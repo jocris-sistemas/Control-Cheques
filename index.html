@@ -4,6 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#14345c">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cheques">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Control de Cheques · Jocris</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -663,7 +670,8 @@ async function viewBit() {
 function menuCuenta() {
   openModal(`<h2 style="margin-top:0">Mi cuenta</h2><div class="card"><div class="b">${esc(S.perfil.nombre)}</div><div class="mut">${esc(S.perfil.correo)} · ${esc(S.perfil.rol)}</div></div>
   <h3>Cambiar contraseña</h3><label class="f">Nueva contraseña (mínimo 8 caracteres)</label><input type="password" id="np1" autocomplete="new-password"><label class="f">Repítela</label><input type="password" id="np2" autocomplete="new-password">
-  <div class="row" style="margin-top:12px"><button class="btn" data-act="cambiarpass">Guardar contraseña</button><button class="btn ghost" data-act="salir">Cerrar sesión</button></div>`);
+  <div class="row" style="margin-top:12px"><button class="btn" data-act="cambiarpass">Guardar contraseña</button><button class="btn ghost" data-act="salir">Cerrar sesión</button></div>
+  <h3>Instalar en el celular</h3><button class="btn ghost" data-act="instalar">Instalar app</button>`);
 }
 
 /* ===================== EVENTOS ===================== */
@@ -676,6 +684,13 @@ document.addEventListener('click', async ev => {
       case 'ovl': if (ev.target === el) closeModal(); break;
       case 'close': closeModal(); break;
       case 'menu': menuCuenta(); break;
+      case 'instalar': {
+        if (window.__pwaPrompt) { window.__pwaPrompt.prompt(); await window.__pwaPrompt.userChoice; window.__pwaPrompt = null; break; }
+        const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+        openModal(`<h2 style="margin-top:0">Instalar la app</h2>` + (ios
+          ? '<div class="card">En iPhone: abre esta página en <b>Safari</b>, toca el botón <b>Compartir</b> (cuadro con flecha hacia arriba) y elige <b>Agregar a pantalla de inicio</b>.</div>'
+          : '<div class="card">En Android (Chrome): toca los <b>tres puntos</b> de arriba a la derecha y elige <b>Instalar app</b> o <b>Agregar a pantalla principal</b>.<br><br>En computadora (Chrome): ícono de instalar al final de la barra de direcciones.</div>')
+          + '<div class="mut sm">Si ya está instalada, ábrela desde su ícono en la pantalla de inicio.</div>'); break; }
       case 'salir': await sb.auth.signOut(); S.perfil = null; closeModal(); renderLogin(); break;
       case 'cambiarpass': {
         const a = $('#np1').value, b = $('#np2').value; if (a.length < 8) return toast('Mínimo 8 caracteres.', 'err'); if (a !== b) return toast('No coinciden.', 'err');
@@ -735,6 +750,8 @@ function refreshView(soft) {
   if (S.tab === 'pend') viewPend(); else if (S.tab === 'cheques') loadList(true); else if (S.tab === 'bit') viewBit();
   refreshPendCount();
 }
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); window.__pwaPrompt = e; });
+if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) navigator.serviceWorker.register('sw.js').catch(() => {});
 sb.auth.onAuthStateChange(ev => { if (ev === 'SIGNED_OUT' && S.perfil) { S.perfil = null; renderLogin(); } });
 boot();
 </script>
