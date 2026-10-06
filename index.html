@@ -431,8 +431,8 @@ async function loadList(reset) {
     if (ids.length) conds.push(`id.in.(${ids.join(',')})`);
     q = q.or(conds.join(','));
   }
-  // Siempre del más reciente al más antiguo.
-  q = q.order('fecha', { ascending: false }).order('creado_en', { ascending: false }).order('numero_cheque', { ascending: false }).range(S.page * PAGE, S.page * PAGE + PAGE - 1);
+  // Siempre por número de cheque, del más alto al más bajo (sin importar estatus ni fecha).
+  q = q.order('numero_cheque', { ascending: false }).order('fecha', { ascending: false }).order('creado_en', { ascending: false }).range(S.page * PAGE, S.page * PAGE + PAGE - 1);
   const { data, error, count } = await q;
   if (error) { $('#lst').innerHTML = `<div class="warnbox">${esc(errMsg(error))}</div>`; return; }
   S.count = count; S.list = S.list.concat(data); S.page++;
@@ -442,8 +442,7 @@ async function loadList(reset) {
     const tot = (pc || []).reduce((a, x) => a + cents(x.monto), 0) / 100;
     $('#resumen').innerHTML = (pc || []).length ? `<div class="card summary"><div class="ico">${ICON.money}</div><div class="grow"><div class="mut sm">Autorizados por cobrar</div><div class="money big">${fmt(tot)}</div></div><div class="mut sm">${(pc || []).length} cheque(s)</div></div>` : '';
   } else $('#resumen').innerHTML = '';
-  let ult = null;
-  const html = S.list.map(c => { const d = String(c.fecha).slice(0, 10); const h = d !== ult ? `<div class="dayh">${fdia(d)}</div>` : ''; ult = d; return h + rowCheque(c); }).join('');
+  const html = S.list.map(c => rowCheque(c)).join('');
   $('#lst').outerHTML = `<div id="lst">${S.list.length ? html : `<div class="card empty">${ICON.empty}<div>Sin resultados.</div></div>`}</div>`;
   $('#more').innerHTML = S.list.length < S.count ? `<button class="btn ghost" data-act="mas">Ver más (${S.list.length} de ${S.count})</button>` : '';
 }
@@ -452,7 +451,7 @@ function rowCheque(c) {
   const st = c.es_historial ? 'hist' : (c.estatus === 'autorizado' && c.cobrado ? 'cobrado' : c.estatus);
   return `<div class="item st-${st}" data-act="detalle" data-id="${c.id}">
     <div class="main"><div class="b ben">${esc(c.beneficiario)}</div>
-      <div class="sub">Cheque ${c.numero_cheque} · ${esc(chequeraNombre(c.chequera_id))}</div>
+      <div class="sub">Cheque ${c.numero_cheque} · ${esc(chequeraNombre(c.chequera_id))} · ${fdate(c.fecha)}</div>
       ${c.concepto ? `<div class="sm" style="margin-top:2px">${esc(c.concepto)}</div>` : ''}
       ${!c.es_historial && fol.length ? `<div class="mut sm" style="margin-top:2px">Folios: ${fol.map(f => esc(cargoNombre(f.cargo_id)) + ' ' + esc(f.folio_numero)).join(' · ')}</div>` : ''}</div>
     <div class="side"><div class="money">${fmt(c.monto)}</div>${estadoChip(c)}</div>
@@ -467,7 +466,7 @@ async function openDetail(id) {
     const { data: bit } = await sb.from('bitacora').select('*').eq('cheque_id', id).order('creado_en', { ascending: true });
     const fol = foliosActivos(c); const cuadra = sumFolios(c) === cents(c.monto);
     const arch = archActivos(c);
-    const tipoTxt = { factura: 'Factura', folio: 'Folio', comprobante_cobro: 'Comprobante de cobro', otro: 'Otro' };
+    const tipoTxt = { factura: 'Factura', folio: 'Folio', comprobante_cobro: 'Ticket / ficha de depósito', otro: 'Otro' };
     const hist = c.es_historial;
     let acciones = '';
     if (!hist) {
@@ -506,7 +505,7 @@ async function openDetail(id) {
         ${arch.length ? arch.map(a => `<div class="row" style="margin-bottom:6px"><span class="chip historial">${tipoTxt[a.tipo]}</span><button class="lnk grow" style="text-align:left" data-act="verpath" data-path="${esc(a.path)}">${esc(a.nombre || 'archivo')}</button>${puedeCapturar() ? `<button class="btn ghost sm" data-act="quitar" data-id="${a.id}">Quitar</button>` : ''}</div>`).join('') : '<span class="mut">Aún no hay documentos.</span>'}
         ${puedeSubir ? `<div class="row" style="margin-top:10px">
           ${puedeCapturar() && c.estatus !== 'cancelado' ? `<button class="btn ghost sm" data-act="subir" data-id="${id}" data-tipo="factura">+ Factura</button><button class="btn ghost sm" data-act="subir" data-id="${id}" data-tipo="folio">+ Folio</button>` : ''}
-          ${c.estatus === 'autorizado' && ['administrador', 'capturista', 'contador'].includes(rol()) ? `<button class="btn ghost sm" data-act="subir" data-id="${id}" data-tipo="comprobante_cobro">+ Comprobante de cobro</button>` : ''}
+          ${c.estatus !== 'cancelado' && ['administrador', 'capturista', 'contador'].includes(rol()) ? `<button class="btn ghost sm" data-act="subir" data-id="${id}" data-tipo="comprobante_cobro">+ Ticket / ficha de depósito</button>` : ''}
           ${puedeCapturar() ? `<button class="btn ghost sm" data-act="subir" data-id="${id}" data-tipo="otro">${c.estatus === 'cancelado' ? '+ Foto del cheque cancelado' : '+ Otro'}</button>` : ''}</div>` : ''}
       </div>
       ${acciones ? `<div class="row" style="margin:12px 0">${acciones}</div>` : ''}
@@ -1122,7 +1121,7 @@ document.addEventListener('click', async ev => {
       case 'okcancelar': { const m = $('#mot').value.trim(); if (!m) return toast('Escribe el motivo.', 'err'); await rpc('cancelar_cheque', { p_id: id, p_motivo: m }); closeModal(); toast('Cheque cancelado; sus folios quedaron libres.', 'ok'); refreshView(); break; }
       case 'cobrar': {
         const c = await loadCheque(id);
-        if (!archActivos(c, 'comprobante_cobro').length) { openModal(`<h2 style="margin-top:0">Falta el comprobante</h2><div class="warnbox">Sube primero el comprobante de que el cheque fue cobrado o depositado.</div><div class="row"><button class="btn gold" data-act="subir" data-id="${id}" data-tipo="comprobante_cobro">Subir comprobante</button><button class="btn ghost" data-act="close">Cerrar</button></div>`); break; }
+        if (!archActivos(c, 'comprobante_cobro').length) { openModal(`<h2 style="margin-top:0">Falta el ticket o ficha de depósito</h2><div class="warnbox">Sube primero el ticket o la ficha de depósito del cheque cobrado.</div><div class="row"><button class="btn gold" data-act="subir" data-id="${id}" data-tipo="comprobante_cobro">Subir ticket / ficha</button><button class="btn ghost" data-act="close">Cerrar</button></div>`); break; }
         openModal(`<h2 style="margin-top:0">Marcar como cobrado</h2><label class="f">Fecha de cobro</label><input type="date" id="fc" value="${today()}"><div class="row" style="margin-top:14px"><button class="btn ok grow" data-act="okcobrar" data-id="${id}">Confirmar</button><button class="btn ghost" data-act="close">Volver</button></div>`); break; }
       case 'okcobrar': await rpc('marcar_cobrado', { p_id: id, p_fecha_cobro: $('#fc').value, p_cobrado: true }); closeModal(); toast('Cheque marcado como cobrado.', 'ok'); refreshView(); break;
       case 'descobrar': await rpc('marcar_cobrado', { p_id: id, p_fecha_cobro: null, p_cobrado: false }); toast('Cobro desmarcado.', 'ok'); openDetail(id); refreshView(true); break;
