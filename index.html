@@ -366,7 +366,7 @@ function cardPend(c, rechazado = false) {
     <div class="row" style="margin-top:8px">
       ${cuadra ? '<span class="chip cobrado">Folios cuadran al centavo</span>' : '<span class="chip rechazado">NO CUADRA</span>'}
       ${fac ? `<button class="btn ghost sm" data-act="verarch" data-id="${c.id}" data-tipo="factura">Ver factura</button>` : (c.sin_factura_motivo ? `<span class="chip warn">Sin factura: ${esc(c.sin_factura_motivo)}</span>` : '<span class="chip warn">Factura pendiente</span>')}
-      ${archActivos(c, 'folio').length ? `<button class="btn ghost sm" data-act="verarch" data-id="${c.id}" data-tipo="folio">Ver folio${archActivos(c, 'folio').length > 1 ? ' (1 de ' + archActivos(c, 'folio').length + ')' : ''}</button>` : ''}
+      ${archActivos(c, 'folio').length ? `<button class="btn ghost sm" data-act="verarch" data-id="${c.id}" data-tipo="folio">Ver folio</button>` : ''}
       <button class="btn ghost sm" data-act="poliza" data-id="${c.id}">Ver póliza</button>
       <button class="btn ghost sm" data-act="detalle" data-id="${c.id}">Detalle</button>
     </div>
