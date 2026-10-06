@@ -88,6 +88,58 @@ td{padding:8px 6px;border-bottom:1px solid var(--line);vertical-align:top}
 .spin{text-align:center;color:var(--mut);padding:24px}
 .warnbox{background:var(--warnbg);border:1px solid #f0d49b;color:#6a4400;border-radius:10px;padding:9px 12px;font-size:13.5px;margin:8px 0}
 .okbox{background:var(--okbg);border:1px solid #b7e2c7;color:#14683a;border-radius:10px;padding:9px 12px;font-size:13.5px;margin:8px 0}
+
+/* ---- Diseño 2.0 ---- */
+:root{--shadow:0 1px 2px rgba(20,52,92,.06),0 4px 14px rgba(20,52,92,.06);--radius:14px}
+body{background:linear-gradient(180deg,#eaeff6 0,#f4f6fa 220px) fixed;font-size:15px;letter-spacing:.005em}
+header.top{background:linear-gradient(135deg,#102c50,#1d4577);border-bottom:0;box-shadow:0 2px 10px rgba(16,44,80,.25);padding-top:calc(10px + env(safe-area-inset-top));padding-bottom:10px}
+header.top::after{content:"";position:absolute;left:0;right:0;bottom:0;height:3px;background:linear-gradient(90deg,var(--gold),#e6c371 50%,var(--gold))}
+header.top .brand{display:flex;align-items:center;gap:11px;font-size:15px}
+header.top .brand .mark{width:36px;height:36px;border-radius:11px;background:var(--gold);color:#fff;font-weight:800;font-size:19px;display:grid;place-items:center;box-shadow:inset 0 -2px 0 rgba(0,0,0,.15);flex:none}
+header.top .brand small{margin-top:1px;opacity:.8;font-size:12px}
+header.top .acct{width:38px;height:38px;border-radius:50%;padding:0;font-weight:700;font-size:14px;background:rgba(255,255,255,.16);border:1.5px solid rgba(255,255,255,.35)}
+nav.tabs{background:rgba(255,255,255,.96);backdrop-filter:blur(8px);border-top:1px solid var(--line);box-shadow:0 -4px 18px rgba(20,52,92,.08);padding-top:4px}
+nav.tabs button{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11.5px;padding:7px 2px 8px;box-shadow:none!important}
+nav.tabs button svg{width:23px;height:23px;stroke:currentColor;fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;transition:transform .15s}
+nav.tabs button.on{color:var(--navy)}
+nav.tabs button.on svg{transform:translateY(-1px);stroke:var(--navy)}
+nav.tabs button.on::before{content:"";position:absolute;top:-5px;left:30%;right:30%;height:3px;border-radius:0 0 4px 4px;background:var(--gold)}
+nav.tabs .badge{top:2px;left:calc(50% + 6px);box-shadow:0 0 0 2px #fff}
+main{padding:16px 14px 24px}
+.pagehead{display:flex;align-items:flex-end;gap:10px;margin:4px 2px 14px}
+.pagehead h2{margin:0;font-size:22px;letter-spacing:-.01em}
+.pagehead .sub{color:var(--mut);font-size:13px;margin-bottom:2px}
+.card{border-radius:var(--radius);box-shadow:var(--shadow);border:1px solid #e6eaf1}
+.btn{border-radius:11px;box-shadow:0 1px 0 rgba(0,0,0,.08);transition:filter .12s,transform .05s}
+.btn:hover{filter:brightness(1.06)} .btn:active{transform:translateY(1px)}
+.btn.ghost{box-shadow:none}
+.chip{padding:3px 10px;font-size:11.5px;letter-spacing:.2px}
+input[type=text],input[type=number],input[type=date],input[type=password],input[type=email],select,textarea{border-radius:10px;border-color:#d3dae4;transition:border-color .12s,box-shadow .12s}
+input:focus,select:focus,textarea:focus{outline:0;border-color:var(--gold);box-shadow:0 0 0 3px rgba(201,154,60,.22)}
+h3{font-size:12.5px;text-transform:uppercase;letter-spacing:.6px;color:#51627a;margin:20px 2px 8px}
+/* lista del historial */
+.dayh{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#51627a;margin:16px 4px 7px;display:flex;align-items:center;gap:8px}
+.dayh::after{content:"";flex:1;height:1px;background:#d9e0ea}
+.item{display:flex;gap:12px;align-items:flex-start;background:#fff;border:1px solid #e6eaf1;border-left:4px solid #c3ccd8;border-radius:12px;padding:11px 13px;margin-bottom:8px;box-shadow:var(--shadow);cursor:pointer;transition:transform .08s,box-shadow .12s}
+.item:hover{box-shadow:0 2px 4px rgba(20,52,92,.08),0 8px 20px rgba(20,52,92,.09)}
+.item:active{transform:scale(.995)}
+.item .main{flex:1;min-width:0}
+.item .ben{font-size:15.5px;line-height:1.25;overflow-wrap:anywhere}
+.item .side{text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:5px;flex:none}
+.item .side .money{font-size:16px}
+.item.st-pendiente{border-left-color:#e0a23a}.item.st-autorizado{border-left-color:#2f6fb8}.item.st-cobrado{border-left-color:var(--ok)}
+.item.st-rechazado,.item.st-cancelado{border-left-color:var(--bad)}.item.st-hist{border-left-color:#c3ccd8}
+.item.st-cancelado .ben{text-decoration:line-through;text-decoration-color:#b3261e88}
+.filters{display:flex;gap:8px;flex-wrap:wrap}
+.filters input{flex:1 1 100%}.filters select{flex:1 1 100%}
+@media(min-width:640px){.filters input{flex:2 1 260px}.filters select{flex:1 1 180px}}
+nav.tabs{justify-content:center}nav.tabs button{max-width:220px}
+.summary{display:flex;align-items:center;gap:12px;background:linear-gradient(135deg,#fff,#f4f8ff);}
+.summary .ico{width:42px;height:42px;border-radius:12px;background:var(--infobg);color:var(--info);display:grid;place-items:center;flex:none}
+.summary .ico svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.empty{text-align:center;color:var(--mut);padding:30px 16px}
+.empty svg{width:42px;height:42px;stroke:#a9b4c4;fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;margin-bottom:6px}
+@media(min-width:900px){main{padding-top:24px}.item{padding:13px 16px}}
 </style>
 </head>
 <body>
@@ -104,7 +156,7 @@ const PAGE = 40;
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, autoRefreshToken: true } });
 
 /* ===================== ESTADO ===================== */
-const S = { perfil: null, cargos: [], chequeras: [], series: {}, tab: 'pend', filt: { q: '', est: 'nuevos', chequera: '' },
+const S = { perfil: null, cargos: [], chequeras: [], series: {}, tab: 'pend', filt: { q: '', chequera: '' },
             list: [], count: 0, page: 0, pendCount: 0, F: null };
 const $ = (s, r = document) => r.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -139,6 +191,17 @@ function estadoChip(c) {
   if (c.estatus === 'autorizado') return c.cobrado ? '<span class="chip cobrado">Cobrado</span>' : '<span class="chip autorizado">Autorizado · por cobrar</span>';
   return `<span class="chip ${c.estatus}">${{ pendiente: 'Pendiente de autorizar', rechazado: 'Rechazado', cancelado: 'Cancelado' }[c.estatus]}</span>`;
 }
+const ICON = {
+  pend: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.7 2.7L16 9.5"/></svg>',
+  cheques: '<svg viewBox="0 0 24 24"><path d="M4 5h16v14H4z"/><path d="M4 10h16M8 15h4"/></svg>',
+  nuevo: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>',
+  bit: '<svg viewBox="0 0 24 24"><path d="M7 3h8l4 4v14H7z"/><path d="M15 3v4h4M10 12h6M10 16h6"/></svg>',
+  money: '<svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/></svg>',
+  empty: '<svg viewBox="0 0 24 24"><path d="M5 4h14v16H5z"/><path d="M9 9h6M9 13h6"/></svg>'
+};
+const rolTxt = r => ({ capturista: 'Administración', administrador: 'Administrador', contador: 'Contador' }[r] || r);
+const iniciales = n => String(n || '?').replace(/^ING\.\s*/i, '').split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase();
+const fdia = d => { const [y, m, dd] = d.split('-'); const M = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre']; return `${Number(dd)} de ${M[Number(m) - 1]} de ${y}`; };
 const foliosActivos = c => (c.cheque_folios || []).filter(f => f.activo);
 const sumFolios = c => foliosActivos(c).reduce((a, f) => a + cents(f.monto), 0);
 const archActivos = (c, tipo) => (c.archivos || []).filter(a => a.activo && (!tipo || a.tipo === tipo));
@@ -228,16 +291,16 @@ async function refreshPendCount() {
 
 /* ===================== SHELL ===================== */
 function renderShell() {
-  const tabs = [['pend', esAdmin() ? 'Autorizar' : 'Pendientes'], ['cheques', 'Cheques']];
+  const tabs = [['pend', esAdmin() ? 'Autorizar' : 'Pendientes'], ['cheques', 'Historial']];
   if (puedeCapturar()) tabs.push(['nuevo', 'Nuevo']);
   tabs.push(['bit', 'Bitácora']);
   $('#app').innerHTML = `
   <header class="top">
-    <div class="brand">JOCRIS · Control de Cheques<small>${esc(S.perfil.nombre)} · ${esc(S.perfil.rol)}</small></div>
-    <button data-act="menu">Cuenta</button>
+    <div class="brand"><span class="mark">J</span><div>JOCRIS · Control de Cheques<small>${esc(S.perfil.nombre)} · ${esc(rolTxt(S.perfil.rol))}</small></div></div>
+    <button class="acct" data-act="menu" title="Mi cuenta" aria-label="Mi cuenta">${esc(iniciales(S.perfil.nombre))}</button>
   </header>
   <main id="view"></main>
-  <nav class="tabs">${tabs.map(([k, l]) => `<button data-tab="${k}" class="${S.tab === k ? 'on' : ''}">${l}${k === 'pend' ? `<span class="badge hidden" id="bPend">0</span>` : ''}</button>`).join('')}</nav>`;
+  <nav class="tabs">${tabs.map(([k, l]) => `<button data-tab="${k}" class="${S.tab === k ? 'on' : ''}">${ICON[k] || ''}<span>${l}</span>${k === 'pend' ? `<span class="badge hidden" id="bPend">0</span>` : ''}</button>`).join('')}</nav>`;
   go(S.tab);
 }
 function go(tab) {
@@ -254,7 +317,7 @@ const SEL = '*, cheque_folios(id,cargo_id,folio_numero,proveedor,descripcion,obr
 
 /* ===================== VISTA: AUTORIZAR / PENDIENTES ===================== */
 async function viewPend() {
-  $('#view').innerHTML = `<h2>${esAdmin() ? 'Cheques por autorizar' : 'Cheques pendientes de autorización'}</h2><div id="pendList" class="spin">Cargando…</div>`;
+  $('#view').innerHTML = `<div class="pagehead"><h2>${esAdmin() ? 'Por autorizar' : 'Pendientes'}</h2><span class="sub">${esAdmin() ? 'Cheques en espera de tu autorización' : 'Cheques en espera de autorización'}</span></div><div id="pendList" class="spin">Cargando…</div>`;
   const { data, error } = await sb.from('cheques').select(SEL).eq('estatus', 'pendiente').eq('es_historial', false).order('creado_en', { ascending: true });
   if (error) return $('#pendList').innerHTML = `<div class="warnbox">${esc(errMsg(error))}</div>`;
   const canc = (await sb.from('cheques').select(SEL).eq('estatus', 'cancelado').eq('es_historial', false).is('cancelacion_enterada_en', null).order('actualizado_en', { ascending: true })).data || [];
@@ -262,7 +325,7 @@ async function viewPend() {
   const rech = (await sb.from('cheques').select(SEL).eq('estatus', 'rechazado').eq('es_historial', false).order('actualizado_en', { ascending: false }).limit(20)).data || [];
   let html = '';
   if (canc.length) html += `<h3>Cheques cancelados por confirmar</h3>` + canc.map(cardCancel).join('');
-  if (!data.length && !canc.length) html += '<div class="card mut" style="text-align:center">No hay cheques pendientes. Todo al día.</div>';
+  if (!data.length && !canc.length) html += `<div class="card empty">${ICON.pend}<div>No hay cheques pendientes. Todo al día.</div></div>`;
   html += data.map(c => cardPend(c)).join('');
   if (rech.length) html += `<h3>Rechazados (esperan corrección)</h3>` + rech.map(c => cardPend(c, true)).join('');
   $('#pendList').outerHTML = html;
@@ -283,7 +346,7 @@ function cardCancel(c) {
 }
 function cardPend(c, rechazado = false) {
   const fol = foliosActivos(c); const fac = archActivos(c, 'factura').length;
-  const sinFac = !fac && !c.sin_factura_motivo;
+  const sinFac = false; // la factura ya no es requisito para autorizar
   const cuadra = sumFolios(c) === cents(c.monto);
   return `<div class="card" id="cp-${c.id}">
     <div class="row" style="align-items:flex-start">
@@ -300,7 +363,7 @@ function cardPend(c, rechazado = false) {
     </tbody></table>
     <div class="row" style="margin-top:8px">
       ${cuadra ? '<span class="chip cobrado">Folios cuadran al centavo</span>' : '<span class="chip rechazado">NO CUADRA</span>'}
-      ${fac ? `<button class="btn ghost sm" data-act="verarch" data-id="${c.id}" data-tipo="factura">Ver factura</button>` : (c.sin_factura_motivo ? `<span class="chip warn">Sin factura: ${esc(c.sin_factura_motivo)}</span>` : '<span class="chip rechazado">Falta factura</span>')}
+      ${fac ? `<button class="btn ghost sm" data-act="verarch" data-id="${c.id}" data-tipo="factura">Ver factura</button>` : (c.sin_factura_motivo ? `<span class="chip warn">Sin factura: ${esc(c.sin_factura_motivo)}</span>` : '<span class="chip warn">Factura pendiente</span>')}
       ${archActivos(c, 'folio').length ? `<button class="btn ghost sm" data-act="verarch" data-id="${c.id}" data-tipo="folio">Ver folio${archActivos(c, 'folio').length > 1 ? ' (1 de ' + archActivos(c, 'folio').length + ')' : ''}</button>` : ''}
       <button class="btn ghost sm" data-act="poliza" data-id="${c.id}">Ver póliza</button>
       <button class="btn ghost sm" data-act="detalle" data-id="${c.id}">Detalle</button>
@@ -309,7 +372,7 @@ function cardPend(c, rechazado = false) {
     ${esAdmin() && !rechazado ? `<div class="row" style="margin-top:12px">
       <button class="btn ok grow" data-act="autorizar" data-id="${c.id}" ${sinFac || !cuadra ? 'disabled' : ''}>Autorizar</button>
       <button class="btn bad grow" data-act="rechazar" data-id="${c.id}">Rechazar</button></div>
-      ${sinFac ? '<div class="warnbox">No se puede autorizar: falta la factura (o el motivo de por qué no lleva).</div>' : ''}` : ''}
+` : ''}
     ${rechazado && puedeCapturar() ? `<div class="row" style="margin-top:10px"><button class="btn gold" data-act="editar" data-id="${c.id}">Corregir y reenviar</button></div>` : ''}
   </div>`;
 }
@@ -343,28 +406,19 @@ function dlgMotivo(titulo, act, id, btnClass = 'bad', btnTxt = 'Confirmar') {
 /* ===================== VISTA: LISTA DE CHEQUES ===================== */
 function viewCheques() {
   const f = S.filt;
-  $('#view').innerHTML = `<h2>Cheques</h2>
-  <div class="card">
-    <input type="text" id="fq" placeholder="Buscar beneficiario, No. de cheque (póliza) o folio…" value="${esc(f.q)}">
-    <div class="grid2" style="margin-top:8px">
-      <select id="fest">${[['nuevos', 'Nuevos (con póliza)'], ['pendiente', 'Pendientes'], ['porcobrar', 'Autorizados por cobrar'], ['cobrado', 'Cobrados'], ['rechazado', 'Rechazados'], ['cancelado', 'Cancelados'], ['historial', 'Historial (archivo)'], ['todos', 'Todos']].map(([v, l]) => `<option value="${v}" ${f.est === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
-      <select id="fch"><option value="">Todas las chequeras</option>${S.chequeras.map(c => `<option value="${c.id}" ${String(f.chequera) === String(c.id) ? 'selected' : ''}>${esc(c.nombre)}</option>`).join('')}</select>
-    </div>
-  </div>
-  <div class="row" style="margin-bottom:10px"><button class="btn ghost sm" data-act="huecos">Revisar huecos de numeración</button>${puedeCapturar() ? '<button class="btn ghost sm" data-act="cancelado">Registrar cheque cancelado</button>' : ''}</div><div id="resumen"></div><div id="lst" class="spin">Cargando…</div><div id="more" class="r"></div>`;
+  $('#view').innerHTML = `<div class="pagehead"><h2>Historial</h2><span class="sub" id="hcount"></span></div>
+  <div class="card" style="padding:11px"><div class="filters">
+    <input type="text" id="fq" placeholder="Buscar beneficiario, cheque o folio" value="${esc(f.q)}">
+    <select id="fch" aria-label="Chequera"><option value="">Todas las chequeras</option>${S.chequeras.map(c => `<option value="${c.id}" ${String(f.chequera) === String(c.id) ? 'selected' : ''}>${esc(c.nombre)}</option>`).join('')}</select>
+  </div></div>
+  <div class="row" style="margin-bottom:12px"><button class="btn ghost sm" data-act="huecos">Huecos de numeración</button>${puedeCapturar() ? '<button class="btn ghost sm" data-act="cancelado">Registrar cancelado</button>' : ''}</div><div id="resumen"></div><div id="lst" class="spin">Cargando…</div><div id="more" class="r"></div>`;
   let t; $('#fq').oninput = e => { clearTimeout(t); t = setTimeout(() => { f.q = e.target.value.trim(); loadList(true); }, 350); };
-  $('#fest').onchange = e => { f.est = e.target.value; loadList(true); };
   $('#fch').onchange = e => { f.chequera = e.target.value; loadList(true); };
   loadList(true);
 }
 async function loadList(reset) {
   const f = S.filt; if (reset) { S.page = 0; S.list = []; $('#lst').innerHTML = '<div class="spin">Cargando…</div>'; }
   let q = sb.from('cheques').select(SEL, { count: 'exact' });
-  if (f.est === 'nuevos') q = q.eq('es_historial', false);
-  else if (f.est === 'historial') q = q.eq('es_historial', true);
-  else if (f.est === 'porcobrar') q = q.eq('es_historial', false).eq('estatus', 'autorizado').eq('cobrado', false);
-  else if (f.est === 'cobrado') q = q.eq('es_historial', false).eq('cobrado', true);
-  else if (['pendiente', 'rechazado', 'cancelado'].includes(f.est)) q = q.eq('es_historial', false).eq('estatus', f.est);
   if (f.chequera) q = q.eq('chequera_id', Number(f.chequera));
   if (f.q) {
     const term = f.q.replace(/[,()%*]/g, ' ').trim(); const conds = [`beneficiario.ilike.%${term}%`, `concepto.ilike.%${term}%`];
@@ -374,28 +428,32 @@ async function loadList(reset) {
     if (ids.length) conds.push(`id.in.(${ids.join(',')})`);
     q = q.or(conds.join(','));
   }
-  q = q.order('fecha', { ascending: false }).order('numero_cheque', { ascending: false }).range(S.page * PAGE, S.page * PAGE + PAGE - 1);
+  // Siempre del más reciente al más antiguo.
+  q = q.order('fecha', { ascending: false }).order('creado_en', { ascending: false }).order('numero_cheque', { ascending: false }).range(S.page * PAGE, S.page * PAGE + PAGE - 1);
   const { data, error, count } = await q;
   if (error) { $('#lst').innerHTML = `<div class="warnbox">${esc(errMsg(error))}</div>`; return; }
   S.count = count; S.list = S.list.concat(data); S.page++;
-  if (f.est === 'porcobrar' || f.est === 'nuevos') {
+  const hc = $('#hcount'); if (hc) hc.textContent = (count || 0) + ' cheque(s)';
+  if (!f.q) {
     const { data: pc } = await sb.from('cheques').select('monto').eq('es_historial', false).eq('estatus', 'autorizado').eq('cobrado', false);
     const tot = (pc || []).reduce((a, x) => a + cents(x.monto), 0) / 100;
-    $('#resumen').innerHTML = `<div class="card row"><div class="grow"><div class="mut sm">Autorizados por cobrar</div><div class="money big">${fmt(tot)}</div></div><div class="mut sm">${(pc || []).length} cheque(s)</div></div>`;
+    $('#resumen').innerHTML = (pc || []).length ? `<div class="card summary"><div class="ico">${ICON.money}</div><div class="grow"><div class="mut sm">Autorizados por cobrar</div><div class="money big">${fmt(tot)}</div></div><div class="mut sm">${(pc || []).length} cheque(s)</div></div>` : '';
   } else $('#resumen').innerHTML = '';
-  $('#lst').outerHTML = `<div id="lst">${S.list.length ? S.list.map(rowCheque).join('') : '<div class="card mut" style="text-align:center">Sin resultados.</div>'}</div>`;
-  $('#more').innerHTML = S.list.length < S.count ? `<button class="btn ghost" data-act="mas">Ver más (${S.list.length} de ${S.count})</button>` : (S.count ? `<span class="mut sm">${S.count} cheque(s)</span>` : '');
+  let ult = null;
+  const html = S.list.map(c => { const d = String(c.fecha).slice(0, 10); const h = d !== ult ? `<div class="dayh">${fdia(d)}</div>` : ''; ult = d; return h + rowCheque(c); }).join('');
+  $('#lst').outerHTML = `<div id="lst">${S.list.length ? html : `<div class="card empty">${ICON.empty}<div>Sin resultados.</div></div>`}</div>`;
+  $('#more').innerHTML = S.list.length < S.count ? `<button class="btn ghost" data-act="mas">Ver más (${S.list.length} de ${S.count})</button>` : '';
 }
 function rowCheque(c) {
   const fol = foliosActivos(c);
-  return `<div class="card cheque-item" data-act="detalle" data-id="${c.id}">
-    <div class="row" style="align-items:flex-start">
-      <div class="grow"><div class="b">${esc(c.beneficiario)}</div>
-        <div class="mut sm">Cheque ${c.numero_cheque} · ${esc(chequeraNombre(c.chequera_id))} · ${fdate(c.fecha)}</div>
-        ${c.concepto ? `<div class="sm">${esc(c.concepto)}</div>` : ''}
-        ${!c.es_historial && fol.length ? `<div class="mut sm">Folios: ${fol.map(f => esc(cargoNombre(f.cargo_id)) + ' ' + esc(f.folio_numero)).join(' · ')}</div>` : ''}</div>
-      <div class="r"><div class="money">${fmt(c.monto)}</div>${estadoChip(c)}</div>
-    </div></div>`;
+  const st = c.es_historial ? 'hist' : (c.estatus === 'autorizado' && c.cobrado ? 'cobrado' : c.estatus);
+  return `<div class="item st-${st}" data-act="detalle" data-id="${c.id}">
+    <div class="main"><div class="b ben">${esc(c.beneficiario)}</div>
+      <div class="mut sm">Cheque ${c.numero_cheque} · ${esc(chequeraNombre(c.chequera_id))}</div>
+      ${c.concepto ? `<div class="sm" style="margin-top:2px">${esc(c.concepto)}</div>` : ''}
+      ${!c.es_historial && fol.length ? `<div class="mut sm" style="margin-top:2px">Folios: ${fol.map(f => esc(cargoNombre(f.cargo_id)) + ' ' + esc(f.folio_numero)).join(' · ')}</div>` : ''}</div>
+    <div class="side"><div class="money">${Number(c.monto) > 0 ? fmt(c.monto) : '—'}</div>${estadoChip(c)}</div>
+  </div>`;
 }
 
 /* ===================== DETALLE ===================== */
@@ -564,17 +622,11 @@ function folioPDF(jsPDF, d) {
   const total = d.folios.reduce((a, f) => a + Math.round(f.monto * 100), 0) / 100;
   txt('TOTAL', X + C1 + C2 - 4, yRow(nRows - 1) + 4, 11.5, true, { align: 'right' });
   txt(money(total), X + W - 6, yRow(nRows - 1) + 4, 12, true, { align: 'right' });
-  // pie
-  const fY = bottom; const footH = 34;
-  txt('SOLICITO: ' + String(d.solicito || '').toUpperCase(), X + 4, fY + 10, 12, false);
-  if (d.firma) { try { // la firma va entre el nombre de quien solicita y "AUTORIZO"
-    doc.setFont(F, 'normal'); doc.setFontSize(12);
-    const x1 = X + 4 + doc.getTextWidth('SOLICITO: ' + String(d.solicito || '').toUpperCase()) + 3;
-    const x2 = X + W - 4 - doc.getTextWidth('AUTORIZO: ' + (d.autorizo || 'ING. CRISTOBAL GARCIA')) - 3;
-    const sw = Math.min(46, x2 - x1);
-    if (sw >= 24) doc.addImage(d.firma, 'PNG', x1 + ((x2 - x1) - sw) / 2, fY + 17 - sw * 28 / 46 / 2, sw, sw * 28 / 46);
-  } catch (e) {} }
-  txt('AUTORIZO: ' + (d.autorizo || 'ING. CRISTOBAL GARCIA'), X + W - 4, fY + 22, 12, false, { align: 'right' });
+  // pie: firma encima de SOLICITO; SOLICITO a la izquierda y AUTORIZO a la derecha, en la misma línea
+  const fY = bottom; const footH = 38;
+  if (d.firma) { try { doc.addImage(d.firma, 'PNG', X + 8, fY + 3, 38, 23.2); } catch (e) {} }
+  txt('SOLICITO: ' + String(d.solicito || '').toUpperCase(), X + 4, fY + 32, 11.5, false);
+  txt('AUTORIZO: ' + String(d.autorizo || 'ING. JOSE CRISTOBAL GARCIA PERALES').toUpperCase(), X + W - 4, fY + 32, 11.5, false, { align: 'right' });
   doc.setDrawColor(0); doc.setLineWidth(0.8); doc.rect(X, y0 - 18, W, (fY + footH) - (y0 - 18));
   return doc;
 }
@@ -607,7 +659,7 @@ function armarHojas(lines, folios, h) {
     const firmaOk = S.firma && String(h.solicito || '').trim().toLowerCase() === String(S.perfil.nombre || '').trim().toLowerCase();
     const doc = folioPDF(window.jspdf.jsPDF, {
       logo: LOGO_JOCRIS, logoRatio: 0.262, fecha: today(), cargo, nombre: mismoNombre, periodo, solicito: h.solicito || S.perfil.nombre,
-      firma: firmaOk ? S.firma : null, autorizo: 'ING. CRISTOBAL GARCIA',
+      firma: firmaOk ? S.firma : null, autorizo: 'ING. JOSE CRISTOBAL GARCIA PERALES',
       folios: g.map(x => ({ folio: x.f.folio_numero, vencimiento: x.l.venc || '', monto: Number(x.f.monto),
         conceptos: conceptosDe(x.l) }))
     });
@@ -689,7 +741,7 @@ async function viewNuevo(editCheque) {
   const F = S.F, h = F.h;
   const { data: bens } = await sb.from('cheques').select('beneficiario').order('creado_en', { ascending: false }).limit(1000);
   const uniq = [...new Set((bens || []).map(x => x.beneficiario))].slice(0, 400);
-  $('#view').innerHTML = `<h2>${F.editId ? 'Editar cheque' : 'Nuevo cheque'}</h2>${F.editId ? '' : '<div class="mut sm" style="margin:-6px 0 10px">¿El cheque ya salió cancelado de origen? <a href="#" data-act="cancelado">Regístralo aquí</a></div>'}
+  $('#view').innerHTML = `<div class="pagehead"><h2>${F.editId ? 'Editar cheque' : 'Nuevo cheque'}</h2></div>${F.editId ? '' : '<div class="mut sm" style="margin:-6px 0 10px">¿El cheque ya salió cancelado de origen? <a href="#" data-act="cancelado">Regístralo aquí</a></div>'}
   <div class="card">
     <div class="grid2">
       <div><label class="f">Chequera</label><select id="h_chequera_id"><option value="">Elige…</option>${S.chequeras.map(c => `<option value="${c.id}" ${String(h.chequera_id) === String(c.id) ? 'selected' : ''}>${esc(c.nombre)}</option>`).join('')}</select></div>
@@ -713,8 +765,8 @@ async function viewNuevo(editCheque) {
   <h3>Factura</h3>
   <div class="card">
     <div class="row"><button class="btn ghost sm" data-act="pickfac">Adjuntar factura (foto o PDF)</button><span id="facInfo" class="mut sm">${F.files.length ? F.files.length + ' archivo(s)' : (F.editId ? 'Puedes agregarla desde el detalle' : 'Sin adjuntar')}</span></div>
-    <label class="f">Si no hay factura, ¿por qué?</label><input type="text" id="h_sin_factura_motivo" placeholder="Ej. proveedor la entrega después, pago de nómina…" value="${esc(h.sin_factura_motivo)}">
-    <div class="mut sm" style="margin-top:6px">Para autorizar se necesita la factura o este motivo.</div>
+    <label class="f">Nota sobre la factura (opcional)</label><input type="text" id="h_sin_factura_motivo" placeholder="Ej. el proveedor la entrega después, pago de nómina…" value="${esc(h.sin_factura_motivo)}">
+    <div class="mut sm" style="margin-top:6px">No es necesaria para autorizar: la puedes subir después desde el detalle del cheque.</div>
   </div>
   <div id="sumbar" class="sumbar"></div>
   <div class="row" style="margin-top:12px"><button class="btn gold grow" id="btnGuardar" data-act="guardar">${F.editId ? 'Guardar cambios y reenviar a autorización' : 'Generar póliza y enviar a autorización'}</button>${F.editId ? '<button class="btn ghost" data-act="cancelarEdit">Cancelar</button>' : ''}</div>`;
@@ -861,7 +913,7 @@ async function polizaPDF(id) {
   y += 4.6;
   box(Array(6).fill(RH), null);
   frame(y);
-  previewPDF(doc, `Poliza_${c.numero_cheque}_${String(chequeraNombre(c.chequera_id)).replace(/[^A-Za-z0-9]+/g, '_')}_${c.beneficiario.replace(/[^A-Za-z0-9]+/g, '_').slice(0, 25)}.pdf`, `Póliza · Cheque ${c.numero_cheque}`);
+  previewPDF(doc, `Poliza_${c.numero_cheque}_${String(chequeraNombre(c.chequera_id)).replace(/[^A-Za-z0-9]+/g, '_')}_${c.beneficiario.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z0-9]+/g, '_').slice(0, 25)}.pdf`, `Póliza · Cheque ${c.numero_cheque}`);
 }
 
 /* ===================== FOLIOS (SERIES) ===================== */
@@ -877,7 +929,7 @@ async function viewSeries() {
 
 /* ===================== BITACORA ===================== */
 async function viewBit() {
-  $('#view').innerHTML = `<h2>Bitácora</h2><div id="bl" class="spin">Cargando…</div>`;
+  $('#view').innerHTML = `<div class="pagehead"><h2>Bitácora</h2><span class="sub">Últimos 150 movimientos</span></div><div id="bl" class="spin">Cargando…</div>`;
   const { data, error } = await sb.from('bitacora').select('*, cheques(poliza_numero,numero_cheque,beneficiario)').order('creado_en', { ascending: false }).limit(150);
   if (error) return $('#bl').innerHTML = `<div class="warnbox">${esc(errMsg(error))}</div>`;
   $('#bl').outerHTML = `<div class="card">${data.map(b => `<div class="log"><b>${esc(b.accion.replace(/_/g, ' '))}</b> · ${esc(b.usuario_nombre || '')} · <span class="mut">${fdt(b.creado_en)}</span>
@@ -886,7 +938,7 @@ async function viewBit() {
 
 /* ===================== MENU CUENTA ===================== */
 function menuCuenta() {
-  openModal(`<h2 style="margin-top:0">Mi cuenta</h2><div class="card"><div class="b">${esc(S.perfil.nombre)}</div><div class="mut">${esc(S.perfil.correo)} · ${esc(S.perfil.rol)}</div></div>
+  openModal(`<h2 style="margin-top:0">Mi cuenta</h2><div class="card"><div class="b">${esc(S.perfil.nombre)}</div><div class="mut">${esc(S.perfil.correo)} · ${esc(rolTxt(S.perfil.rol))}</div></div>
   <h3>Cambiar contraseña</h3><label class="f">Nueva contraseña (mínimo 8 caracteres)</label>${pwField('np1', 'new-password')}<label class="f">Repítela</label>${pwField('np2', 'new-password')}
   <div class="row" style="margin-top:12px"><button class="btn" data-act="cambiarpass">Guardar contraseña</button><button class="btn ghost" data-act="salir">Cerrar sesión</button></div>
   <h3>Mi firma</h3><div class="mut sm" style="margin-bottom:6px">${S.firma ? 'Ya tienes una firma guardada.' : 'Aún no tienes firma guardada.'}</div><button class="btn ghost" data-act="firma">${S.firma ? 'Cambiar mi firma' : 'Agregar mi firma'}</button>
