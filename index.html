@@ -364,8 +364,8 @@ function cardPend(c, rechazado = false) {
       ${fol.map(f => `<tr><td>${esc(cargoNombre(f.cargo_id))}</td><td>${esc(f.folio_numero)}</td><td>${esc([f.proveedor, f.descripcion, f.obra].filter(Boolean).join(' · '))}</td><td class="r money">${fmt(f.monto)}</td></tr>`).join('')}
     </tbody></table>
     <div class="row" style="margin-top:8px">
-      ${cuadra ? '<span class="chip cobrado">Folios cuadran al centavo</span>' : '<span class="chip rechazado">NO CUADRA</span>'}
-      ${fac ? `<button class="btn ghost sm" data-act="verarch" data-id="${c.id}" data-tipo="factura">Ver factura</button>` : (c.sin_factura_motivo ? `<span class="chip warn">Sin factura: ${esc(c.sin_factura_motivo)}</span>` : '<span class="chip warn">Factura pendiente</span>')}
+      ${cuadra ? '' : '<span class="chip rechazado">NO CUADRA</span>'}
+      ${fac ? `<button class="btn ghost sm" data-act="verarch" data-id="${c.id}" data-tipo="factura">Ver factura</button>` : (c.sin_factura_motivo ? `<span class="chip warn">Sin factura: ${esc(c.sin_factura_motivo)}</span>` : '<span class="chip warn">PDTE. FACTURA</span>')}
       ${archActivos(c, 'folio').length ? `<button class="btn ghost sm" data-act="verarch" data-id="${c.id}" data-tipo="folio">Ver folio</button>` : ''}
       <button class="btn ghost sm" data-act="poliza" data-id="${c.id}">Ver póliza</button>
       <button class="btn ghost sm" data-act="detalle" data-id="${c.id}">Detalle</button>
@@ -501,7 +501,7 @@ async function openDetail(id) {
       <h3>Folios</h3><div class="card" style="padding:6px 10px"><table><thead><tr><th>Cargo</th><th>Folio</th><th>Detalle</th><th class="r">Monto</th></tr></thead><tbody>
         ${fol.map(f => `<tr><td>${esc(cargoNombre(f.cargo_id))}</td><td>${esc(f.folio_numero)}</td><td>${esc([f.proveedor, f.descripcion, f.obra].filter(Boolean).join(' · '))}</td><td class="r money">${fmt(f.monto)}</td></tr>`).join('') || '<tr><td colspan="4" class="mut">Sin folios</td></tr>'}
       </tbody></table></div>
-      ${cuadra ? '<div class="okbox">Folios y cheque cuadran al centavo.</div>' : `<div class="warnbox">No cuadra: folios ${fmt(sumFolios(c) / 100)} vs cheque ${fmt(c.monto)}.</div>`}`}
+      ${cuadra ? '' : `<div class="warnbox">No cuadra: folios ${fmt(sumFolios(c) / 100)} vs cheque ${fmt(c.monto)}.</div>`}`}
       <h3>Documentos</h3><div class="card files">
         ${arch.length ? arch.map(a => `<div class="row" style="margin-bottom:6px"><span class="chip historial">${tipoTxt[a.tipo]}</span><button class="lnk grow" style="text-align:left" data-act="verpath" data-path="${esc(a.path)}">${esc(a.nombre || 'archivo')}</button>${puedeCapturar() ? `<button class="btn ghost sm" data-act="quitar" data-id="${a.id}">Quitar</button>` : ''}</div>`).join('') : '<span class="mut">Aún no hay documentos.</span>'}
         ${puedeSubir ? `<div class="row" style="margin-top:10px">
