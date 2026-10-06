@@ -752,6 +752,7 @@ async function viewNuevo(editCheque) {
       <div><label class="f">Fecha</label><input type="date" id="h_fecha" value="${esc(h.fecha)}"></div>
       <div><label class="f">Monto del cheque</label><input type="text" inputmode="decimal" id="h_monto" placeholder="0.00" value="${esc(h.monto)}"></div>
     </div>
+    <div id="numInfo"></div>
     <label class="f">Beneficiario</label><input type="text" id="h_beneficiario" list="dlBen" value="${esc(h.beneficiario)}" autocomplete="off">
     <datalist id="dlBen">${uniq.map(b => `<option value="${esc(b)}">`).join('')}</datalist>
     <label class="f">Concepto</label><input type="text" id="h_concepto" value="${esc(h.concepto)}">
@@ -774,9 +775,82 @@ async function viewNuevo(editCheque) {
   <div id="sumbar" class="sumbar"></div>
   <div class="row" style="margin-top:12px"><button class="btn gold grow" id="btnGuardar" data-act="guardar">${F.editId ? 'Guardar cambios y reenviar a autorización' : 'Generar póliza y enviar a autorización'}</button>${F.editId ? '<button class="btn ghost" data-act="cancelarEdit">Cancelar</button>' : ''}</div>`;
   ['chequera_id', 'numero_cheque', 'fecha', 'monto', 'beneficiario', 'concepto', 'solicito', 'sin_factura_motivo'].forEach(k => {
-    const el = $('#h_' + k); el.oninput = el.onchange = () => { h[k] = el.value; updateSum(); };
+    const el = $('#h_' + k); el.oninput = el.onchange = async () => {
+      h[k] = el.value; updateSum();
+      if (k === 'chequera_id' && !F.editId && h.chequera_id) {
+        // Al elegir la chequera se propone el siguiente número consecutivo (se puede cambiar).
+        const u = await ultimoChequera(Number(h.chequera_id));
+        if (u.num != null && String(h.chequera_id) === el.value) { h.numero_cheque = String(u.num + 1); $('#h_numero_cheque').value = h.numero_cheque; }
+      }
+      if (k === 'chequera_id' || k === 'numero_cheque') programarNumInfo();
+    };
   });
   renderLines();
+  numInfo();
+}
+
+/* ===================== SEGUROS DE CAPTURA (numeración, duplicados, fechas, montos) ===================== */
+S.ult = {};
+async function ultimoChequera(id) {
+  const c = S.ult[id]; if (c && Date.now() - c.t < 60000) return c;
+  const { data } = await sb.from('cheques').select('numero_cheque,fecha').eq('chequera_id', id).order('numero_cheque', { ascending: false }).limit(1);
+  const r = { num: data && data[0] ? data[0].numero_cheque : null, fecha: data && data[0] ? data[0].fecha : null, t: Date.now() };
+  S.ult[id] = r; return r;
+}
+async function revisarNumero(h, esEdit) {
+  const out = { bloqueos: [], avisos: [], info: '' };
+  const id = Number(h.chequera_id), n = Number(h.numero_cheque); if (!id) return out;
+  const nom = chequeraNombre(id);
+  const u = await ultimoChequera(id);
+  if (u.num != null) out.info = `Último cheque de ${nom}: ${u.num} (${fdate(u.fecha)}). Siguiente: ${u.num + 1}.`;
+  if (!(n > 0)) return out;
+  const { data: ex } = await sb.from('cheques').select('id,beneficiario,fecha').eq('chequera_id', id).eq('numero_cheque', n).limit(1);
+  if (ex && ex[0] && !(esEdit && ex[0].id === (S.F && S.F.editId))) { out.bloqueos.push(`El cheque ${n} de ${nom} YA EXISTE (${ex[0].beneficiario}, ${fdate(ex[0].fecha)}). No se puede repetir.`); return out; }
+  if (esEdit || u.num == null) return out;
+  if (Math.abs(n - u.num) > 25) {
+    const otras = [];
+    for (const q of S.chequeras) { if (q.id === id) continue; const o = await ultimoChequera(q.id); if (o.num != null && Math.abs(n - o.num) <= 25) otras.push(q.nombre); }
+    out.avisos.push(`OJO: el ${n} está muy lejos del último de ${nom} (${u.num})${otras.length ? ` y se parece a la numeración de ${otras.join(' / ')}. ¿Elegiste bien la chequera?` : '. Revisa que el número esté bien.'}`);
+  } else if (n > u.num + 1) {
+    out.avisos.push(`Te estás saltando números: el último es ${u.num} y capturas el ${n} (faltan ${n - u.num - 1 > 1 ? (u.num + 1) + ' al ' + (n - 1) : (u.num + 1)}).`);
+  } else if (n < u.num) {
+    out.avisos.push(`El ${n} es menor que el último capturado (${u.num}).`);
+  }
+  return out;
+}
+let _numT = null;
+function programarNumInfo() { clearTimeout(_numT); _numT = setTimeout(numInfo, 350); }
+async function numInfo() {
+  const box = $('#numInfo'); if (!box || !S.F) return;
+  const r = await revisarNumero(S.F.h, !!S.F.editId);
+  box.innerHTML = (r.info ? `<div class="mut sm">${esc(r.info)}</div>` : '')
+    + r.bloqueos.map(t => `<div class="warnbox" style="margin-top:6px;border-color:var(--bad)">${esc(t)}</div>`).join('')
+    + r.avisos.map(t => `<div class="warnbox" style="margin-top:6px">${esc(t)}</div>`).join('');
+}
+async function revisionCaptura(h, tot, esEdit) {
+  const r = await revisarNumero(h, esEdit);
+  if (esEdit) return r;
+  const hoy = new Date(today() + 'T12:00:00'), f = new Date(h.fecha + 'T12:00:00'); const dias = Math.round((hoy - f) / 86400000);
+  if (dias < 0) r.avisos.push(`La fecha del cheque es futura (${fdate(h.fecha)}).`);
+  else if (dias > 10) r.avisos.push(`La fecha del cheque es de hace ${dias} días (${fdate(h.fecha)}).`);
+  try {
+    const ben = h.beneficiario.trim().toUpperCase();
+    const desde = new Date(f.getTime() - 15 * 86400000).toISOString().slice(0, 10);
+    const { data: dup } = await sb.from('cheques').select('numero_cheque,fecha,chequera_id').eq('beneficiario', ben).eq('monto', tot).gte('fecha', desde).neq('estatus', 'cancelado').limit(3);
+    if (dup && dup.length) r.avisos.push(`Ya hay un cheque a ${ben} por el mismo monto: ${dup.map(d => 'No. ' + d.numero_cheque + ' (' + chequeraNombre(d.chequera_id) + ', ' + fdate(d.fecha) + ')').join(', ')}. ¿Es un duplicado?`);
+    const { data: mx } = await sb.from('cheques').select('monto').eq('beneficiario', ben).neq('estatus', 'cancelado').order('monto', { ascending: false }).limit(1);
+    if (mx && mx[0] && Number(mx[0].monto) > 0 && tot >= 3 * Number(mx[0].monto) && tot >= 5000) r.avisos.push(`El monto ${fmt(tot)} es mucho mayor al cheque más grande que se le ha hecho a ${ben} (${fmt(mx[0].monto)}). Revisa los ceros.`);
+  } catch (e) { /* los avisos extra son opcionales */ }
+  if (tot >= 100000) r.avisos.push(`Monto alto: ${fmt(tot)}. Confirma que sea correcto.`);
+  return r;
+}
+function dlgConfirmarCaptura(h, tot, r) {
+  const nom = chequeraNombre(Number(h.chequera_id));
+  openModal(`<h2 style="margin-top:0">${r.bloqueos.length ? 'No se puede guardar' : 'Revisa antes de guardar'}</h2>
+    <div class="card"><div class="kv"><div>Chequera</div><div class="b">${esc(nom)}</div><div>No. de cheque</div><div class="b big">${esc(h.numero_cheque)}</div><div>Fecha</div><div>${fdate(h.fecha)}</div><div>Beneficiario</div><div class="b">${esc(h.beneficiario.trim().toUpperCase())}</div><div>Monto</div><div class="money big">${fmt(tot)}</div></div></div>
+    ${r.bloqueos.map(t => `<div class="warnbox" style="margin-top:8px;border-color:var(--bad)">${esc(t)}</div>`).join('')}
+    ${r.avisos.map(t => `<div class="warnbox" style="margin-top:8px">${esc(t)}</div>`).join('')}
+    <div class="row" style="margin-top:14px">${r.bloqueos.length ? '' : `<button class="btn gold grow" data-act="confirmguardar">${r.avisos.length ? 'Sí, lo reviso y está correcto' : 'Sí, es correcto — guardar'}</button>`}<button class="btn ghost ${r.bloqueos.length ? 'grow' : ''}" data-act="close">Volver a revisar</button></div>`);
 }
 function suggest() {
   // Los folios se capturan siempre a mano: la numeración se comparte con los gastos en efectivo, que la app no ve.
@@ -823,7 +897,7 @@ function updateSum() {
   sb_.innerHTML = `<div><div class="mut sm">Cheque</div><div class="money">${fmt(tot / 100)}</div></div><div><div class="mut sm">Suma de folios</div><div class="money">${fmt(sum / 100)}</div></div>
     <div class="grow r"><div class="mut sm">Diferencia</div><div class="money big" style="color:${ok ? 'var(--ok)' : 'var(--bad)'}">${ok ? 'Cuadra ✓' : fmt(diff / 100)}</div></div>`;
 }
-async function guardarCheque() {
+async function guardarCheque(confirmado = false) {
   const F = S.F, h = F.h; const btn = $('#btnGuardar');
   const tot = parseMoney(h.monto);
   const err = [];
@@ -841,6 +915,14 @@ async function guardarCheque() {
   const sum = F.lines.reduce((a, l) => a + cents(parseMoney(l.monto) || 0), 0);
   if (!err.length && sum !== cents(tot)) err.push(`Los folios suman ${fmt(sum / 100)} y el cheque es por ${fmt(tot)}. Deben cuadrar al centavo.`);
   if (err.length) return toast(err[0], 'err');
+  // Seguro: revisión de número, fecha, duplicados y monto antes de guardar
+  if (!confirmado) {
+    btn.disabled = true; const txt0 = btn.textContent; btn.textContent = 'Revisando…';
+    let r; try { r = await revisionCaptura(h, tot, !!F.editId); } catch (e) { r = { bloqueos: [], avisos: [] }; }
+    btn.disabled = false; btn.textContent = txt0;
+    if (r.bloqueos.length) { if (F.editId) return toast(r.bloqueos[0], 'err'); return dlgConfirmarCaptura(h, tot, r); }
+    if (!F.editId) return dlgConfirmarCaptura(h, tot, r);
+  }
   const payload = {
     chequera_id: Number(h.chequera_id), numero_cheque: Number(h.numero_cheque), fecha: h.fecha, beneficiario: h.beneficiario.trim().toUpperCase(), monto: tot,
     concepto: h.concepto.trim().toUpperCase(), solicito: h.solicito.trim().toUpperCase(), sin_factura_motivo: h.sin_factura_motivo.trim().toUpperCase(),
@@ -939,12 +1021,58 @@ async function viewBit() {
     ${b.cheques ? `<br><a href="#" data-act="detalle" data-id="${b.cheque_id}">Cheque ${b.cheques.numero_cheque} · ${esc(b.cheques.beneficiario)}</a>` : (b.detalle && b.detalle.cargo ? `<br><span class="mut">${esc(b.detalle.cargo)}: ${b.detalle.antes} → ${b.detalle.despues}</span>` : '')}</div>`).join('') || '<span class="mut">Sin movimientos</span>'}</div>`;
 }
 
+
+/* ===================== RESPALDO EN EXCEL ===================== */
+function cargarSheetJS() {
+  if (window.XLSX) return Promise.resolve();
+  return new Promise((ok, no) => { const sc = document.createElement('script'); sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'; sc.onload = ok; sc.onerror = () => no(new Error('No se pudo cargar el generador de Excel. Revisa tu internet.')); document.head.appendChild(sc); });
+}
+async function traerTodo(tabla, sel, orden) {
+  let out = [], from = 0; const N = 1000;
+  for (;;) {
+    let q = sb.from(tabla).select(sel); orden.forEach(o => { q = q.order(o, { ascending: false }); });
+    const { data, error } = await q.range(from, from + N - 1); if (error) throw error;
+    out = out.concat(data || []); if (!data || data.length < N) break; from += N;
+  }
+  return out;
+}
+async function respaldoExcel() {
+  const btn = $('#btnRespaldo'); if (btn) { btn.disabled = true; btn.textContent = 'Generando respaldo…'; }
+  try {
+    await cargarSheetJS();
+    const ch = await traerTodo('cheques', SEL, ['fecha', 'numero_cheque']);
+    let bit = []; try { bit = await traerTodo('bitacora', '*, cheques(numero_cheque,beneficiario,chequera_id)', ['creado_en']); } catch (e) { bit = []; }
+    const byId = {}; ch.forEach(c => { byId[c.id] = c; });
+    const si = v => v ? 'SI' : 'NO';
+    const cheques = ch.map(c => ({ 'PÓLIZA': c.poliza_numero ?? '', 'CHEQUERA': chequeraNombre(c.chequera_id), 'NO. CHEQUE': c.numero_cheque, 'FECHA': c.fecha, 'BENEFICIARIO': c.beneficiario, 'MONTO': Number(c.monto), 'ESTATUS': String(c.estatus || '').toUpperCase(), 'HISTORIAL (EXCEL ORIGINAL)': si(c.es_historial), 'CONCEPTO': c.concepto || '', 'SOLICITÓ': c.solicito || '', 'CAPTURÓ': c.capturado_por_nombre || '', 'AUTORIZÓ': c.autorizado_por_nombre || '', 'FECHA AUTORIZACIÓN': c.fecha_autorizacion ? String(c.fecha_autorizacion).slice(0, 10) : '', 'COBRADO': si(c.cobrado), 'FECHA COBRO': c.fecha_cobro || '', 'MOTIVO CANCELACIÓN': c.motivo_cancelacion || '', 'MOTIVO RECHAZO': c.motivo_rechazo || '', 'FACTURA': c.sin_factura_motivo || '', 'NOTA': c.nota_historial || '' }));
+    const folios = []; ch.forEach(c => (c.cheque_folios || []).forEach(f => folios.push({ 'PÓLIZA': c.poliza_numero ?? '', 'CHEQUERA': chequeraNombre(c.chequera_id), 'NO. CHEQUE': c.numero_cheque, 'BENEFICIARIO': c.beneficiario, 'CARGO': cargoNombre(f.cargo_id), 'FOLIO': f.folio_numero, 'PROVEEDOR': f.proveedor || '', 'DESCRIPCIÓN': f.descripcion || '', 'OBRA / VILLA': f.obra || '', 'MONTO': Number(f.monto), 'VIGENTE': si(f.activo) })));
+    const arch = []; ch.forEach(c => (c.archivos || []).forEach(a => arch.push({ 'PÓLIZA': c.poliza_numero ?? '', 'CHEQUERA': chequeraNombre(c.chequera_id), 'NO. CHEQUE': c.numero_cheque, 'BENEFICIARIO': c.beneficiario, 'TIPO': String(a.tipo || '').toUpperCase(), 'ARCHIVO': a.nombre || '', 'VIGENTE': si(a.activo) })));
+    const bita = bit.map(b => ({ 'FECHA Y HORA': fdt(b.creado_en), 'USUARIO': b.usuario_nombre || '', 'ACCIÓN': String(b.accion || '').replace(/_/g, ' ').toUpperCase(), 'CHEQUERA': b.cheques ? chequeraNombre(b.cheques.chequera_id) : '', 'NO. CHEQUE': b.cheques ? b.cheques.numero_cheque : '', 'BENEFICIARIO': b.cheques ? b.cheques.beneficiario : '' }));
+    const wb = XLSX.utils.book_new();
+    const add = (nombre, rows, anchos, montoCols) => {
+      const ws = XLSX.utils.json_to_sheet(rows.length ? rows : [{ 'SIN DATOS': '' }]);
+      ws['!cols'] = anchos.map(w => ({ wch: w })); if (rows.length) ws['!autofilter'] = { ref: ws['!ref'] };
+      (montoCols || []).forEach(col => { const rng = XLSX.utils.decode_range(ws['!ref']); for (let r = 1; r <= rng.e.r; r++) { const cell = ws[XLSX.utils.encode_cell({ r, c: col })]; if (cell && typeof cell.v === 'number') cell.z = '#,##0.00'; } });
+      XLSX.utils.book_append_sheet(wb, ws, nombre);
+    };
+    add('CHEQUES', cheques, [9, 22, 11, 12, 40, 14, 12, 14, 28, 24, 24, 24, 14, 9, 12, 28, 28, 28, 28], [5]);
+    add('FOLIOS', folios, [9, 22, 11, 36, 18, 12, 30, 34, 22, 14, 9], [9]);
+    add('ARCHIVOS', arch, [9, 22, 11, 36, 14, 44, 9], []);
+    add('BITACORA', bita, [18, 30, 22, 22, 11, 40], []);
+    const d = new Date(); const f = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    XLSX.writeFile(wb, `RESPALDO_CONTROL_CHEQUES_${f}.xlsx`);
+    toast(`Respaldo listo: ${cheques.length} cheques, ${folios.length} folios.`, 'ok');
+  } catch (e) { toast(errMsg(e), 'err'); }
+  if (btn) { btn.disabled = false; btn.textContent = 'Descargar respaldo en Excel'; }
+}
+
 /* ===================== MENU CUENTA ===================== */
 function menuCuenta() {
   openModal(`<h2 style="margin-top:0">Mi cuenta</h2><div class="card"><div class="b">${esc(S.perfil.nombre)}</div><div class="mut">${esc(S.perfil.correo)} · ${esc(rolTxt(S.perfil.rol))}</div></div>
   <h3>Cambiar contraseña</h3><label class="f">Nueva contraseña (mínimo 8 caracteres)</label>${pwField('np1', 'new-password')}<label class="f">Repítela</label>${pwField('np2', 'new-password')}
   <div class="row" style="margin-top:12px"><button class="btn" data-act="cambiarpass">Guardar contraseña</button><button class="btn ghost" data-act="salir">Cerrar sesión</button></div>
   <h3>Mi firma</h3><div class="mut sm" style="margin-bottom:6px">${S.firma ? 'Ya tienes una firma guardada.' : 'Aún no tienes firma guardada.'}</div><button class="btn ghost" data-act="firma">${S.firma ? 'Cambiar mi firma' : 'Agregar mi firma'}</button>
+  <h3>Respaldo</h3><div class="mut sm" style="margin-bottom:6px">Descarga todos los cheques, folios, archivos y la bitácora en un Excel. Se recomienda hacerlo cada semana y guardarlo en tu computadora o en Drive.</div><button class="btn ghost" id="btnRespaldo" data-act="respaldo">Descargar respaldo en Excel</button>
   <h3>Instalar en el celular</h3><button class="btn ghost" data-act="instalar">Instalar app</button>`);
 }
 
@@ -964,6 +1092,7 @@ document.addEventListener('click', async ev => {
       case 'ovl': if (ev.target === el) closeModal(); break;
       case 'close': closeModal(); break;
       case 'menu': menuCuenta(); break;
+      case 'respaldo': respaldoExcel(); break;
       case 'verpass': { const inp = document.getElementById(el.dataset.for); const ver = inp.type === 'password'; inp.type = ver ? 'text' : 'password'; el.innerHTML = ver ? EYE_OFF : EYE; inp.focus(); break; }
       case 'instalar': {
         if (window.__pwaPrompt) { window.__pwaPrompt.prompt(); await window.__pwaPrompt.userChoice; window.__pwaPrompt = null; break; }
@@ -1033,6 +1162,7 @@ document.addEventListener('click', async ev => {
         if (falta > 0) { F.lines[i].monto = (falta / 100).toFixed(2); renderLines(); } else toast('No falta nada por repartir.', 'err'); break; }
       case 'pickfac': { const files = await pickFiles(true); S.F.files = files; $('#facInfo').textContent = files.length ? files.length + ' archivo(s) listo(s) para subir' : 'Sin adjuntar'; break; }
       case 'guardar': guardarCheque(); break;
+      case 'confirmguardar': closeModal(); guardarCheque(true); break;
       case 'saveserie': {
         const v = Number($('#ser_' + id).value); await rpc('ajustar_serie', { p_cargo_id: Number(id), p_ultimo: v }); toast('Serie actualizada.', 'ok'); await loadCatalogs(); break; }
     }
