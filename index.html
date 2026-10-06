@@ -219,8 +219,10 @@ async function loadCatalogs() {
   S.series = {}; (c.data || []).forEach(s => S.series[s.cargo_id] = s);
 }
 async function refreshPendCount() {
-  const { count } = await sb.from('cheques').select('id', { count: 'exact', head: true }).eq('estatus', 'pendiente').eq('es_historial', false);
-  S.pendCount = count || 0;
+  const [r1, r2] = await Promise.all([
+    sb.from('cheques').select('id', { count: 'exact', head: true }).eq('estatus', 'pendiente').eq('es_historial', false),
+    sb.from('cheques').select('id', { count: 'exact', head: true }).eq('estatus', 'cancelado').eq('es_historial', false).is('cancelacion_enterada_en', null)]);
+  S.pendCount = (r1.count || 0) + (r2.count || 0);
   const b = $('#bPend'); if (b) { b.textContent = S.pendCount; b.classList.toggle('hidden', !S.pendCount); }
 }
 
@@ -255,13 +257,29 @@ async function viewPend() {
   $('#view').innerHTML = `<h2>${esAdmin() ? 'Cheques por autorizar' : 'Cheques pendientes de autorización'}</h2><div id="pendList" class="spin">Cargando…</div>`;
   const { data, error } = await sb.from('cheques').select(SEL).eq('estatus', 'pendiente').eq('es_historial', false).order('creado_en', { ascending: true });
   if (error) return $('#pendList').innerHTML = `<div class="warnbox">${esc(errMsg(error))}</div>`;
-  S.pendCount = data.length; refreshPendCount();
+  const canc = (await sb.from('cheques').select(SEL).eq('estatus', 'cancelado').eq('es_historial', false).is('cancelacion_enterada_en', null).order('actualizado_en', { ascending: true })).data || [];
+  S.pendCount = data.length + canc.length; refreshPendCount();
   const rech = (await sb.from('cheques').select(SEL).eq('estatus', 'rechazado').eq('es_historial', false).order('actualizado_en', { ascending: false }).limit(20)).data || [];
   let html = '';
-  if (!data.length) html += '<div class="card mut" style="text-align:center">No hay cheques pendientes. Todo al día.</div>';
+  if (canc.length) html += `<h3>Cheques cancelados por confirmar</h3>` + canc.map(cardCancel).join('');
+  if (!data.length && !canc.length) html += '<div class="card mut" style="text-align:center">No hay cheques pendientes. Todo al día.</div>';
   html += data.map(c => cardPend(c)).join('');
   if (rech.length) html += `<h3>Rechazados (esperan corrección)</h3>` + rech.map(c => cardPend(c, true)).join('');
   $('#pendList').outerHTML = html;
+}
+function cardCancel(c) {
+  const foto = archActivos(c, 'otro').length;
+  return `<div class="card" id="cp-${c.id}" style="border-color:#e0b4b4">
+    <div class="row" style="align-items:flex-start"><div class="grow">
+      <div class="b" style="font-size:17px">CHEQUE ${c.numero_cheque} CANCELADO</div>
+      <div class="mut sm">${esc(chequeraNombre(c.chequera_id))} · ${fdate(c.fecha)}${Number(c.monto) > 0 ? ' · ' + esc(c.beneficiario) : ''}</div></div>
+      ${Number(c.monto) > 0 ? `<div class="money big">${fmt(c.monto)}</div>` : ''}</div>
+    <div class="warnbox" style="margin-top:8px">Motivo: ${esc(c.motivo_cancelacion || c.concepto || '')}</div>
+    <div class="mut sm" style="margin-top:4px">Lo registró: ${esc(c.capturado_por_nombre || '')}</div>
+    <div class="row" style="margin-top:8px">${foto ? `<button class="btn ghost sm" data-act="verarch" data-id="${c.id}" data-tipo="otro">Ver foto del cheque</button>` : ''}<button class="btn ghost sm" data-act="detalle" data-id="${c.id}">Detalle</button></div>
+    ${esAdmin() ? `<div class="row" style="margin-top:12px"><button class="btn ok grow" data-act="enterar" data-id="${c.id}">Enterado y de acuerdo con la cancelación</button></div>`
+      : '<div class="chip warn" style="margin-top:10px">Esperando que el Ing. dé por enterada la cancelación</div>'}
+  </div>`;
 }
 function cardPend(c, rechazado = false) {
   const fol = foliosActivos(c); const fac = archActivos(c, 'factura').length;
@@ -284,7 +302,7 @@ function cardPend(c, rechazado = false) {
       ${cuadra ? '<span class="chip cobrado">Folios cuadran al centavo</span>' : '<span class="chip rechazado">NO CUADRA</span>'}
       ${fac ? `<button class="btn ghost sm" data-act="verarch" data-id="${c.id}" data-tipo="factura">Ver factura</button>` : (c.sin_factura_motivo ? `<span class="chip warn">Sin factura: ${esc(c.sin_factura_motivo)}</span>` : '<span class="chip rechazado">Falta factura</span>')}
       ${archActivos(c, 'folio').length ? `<button class="btn ghost sm" data-act="verarch" data-id="${c.id}" data-tipo="folio">Ver folio${archActivos(c, 'folio').length > 1 ? ' (1 de ' + archActivos(c, 'folio').length + ')' : ''}</button>` : ''}
-      <button class="btn ghost sm" data-act="poliza" data-id="${c.id}">Póliza PDF</button>
+      <button class="btn ghost sm" data-act="poliza" data-id="${c.id}">Ver póliza</button>
       <button class="btn ghost sm" data-act="detalle" data-id="${c.id}">Detalle</button>
     </div>
     ${rechazado ? `<div class="warnbox">Rechazado: ${esc(c.motivo_rechazo || '')}</div>` : ''}
@@ -398,7 +416,7 @@ async function openDetail(id) {
       if (esAdmin() && c.cobrado) acciones += `<button class="btn ghost" data-act="descobrar" data-id="${id}">Desmarcar cobro</button>`;
       const mismoDia = c.creado_en && new Date(c.creado_en).toLocaleDateString('en-CA', { timeZone: 'America/Monterrey' }) === new Date().toLocaleDateString('en-CA', { timeZone: 'America/Monterrey' });
       if ((esAdmin() || (puedeCapturar() && mismoDia)) && !c.cobrado && c.estatus !== 'cancelado') acciones += `<button class="btn ghost" data-act="cancelar" data-id="${id}">Cancelar cheque</button>`;
-      acciones += `<button class="btn ghost" data-act="poliza" data-id="${id}">Póliza PDF</button>`;
+      acciones += `<button class="btn ghost" data-act="poliza" data-id="${id}">Ver póliza</button>`;
     }
     const puedeSubir = !hist && (c.estatus !== 'cancelado' || puedeCapturar());
     openModal(`
@@ -413,6 +431,7 @@ async function openDetail(id) {
         ${c.autorizado_por_nombre ? `<div>Autorizó</div><div>${esc(c.autorizado_por_nombre)} · ${fdt(c.fecha_autorizacion)}${c.comentario_autorizacion ? '<br><span class="mut">' + esc(c.comentario_autorizacion) + '</span>' : ''}</div>` : ''}
         ${c.motivo_rechazo ? `<div>Rechazo</div><div>${esc(c.motivo_rechazo)}</div>` : ''}
         ${c.motivo_cancelacion ? `<div>Cancelación</div><div>${esc(c.motivo_cancelacion)}</div>` : ''}
+        ${c.estatus === 'cancelado' && !c.es_historial ? `<div>Confirmación del Ing.</div><div>${c.cancelacion_enterada_en ? 'Enterado: ' + esc(c.cancelacion_enterada_por_nombre || '') + ' · ' + fdt(c.cancelacion_enterada_en) : '<span class="chip warn">Pendiente de confirmar</span>'}</div>` : ''}
         ${c.sin_factura_motivo ? `<div>Sin factura</div><div>${esc(c.sin_factura_motivo)}</div>` : ''}
         ${c.cobrado ? `<div>Cobrado</div><div>${fdate(c.fecha_cobro)}</div>` : ''}
         ${c.nota_historial ? `<div>Nota</div><div>${esc(c.nota_historial)}</div>` : ''}
@@ -654,16 +673,16 @@ async function guardarFirma(dataUrl) {
 }
 
 /* ===================== FORMULARIO NUEVO / EDITAR ===================== */
-const newLine = () => ({ cargo_id: '', folio_numero: '', touched: false, proveedor: '', descripcion: '', obra: '', monto: '', modo: 'archivo', files: [], venc: '', periodo: '', conceptos: '' });
+const newLine = () => ({ cargo_id: '', folio_numero: '', touched: false, proveedor: '', descripcion: '', obra: '', monto: '', modo: 'archivo', venc: '', periodo: '', conceptos: '' });
 async function viewNuevo(editCheque) {
   await loadCatalogs();
   if (!S.F) {
-    S.F = { editId: null, clave: crypto.randomUUID(), files: [], lines: [newLine()],
+    S.F = { editId: null, clave: crypto.randomUUID(), files: [], folioFiles: [], lines: [newLine()],
       h: { chequera_id: '', numero_cheque: '', fecha: today(), beneficiario: '', monto: '', concepto: '', solicito: S.perfil.nombre, sin_factura_motivo: '' } };
     if (editCheque) {
       const c = editCheque; S.F.editId = c.id; S.F.clave = null;
       S.F.h = { chequera_id: c.chequera_id, numero_cheque: c.numero_cheque, fecha: c.fecha, beneficiario: c.beneficiario, monto: c.monto, concepto: c.concepto || '', solicito: c.solicito || '', sin_factura_motivo: c.sin_factura_motivo || '' };
-      S.F.lines = foliosActivos(c).map(f => ({ cargo_id: f.cargo_id, folio_numero: f.folio_numero, touched: true, proveedor: f.proveedor || '', descripcion: f.descripcion || '', obra: f.obra || '', monto: f.monto, modo: 'archivo', files: [], venc: '', periodo: '', conceptos: '' }));
+      S.F.lines = foliosActivos(c).map(f => ({ cargo_id: f.cargo_id, folio_numero: f.folio_numero, touched: true, proveedor: f.proveedor || '', descripcion: f.descripcion || '', obra: f.obra || '', monto: f.monto, modo: 'archivo', venc: '', periodo: '', conceptos: '' }));
       if (!S.F.lines.length) S.F.lines = [newLine()];
     }
   }
@@ -686,6 +705,11 @@ async function viewNuevo(editCheque) {
   <h3>Folios que cubre este cheque</h3>
   <div id="lines"></div>
   <button class="btn ghost sm" data-act="addline">+ Agregar folio</button>
+  <h3>Folio (archivo o foto)</h3>
+  <div class="card">
+    <div class="row"><button class="btn ghost sm" data-act="pickfolio">Adjuntar folio (un solo archivo para todos)</button><span id="folInfo" class="mut sm">${F.folioFiles.length ? F.folioFiles.length + ' archivo(s) listo(s) para subir' : 'Sin adjuntar'}</span></div>
+    <div class="mut sm" style="margin-top:6px">Sube aquí el PDF o la foto de los folios que ya tienes: un solo archivo aunque el cheque cubra varios folios. Los folios que genera el sistema se guardan solos.</div>
+  </div>
   <h3>Factura</h3>
   <div class="card">
     <div class="row"><button class="btn ghost sm" data-act="pickfac">Adjuntar factura (foto o PDF)</button><span id="facInfo" class="mut sm">${F.files.length ? F.files.length + ' archivo(s)' : (F.editId ? 'Puedes agregarla desde el detalle' : 'Sin adjuntar')}</span></div>
@@ -706,7 +730,7 @@ function suggest() {
 function renderLines() {
   suggest();
   $('#lines').innerHTML = S.F.lines.map((l, i) => `<div class="line" data-i="${i}">
-    <div class="row"><b class="grow">Folio ${i + 1}</b>${S.F.lines.length > 1 ? `<button class="btn ghost sm" data-act="rmline" data-i="${i}">Quitar</button>` : ''}</div>
+    ${S.F.lines.length > 1 ? `<div class="row"><span class="grow"></span><button class="btn ghost sm" data-act="rmline" data-i="${i}">Quitar este folio</button></div>` : ''}
     <div class="grid2">
       <div><label class="f">Cargo</label><select data-k="cargo_id"><option value="">Elige…</option>${S.cargos.map(c => `<option value="${c.id}" ${String(l.cargo_id) === String(c.id) ? 'selected' : ''}>${esc(c.nombre)}</option>`).join('')}</select></div>
       <div><label class="f">No. de folio</label><input type="text" inputmode="numeric" data-k="folio_numero" placeholder="${esc(l._ph || '')}" value="${esc(l.folio_numero)}"></div>
@@ -719,7 +743,7 @@ function renderLines() {
     <label class="f">Hoja de folio</label>
     <div class="row seg"><button class="btn ${l.modo === 'archivo' ? 'gold' : 'ghost'} sm" data-act="modo" data-i="${i}" data-m="archivo">Ya tengo el folio (archivo o foto)</button>
       <button class="btn ${l.modo === 'sistema' ? 'gold' : 'ghost'} sm" data-act="modo" data-i="${i}" data-m="sistema" ${esCancun(l.cargo_id) ? 'disabled title="Cancún usa su propio formato"' : ''}>Que lo genere el sistema</button></div>
-    ${l.modo === 'archivo' ? `<div class="row" style="margin-top:6px"><button class="btn ghost sm" data-act="pickfolio" data-i="${i}">Adjuntar folio</button><span class="mut sm">${l.files.length ? l.files.length + ' archivo(s) listo(s) para subir' : 'Opcional: puedes adjuntarlo después desde el detalle'}</span></div>` : `
+    ${l.modo === 'archivo' ? `<div class="mut sm" style="margin-top:4px">El archivo del folio se adjunta una sola vez, abajo, en “Folio (archivo o foto)”.</div>` : `
       <div class="grid2"><div><label class="f">Vencimiento (opcional)</label><input type="date" data-k="venc" value="${esc(l.venc)}"></div>
       <div><label class="f">Periodo (opcional)</label><input type="text" data-k="periodo" placeholder="Ej. AGOSTO 2026" value="${esc(l.periodo)}"></div></div>
       <label class="f">Conceptos (un renglón por línea; si lo dejas vacío usa la descripción)</label><textarea data-k="conceptos" rows="3" style="width:100%">${esc(l.conceptos)}</textarea>
@@ -754,18 +778,18 @@ async function guardarCheque() {
   if (!h.beneficiario.trim()) err.push('Captura el beneficiario.');
   if (!(tot > 0)) err.push('Captura el monto del cheque.');
   F.lines.forEach((l, i) => {
-    if (!l.cargo_id) err.push(`Folio ${i + 1}: elige el cargo.`);
-    if (!(parseMoney(l.monto) > 0)) err.push(`Folio ${i + 1}: captura el monto.`);
-    if (l.modo === 'sistema' && !String(l.proveedor).trim()) err.push(`Folio ${i + 1}: captura el proveedor (es el nombre que sale en el folio).`);
-    if (!String(l.folio_numero).trim()) err.push(`Folio ${i + 1}: escribe el número de folio.`);
+    if (!l.cargo_id) err.push('Hay un folio sin cargo: elígelo.');
+    if (!(parseMoney(l.monto) > 0)) err.push('Hay un folio sin monto: captúralo.');
+    if (l.modo === 'sistema' && !String(l.proveedor).trim()) err.push('Hay un folio generado por el sistema sin proveedor (es el nombre que sale en el folio).');
+    if (!String(l.folio_numero).trim()) err.push('Hay un folio sin número: escríbelo.');
   });
   const sum = F.lines.reduce((a, l) => a + cents(parseMoney(l.monto) || 0), 0);
   if (!err.length && sum !== cents(tot)) err.push(`Los folios suman ${fmt(sum / 100)} y el cheque es por ${fmt(tot)}. Deben cuadrar al centavo.`);
   if (err.length) return toast(err[0], 'err');
   const payload = {
-    chequera_id: Number(h.chequera_id), numero_cheque: Number(h.numero_cheque), fecha: h.fecha, beneficiario: h.beneficiario.trim(), monto: tot,
-    concepto: h.concepto.trim(), solicito: h.solicito.trim(), sin_factura_motivo: h.sin_factura_motivo.trim(),
-    folios: F.lines.map(l => ({ cargo_id: Number(l.cargo_id), folio_numero: String(l.folio_numero).trim() || null, proveedor: l.proveedor, descripcion: l.descripcion, obra: l.obra, monto: parseMoney(l.monto) }))
+    chequera_id: Number(h.chequera_id), numero_cheque: Number(h.numero_cheque), fecha: h.fecha, beneficiario: h.beneficiario.trim().toUpperCase(), monto: tot,
+    concepto: h.concepto.trim().toUpperCase(), solicito: h.solicito.trim().toUpperCase(), sin_factura_motivo: h.sin_factura_motivo.trim().toUpperCase(),
+    folios: F.lines.map(l => ({ cargo_id: Number(l.cargo_id), folio_numero: String(l.folio_numero).trim().toUpperCase() || null, proveedor: l.proveedor.trim().toUpperCase(), descripcion: l.descripcion.trim().toUpperCase(), obra: l.obra.trim().toUpperCase(), monto: parseMoney(l.monto) }))
   };
   btn.disabled = true; btn.textContent = 'Guardando…';
   try {
@@ -774,10 +798,10 @@ async function guardarCheque() {
     else { payload.clave_submision = F.clave; c = await rpc('capturar_cheque', { p: payload }); }
     let subidaErr = '';
     if (F.files.length) { try { await subirArchivo(c.id, 'factura', F.files); } catch (e) { subidaErr = errMsg(e); } }
-    const par = emparejarFolios(F.lines, c.folios || []);
-    for (let i = 0; i < F.lines.length; i++) {
-      const l = F.lines[i]; if (l.modo !== 'archivo' || !l.files.length) continue;
-      try { await subirArchivo(c.id, 'folio', l.files, `Folio_${cargoNombre(Number(l.cargo_id))}_${par[i] ? par[i].folio_numero : (i + 1)}`.replace(/[^A-Za-z0-9-]+/g, '_') + '.pdf'); } catch (e) { subidaErr = (subidaErr ? subidaErr + ' · ' : '') + 'Folio ' + (i + 1) + ': ' + errMsg(e); }
+    if (F.folioFiles.length) {
+      const par = emparejarFolios(F.lines, c.folios || []);
+      const nums = F.lines.map((l, k) => l.modo === 'archivo' && par[k] ? par[k].folio_numero : null).filter(Boolean).join('-') || 'FOLIOS';
+      try { await subirArchivo(c.id, 'folio', F.folioFiles, ('Folio_' + nums).replace(/[^A-Za-z0-9-]+/g, '_') + '.pdf'); } catch (e) { subidaErr = (subidaErr ? subidaErr + ' · ' : '') + 'folio: ' + errMsg(e); }
     }
     S.hojas = []; let hojasErr = '';
     try { S.hojas = armarHojas(F.lines, c.folios || [], h); } catch (e) { hojasErr = errMsg(e); }
@@ -790,10 +814,18 @@ async function guardarCheque() {
       ${subidaErr ? `<div class="warnbox">El cheque se guardó, pero un archivo no se pudo subir: ${esc(subidaErr)}. Súbelo desde el detalle.</div>` : ''}
       ${hojasErr ? `<div class="warnbox">El cheque se guardó, pero no se pudo generar o guardar un folio: ${esc(hojasErr)}.</div>` : ''}
       ${S.hojas.length ? `<div class="okbox">Folios generados y guardados en el cheque:</div><div class="row" style="flex-wrap:wrap;gap:6px;margin:8px 0">${S.hojas.map((hj, k) => `<button class="btn ghost sm" data-act="dlfolio" data-i="${k}">Descargar folio ${esc(hj.nums)}</button>`).join('')}</div>` : ''}
-      <div class="row" style="margin-top:12px"><button class="btn gold" data-act="poliza" data-id="${c.id}">Descargar póliza PDF</button><button class="btn ghost" data-act="detalle" data-id="${c.id}">Ver cheque</button><button class="btn ghost" data-act="otro">Capturar otro</button></div>`);
+      <div class="row" style="margin-top:12px"><button class="btn gold" data-act="poliza" data-id="${c.id}">Ver y imprimir póliza</button><button class="btn ghost" data-act="detalle" data-id="${c.id}">Ver cheque</button><button class="btn ghost" data-act="otro">Capturar otro</button></div>`);
   } catch (e) { toast(errMsg(e), 'err'); btn.disabled = false; btn.textContent = F.editId ? 'Guardar cambios y reenviar a autorización' : 'Generar póliza y enviar a autorización'; }
 }
 
+/* ===================== VISTA PREVIA DE PDF ===================== */
+function previewPDF(doc, nombre, titulo) {
+  const blob = doc.output('blob'); const url = URL.createObjectURL(blob); S.prev = { blob, nombre, url };
+  openModal(`<h2 style="margin-top:0">${esc(titulo)}</h2>
+    <iframe id="pdfFrame" src="${url}" title="Vista previa" style="width:100%;height:66vh;border:1px solid var(--line);border-radius:8px;background:#fff"></iframe>
+    <div class="row" style="margin-top:10px;flex-wrap:wrap;gap:8px"><button class="btn gold" data-act="prevprint">Imprimir</button><button class="btn ghost" data-act="prevdl">Descargar PDF</button><button class="btn ghost" data-act="prevopen">Abrir en otra pestaña</button></div>
+    <div class="mut sm" style="margin-top:6px">Revisa cómo quedó antes de imprimir. Si en el celular no se ve aquí, usa “Abrir en otra pestaña”.</div>`);
+}
 /* ===================== POLIZA PDF ===================== */
 async function polizaPDF(id) {
   let c; try { c = await loadCheque(id); } catch (e) { return toast(errMsg(e), 'err'); }
@@ -829,7 +861,7 @@ async function polizaPDF(id) {
   y += 4.6;
   box(Array(6).fill(RH), null);
   frame(y);
-  doc.save(`Poliza_${c.numero_cheque}_${String(chequeraNombre(c.chequera_id)).replace(/[^A-Za-z0-9]+/g, '_')}_${c.beneficiario.replace(/[^A-Za-z0-9]+/g, '_').slice(0, 25)}.pdf`);
+  previewPDF(doc, `Poliza_${c.numero_cheque}_${String(chequeraNombre(c.chequera_id)).replace(/[^A-Za-z0-9]+/g, '_')}_${c.beneficiario.replace(/[^A-Za-z0-9]+/g, '_').slice(0, 25)}.pdf`, `Póliza · Cheque ${c.numero_cheque}`);
 }
 
 /* ===================== FOLIOS (SERIES) ===================== */
@@ -862,6 +894,12 @@ function menuCuenta() {
 }
 
 /* ===================== EVENTOS ===================== */
+// Todo lo que se escribe en la app va en MAYÚSCULAS (correo y contraseña no se tocan).
+document.addEventListener('input', ev => {
+  const el = ev.target; if (!el.matches || !el.matches('input[type=text], textarea')) return;
+  const v = el.value, u = v.toUpperCase(); if (v === u) return;
+  const a = el.selectionStart, b = el.selectionEnd; el.value = u; try { el.setSelectionRange(a, b); } catch (e) {}
+}, true);
 document.addEventListener('click', async ev => {
   const tabBtn = ev.target.closest('nav.tabs button'); if (tabBtn) return go(tabBtn.dataset.tab);
   const el = ev.target.closest('[data-act]'); if (!el) return; const act = el.dataset.act, id = el.dataset.id;
@@ -883,7 +921,11 @@ document.addEventListener('click', async ev => {
       case 'cambiarpass': {
         const a = $('#np1').value, b = $('#np2').value; if (a.length < 8) return toast('Mínimo 8 caracteres.', 'err'); if (a !== b) return toast('No coinciden.', 'err');
         const { error } = await sb.auth.updateUser({ password: a }); if (error) return toast(errMsg(error), 'err'); toast('Contraseña actualizada.', 'ok'); closeModal(); break; }
+      case 'prevprint': { const f = $('#pdfFrame'); try { f.contentWindow.focus(); f.contentWindow.print(); } catch (e) { window.open(S.prev.url, '_blank'); } break; }
+      case 'prevdl': bajarBlob(S.prev.blob, S.prev.nombre); break;
+      case 'prevopen': window.open(S.prev.url, '_blank'); break;
       case 'detalle': openDetail(id); break;
+      case 'enterar': { el.disabled = true; await rpc('enterar_cancelacion', { p_id: id }); toast('Cancelación confirmada.', 'ok'); refreshView(); break; }
       case 'mas': loadList(false); break;
       case 'poliza': polizaPDF(id); break;
       case 'verarch': { const c = await loadCheque(id); const a = archActivos(c, el.dataset.tipo)[0]; if (a) abrirPath(a.path); break; }
@@ -922,7 +964,7 @@ document.addEventListener('click', async ev => {
       case 'cancelarEdit': S.F = null; go('cheques'); break;
       case 'otro': closeModal(); S.F = null; go('nuevo'); break;
       case 'modo': { const l = S.F.lines[Number(el.dataset.i)]; l.modo = el.dataset.m; renderLines(); break; }
-      case 'pickfolio': { const l = S.F.lines[Number(el.dataset.i)]; const fs = await pickFiles(true); if (fs.length) { l.files = fs; renderLines(); } break; }
+      case 'pickfolio': { const fs = await pickFiles(true); S.F.folioFiles = fs; $('#folInfo').textContent = fs.length ? fs.length + ' archivo(s) listo(s) para subir' : 'Sin adjuntar'; break; }
       case 'dlfolio': { const hj = (S.hojas || [])[Number(el.dataset.i)]; if (hj) bajarBlob(hj.blob || hj.doc.output('blob'), hj.nombre); break; }
       case 'firma': dlgFirma(); break;
       case 'firmalimpiar': { const cv = $('#firmaPad'); cv.getContext('2d').clearRect(0, 0, cv.width, cv.height); break; }
