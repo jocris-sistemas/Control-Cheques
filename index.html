@@ -375,6 +375,7 @@ function cardPend(c, rechazado = false) {
       <button class="btn ok grow" data-act="autorizar" data-id="${c.id}" ${sinFac || !cuadra ? 'disabled' : ''}>Autorizar</button>
       <button class="btn bad grow" data-act="rechazar" data-id="${c.id}">Rechazar</button></div>
 ` : ''}
+    ${!esAdmin() && !rechazado ? '<div class="chip warn" style="margin-top:10px">Esperando que el Ing. autorice</div>' : ''}
     ${rechazado && puedeCapturar() ? `<div class="row" style="margin-top:10px"><button class="btn gold" data-act="editar" data-id="${c.id}">Corregir y reenviar</button></div>` : ''}
   </div>`;
 }
