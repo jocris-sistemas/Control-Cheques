@@ -124,9 +124,9 @@ h3{font-size:12.5px;text-transform:uppercase;letter-spacing:.6px;color:#51627a;m
 .item:hover{box-shadow:0 2px 4px rgba(20,52,92,.08),0 8px 20px rgba(20,52,92,.09)}
 .item:active{transform:scale(.995)}
 .item .main{flex:1;min-width:0}
-.item .ben,.item .sub{font-size:15px;line-height:1.3;overflow-wrap:anywhere}
-.item .sub{color:#3b4757;font-weight:500;margin-top:1px}
-.hl{font-size:15.5px;line-height:1.3;font-weight:700}.hl2{font-size:15.5px;line-height:1.3;font-weight:500;color:#3b4757;margin-top:1px}
+.item .ben,.item .sub{font-size:16px;line-height:1.3;overflow-wrap:anywhere}
+.item .sub{color:#2b3645;font-weight:500;margin-top:2px}
+.hl{font-size:16px;line-height:1.3;font-weight:700}.hl2{font-size:16px;line-height:1.3;font-weight:500;color:#2b3645;margin-top:2px}
 .item .side{text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:5px;flex:none}
 .item .side .money{font-size:16px}
 .item.st-pendiente{border-left-color:#e0a23a}.item.st-autorizado{border-left-color:#2f6fb8}.item.st-cobrado{border-left-color:var(--ok)}
@@ -270,7 +270,7 @@ async function boot() {
   $('#app').innerHTML = '<div class="spin">Cargando…</div>';
   await loadCatalogs();
   try { const { data: fr } = await sb.from('firmas').select('imagen').maybeSingle(); S.firma = fr ? fr.imagen : null; } catch (e) { S.firma = null; }
-  S.tab = esAdmin() ? 'pend' : 'cheques';
+  S.tab = 'pend'; // todos entran a Pendientes
   renderShell();
   refreshPendCount();
   if (!boot._iv) boot._iv = setInterval(() => { if (S.perfil) refreshPendCount(); }, 60000);
