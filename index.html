@@ -183,9 +183,17 @@ function renderLogin(msg = '') {
   </div>`;
   $('#fLogin').onsubmit = async ev => {
     ev.preventDefault(); const b = $('#lgBtn'); b.disabled = true; b.textContent = 'Entrando…';
-    const { error } = await sb.auth.signInWithPassword({ email: $('#lgMail').value.trim().toLowerCase(), password: $('#lgPass').value });
-    if (error) { renderLogin('Correo o contraseña incorrectos.'); return; }
-    await boot();
+    const mail = $('#lgMail').value.trim().toLowerCase();
+    const back = m => { renderLogin(m); $('#lgMail').value = mail; };
+    let error;
+    try { ({ error } = await sb.auth.signInWithPassword({ email: mail, password: $('#lgPass').value })); } catch (e) { error = e; }
+    if (error) {
+      const m = String(error.message || error);
+      back(/invalid login|invalid_credentials|credentials/i.test(m) ? 'Correo o contraseña incorrectos.'
+        : /fetch|network|load failed/i.test(m) ? 'No hay conexión con el servidor. Revisa tu internet e inténtalo de nuevo.'
+        : 'No se pudo entrar: ' + m); return;
+    }
+    try { await boot(); } catch (e) { back('Entraste, pero la app no pudo cargar: ' + String(e.message || e)); }
   };
 }
 async function boot() {
