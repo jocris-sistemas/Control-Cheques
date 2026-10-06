@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#14345c">
+<title>Control de Cheques · Jocris</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+:root{
+  --navy:#14345c; --navy2:#1d4577; --gold:#c99a3c; --bg:#f3f5f9; --card:#fff; --ink:#1b2430; --mut:#6b7482;
+  --line:#e1e5ec; --ok:#1e8a4c; --okbg:#e5f6ec; --warn:#b26a00; --warnbg:#fff3dc; --bad:#b3261e; --badbg:#fdebea; --info:#1d4577; --infobg:#e8f0fb;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--ink);font-size:15px;line-height:1.4;padding-bottom:84px}
+button,input,select,textarea{font:inherit;color:inherit}
+.hidden{display:none!important}
+header.top{background:var(--navy);color:#fff;padding:calc(10px + env(safe-area-inset-top)) 16px 10px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:20;border-bottom:3px solid var(--gold)}
+header.top .brand{font-weight:700;letter-spacing:.3px;flex:1}
+header.top .brand small{display:block;font-weight:400;opacity:.75;font-size:11.5px;letter-spacing:0}
+header.top button{background:rgba(255,255,255,.14);border:0;color:#fff;border-radius:8px;padding:8px 12px;cursor:pointer}
+nav.tabs{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--line);display:flex;z-index:20;padding-bottom:env(safe-area-inset-bottom)}
+nav.tabs button{flex:1;background:none;border:0;padding:10px 2px 9px;font-size:12px;color:var(--mut);cursor:pointer;position:relative;font-weight:600}
+nav.tabs button.on{color:var(--navy);box-shadow:inset 0 3px 0 var(--gold)}
+nav.tabs .badge{position:absolute;top:4px;left:calc(50% + 8px);background:var(--bad);color:#fff;border-radius:9px;font-size:10.5px;min-width:18px;padding:1px 5px}
+main{max-width:980px;margin:0 auto;padding:14px 14px 20px}
+h2{margin:6px 0 12px;font-size:19px;color:var(--navy)}
+h3{margin:14px 0 8px;font-size:15px;color:var(--navy)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px;box-shadow:0 1px 2px rgba(20,52,92,.04)}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.grow{flex:1;min-width:0}
+.mut{color:var(--mut)} .sm{font-size:12.5px} .b{font-weight:700} .r{text-align:right}
+.money{font-variant-numeric:tabular-nums;font-weight:700}
+.big{font-size:22px}
+label.f{display:block;font-size:12.5px;color:var(--mut);margin:10px 0 3px;font-weight:600}
+input[type=text],input[type=number],input[type=date],input[type=password],input[type=email],select,textarea{width:100%;padding:10px 11px;border:1px solid #cbd2dc;border-radius:9px;background:#fff;font-size:16px}
+textarea{min-height:70px;resize:vertical}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--gold);border-color:var(--gold)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:0;border-radius:10px;padding:11px 16px;font-weight:700;cursor:pointer;background:var(--navy);color:#fff;font-size:15px}
+.btn.gold{background:var(--gold);color:#fff}
+.btn.ok{background:var(--ok)} .btn.bad{background:var(--bad)}
+.btn.ghost{background:#fff;color:var(--navy);border:1px solid #c5cddb}
+.btn.sm{padding:7px 11px;font-size:13px;border-radius:8px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.chip{display:inline-block;padding:2px 9px;border-radius:20px;font-size:12px;font-weight:700;white-space:nowrap}
+.chip.pendiente{background:var(--warnbg);color:var(--warn)}
+.chip.autorizado{background:var(--infobg);color:var(--info)}
+.chip.cobrado{background:var(--okbg);color:var(--ok)}
+.chip.rechazado,.chip.cancelado{background:var(--badbg);color:var(--bad)}
+.chip.historial{background:#eceff3;color:#59626f}
+.chip.warn{background:var(--warnbg);color:var(--warn)}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{text-align:left;font-size:11.5px;text-transform:uppercase;color:var(--mut);letter-spacing:.4px;padding:6px 6px;border-bottom:1px solid var(--line)}
+td{padding:8px 6px;border-bottom:1px solid var(--line);vertical-align:top}
+.cheque-item{cursor:pointer}
+.cheque-item:active{background:#f8f9fc}
+.sumbar{position:sticky;bottom:78px;background:#fff;border:2px solid var(--line);border-radius:12px;padding:10px 14px;display:flex;gap:14px;flex-wrap:wrap;align-items:center;box-shadow:0 -4px 14px rgba(0,0,0,.08);z-index:5}
+.sumbar.okk{border-color:var(--ok);background:var(--okbg)}
+.sumbar.noo{border-color:var(--bad);background:var(--badbg)}
+.line{border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:10px;background:#fbfcfe}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+@media(max-width:560px){.grid3{grid-template-columns:1fr 1fr}}
+.overlay{position:fixed;inset:0;background:rgba(15,25,40,.55);z-index:50;display:flex;align-items:flex-end;justify-content:center}
+.sheet{background:var(--bg);width:100%;max-width:760px;max-height:94vh;overflow:auto;border-radius:18px 18px 0 0;padding:16px 16px calc(24px + env(safe-area-inset-bottom))}
+@media(min-width:760px){.overlay{align-items:center}.sheet{border-radius:16px}}
+.sheet .x{float:right;background:#e6eaf1;border:0;border-radius:50%;width:34px;height:34px;font-size:18px;cursor:pointer}
+#toast{position:fixed;left:50%;transform:translateX(-50%);bottom:96px;background:#222;color:#fff;padding:11px 16px;border-radius:10px;z-index:99;max-width:92%;font-size:14px;box-shadow:0 6px 20px rgba(0,0,0,.3)}
+#toast.err{background:var(--bad)} #toast.ok{background:var(--ok)}
+.login{max-width:380px;margin:12vh auto 0;padding:0 18px}
+.login .logo{background:var(--navy);color:#fff;border-radius:16px 16px 0 0;padding:22px;text-align:center;border-bottom:4px solid var(--gold)}
+.login .logo b{font-size:22px;letter-spacing:.5px;display:block}
+.login .box{background:#fff;border:1px solid var(--line);border-top:0;border-radius:0 0 16px 16px;padding:8px 20px 22px}
+.kv{display:grid;grid-template-columns:120px 1fr;gap:4px 10px;font-size:14px}
+.kv div:nth-child(odd){color:var(--mut)}
+.files a,.files button.lnk{color:var(--navy2);text-decoration:underline;background:none;border:0;padding:0;cursor:pointer;font-size:14px}
+.log{font-size:13px;border-left:3px solid var(--line);padding:2px 0 2px 10px;margin:6px 0}
+.spin{text-align:center;color:var(--mut);padding:24px}
+.warnbox{background:var(--warnbg);border:1px solid #f0d49b;color:#6a4400;border-radius:10px;padding:9px 12px;font-size:13.5px;margin:8px 0}
+.okbox{background:var(--okbg);border:1px solid #b7e2c7;color:#14683a;border-radius:10px;padding:9px 12px;font-size:13.5px;margin:8px 0}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="modal"></div>
+<div id="toast" class="hidden"></div>
+
+<script>
+/* ===================== CONFIG ===================== */
+const SUPABASE_URL = 'https://hbttxvanyqczspljtqpz.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_J4abyTF0BPq47eBTVLjIFQ_5-x2HOiJ';
+const BUCKET = 'cheques-archivos';
+const PAGE = 40;
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, autoRefreshToken: true } });
+
+/* ===================== ESTADO ===================== */
+const S = { perfil: null, cargos: [], chequeras: [], series: {}, tab: 'pend', filt: { q: '', est: 'nuevos', chequera: '' },
+            list: [], count: 0, page: 0, pendCount: 0, F: null };
+const $ = (s, r = document) => r.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const fmt = n => '$' + Number(n || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const cents = n => Math.round(Number(n || 0) * 100);
+const fdate = d => { if (!d) return ''; const [y, m, dd] = String(d).slice(0, 10).split('-'); return `${dd}/${m}/${y}`; };
+const fdt = d => d ? new Date(d).toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' }) : '';
+const today = () => { const d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
+const parseMoney = s => { const n = Number(String(s ?? '').replace(/[$,\s]/g, '')); return isFinite(n) ? n : NaN; };
+const pad = (n, l = 4) => String(n).padStart(l, '0');
+const rol = () => S.perfil?.rol;
+const puedeCapturar = () => ['administrador', 'capturista'].includes(rol());
+const esAdmin = () => rol() === 'administrador';
+const cargoNombre = id => S.cargos.find(c => c.id === id)?.nombre || '?';
+const chequeraNombre = id => S.chequeras.find(c => c.id === id)?.nombre || '?';
+
+function toast(msg, type = '') {
+  const t = $('#toast'); t.textContent = msg; t.className = type; clearTimeout(toast._t);
+  toast._t = setTimeout(() => t.classList.add('hidden'), type === 'err' ? 6500 : 3000);
+}
+const errMsg = e => (e && (e.message || e.error_description)) || String(e);
+async function rpc(name, args) {
+  const { data, error } = await sb.rpc(name, args);
+  if (error) throw error;
+  return data;
+}
+function openModal(html) { $('#modal').innerHTML = `<div class="overlay" data-act="ovl"><div class="sheet"><button class="x" data-act="close">×</button>${html}</div></div>`; }
+function closeModal() { $('#modal').innerHTML = ''; }
+
+function estadoChip(c) {
+  if (c.es_historial) return '<span class="chip historial">Historial</span>';
+  if (c.estatus === 'autorizado') return c.cobrado ? '<span class="chip cobrado">Cobrado</span>' : '<span class="chip autorizado">Autorizado · por cobrar</span>';
+  return `<span class="chip ${c.estatus}">${{ pendiente: 'Pendiente de autorizar', rechazado: 'Rechazado', cancelado: 'Cancelado' }[c.estatus]}</span>`;
+}
+const foliosActivos = c => (c.cheque_folios || []).filter(f => f.activo);
+const sumFolios = c => foliosActivos(c).reduce((a, f) => a + cents(f.monto), 0);
+const archActivos = (c, tipo) => (c.archivos || []).filter(a => a.activo && (!tipo || a.tipo === tipo));
+
+/* ===================== NUMERO A LETRA ===================== */
+function montoLetra(n) {
+  const U = ['', 'UN', 'DOS', 'TRES', 'CUATRO', 'CINCO', 'SEIS', 'SIETE', 'OCHO', 'NUEVE', 'DIEZ', 'ONCE', 'DOCE', 'TRECE', 'CATORCE', 'QUINCE', 'DIECISEIS', 'DIECISIETE', 'DIECIOCHO', 'DIECINUEVE', 'VEINTE', 'VEINTIUN', 'VEINTIDOS', 'VEINTITRES', 'VEINTICUATRO', 'VEINTICINCO', 'VEINTISEIS', 'VEINTISIETE', 'VEINTIOCHO', 'VEINTINUEVE'];
+  const D = ['', '', '', 'TREINTA', 'CUARENTA', 'CINCUENTA', 'SESENTA', 'SETENTA', 'OCHENTA', 'NOVENTA'];
+  const C = ['', 'CIENTO', 'DOSCIENTOS', 'TRESCIENTOS', 'CUATROCIENTOS', 'QUINIENTOS', 'SEISCIENTOS', 'SETECIENTOS', 'OCHOCIENTOS', 'NOVECIENTOS'];
+  const m1000 = x => { if (x === 100) return 'CIEN'; let s = ''; const c = Math.floor(x / 100), r = x % 100; if (c) s += C[c] + ' '; if (r < 30) s += U[r]; else { const d = Math.floor(r / 10), u = r % 10; s += D[d] + (u ? ' Y ' + U[u] : ''); } return s.trim(); };
+  const total = Math.round(Number(n) * 100); const ent = Math.floor(total / 100), cc = total % 100;
+  let s = '';
+  if (ent === 0) s = 'CERO';
+  else {
+    const mill = Math.floor(ent / 1e6), mil = Math.floor((ent % 1e6) / 1000), r = ent % 1000;
+    if (mill) s += (mill === 1 ? 'UN MILLON' : m1000(mill) + ' MILLONES') + ' ';
+    if (mil) s += (mil === 1 ? 'MIL' : m1000(mil) + ' MIL') + ' ';
+    if (r) s += m1000(r);
+    s = s.trim();
+  }
+  const sufijo = ent === 1 ? 'PESO' : (ent > 0 && ent % 1e6 === 0 ? 'DE PESOS' : 'PESOS');
+  return `${s} ${sufijo} ${String(cc).padStart(2, '0')}/100 M.N.`;
+}
+
+/* ===================== AUTENTICACION ===================== */
+function renderLogin(msg = '') {
+  $('#app').innerHTML = `
+  <div class="login">
+    <div class="logo"><b>JOCRIS</b><span>Control de Cheques</span></div>
+    <div class="box">
+      <form id="fLogin">
+        <label class="f">Correo</label><input type="email" id="lgMail" autocomplete="username" required>
+        <label class="f">Contraseña</label><input type="password" id="lgPass" autocomplete="current-password" required>
+        ${msg ? `<div class="warnbox">${esc(msg)}</div>` : ''}
+        <button class="btn" style="width:100%;margin-top:16px" id="lgBtn">Entrar</button>
+        <p class="mut sm" style="text-align:center;margin:14px 0 0">Acceso solo para usuarios autorizados.</p>
+      </form>
+    </div>
+  </div>`;
+  $('#fLogin').onsubmit = async ev => {
+    ev.preventDefault(); const b = $('#lgBtn'); b.disabled = true; b.textContent = 'Entrando…';
+    const { error } = await sb.auth.signInWithPassword({ email: $('#lgMail').value.trim().toLowerCase(), password: $('#lgPass').value });
+    if (error) { renderLogin('Correo o contraseña incorrectos.'); return; }
+    await boot();
+  };
+}
+async function boot() {
+  const { data: { session } } = await sb.auth.getSession();
+  if (!session) return renderLogin();
+  const { data: p } = await sb.from('perfiles').select('*').eq('id', session.user.id).maybeSingle();
+  if (!p || !p.activo) { await sb.auth.signOut(); return renderLogin('Tu usuario no está activo en el sistema. Avísale a Pedro.'); }
+  S.perfil = p;
+  $('#app').innerHTML = '<div class="spin">Cargando…</div>';
+  await loadCatalogs();
+  S.tab = esAdmin() ? 'pend' : 'cheques';
+  renderShell();
+  refreshPendCount();
+  if (!boot._iv) boot._iv = setInterval(() => { if (S.perfil) refreshPendCount(); }, 60000);
+}
+async function loadCatalogs() {
+  const [a, b, c] = await Promise.all([
+    sb.from('chequeras').select('*').eq('activa', true).order('nombre'),
+    sb.from('cargos').select('*').eq('activo', true).order('id'),
+    sb.from('series_folio').select('*')]);
+  S.chequeras = a.data || []; S.cargos = b.data || [];
+  S.series = {}; (c.data || []).forEach(s => S.series[s.cargo_id] = s);
+}
+async function refreshPendCount() {
+  const { count } = await sb.from('cheques').select('id', { count: 'exact', head: true }).eq('estatus', 'pendiente').eq('es_historial', false);
+  S.pendCount = count || 0;
+  const b = $('#bPend'); if (b) { b.textContent = S.pendCount; b.classList.toggle('hidden', !S.pendCount); }
+}
+
+/* ===================== SHELL ===================== */
+function renderShell() {
+  const tabs = [['pend', esAdmin() ? 'Autorizar' : 'Pendientes'], ['cheques', 'Cheques']];
+  if (puedeCapturar()) tabs.push(['nuevo', 'Nuevo']);
+  tabs.push(['series', 'Folios'], ['bit', 'Bitácora']);
+  $('#app').innerHTML = `
+  <header class="top">
+    <div class="brand">JOCRIS · Control de Cheques<small>${esc(S.perfil.nombre)} · ${esc(S.perfil.rol)}</small></div>
+    <button data-act="menu">Cuenta</button>
+  </header>
+  <main id="view"></main>
+  <nav class="tabs">${tabs.map(([k, l]) => `<button data-tab="${k}" class="${S.tab === k ? 'on' : ''}">${l}${k === 'pend' ? `<span class="badge hidden" id="bPend">0</span>` : ''}</button>`).join('')}</nav>`;
+  go(S.tab);
+}
+function go(tab) {
+  S.tab = tab;
+  document.querySelectorAll('nav.tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
+  if (tab !== 'nuevo') S.F = null;
+  ({ pend: viewPend, cheques: viewCheques, nuevo: viewNuevo, series: viewSeries, bit: viewBit }[tab])();
+  window.scrollTo(0, 0);
+  refreshPendCount();
+}
+
+/* ===================== CONSULTAS ===================== */
+const SEL = '*, cheque_folios(id,cargo_id,folio_numero,proveedor,descripcion,obra,monto,activo), archivos(id,tipo,activo,nombre,path)';
+
+/* ===================== VISTA: AUTORIZAR / PENDIENTES ===================== */
+async function viewPend() {
+  $('#view').innerHTML = `<h2>${esAdmin() ? 'Cheques por autorizar' : 'Cheques pendientes de autorización'}</h2><div id="pendList" class="spin">Cargando…</div>`;
+  const { data, error } = await sb.from('cheques').select(SEL).eq('estatus', 'pendiente').eq('es_historial', false).order('creado_en', { ascending: true });
+  if (error) return $('#pendList').innerHTML = `<div class="warnbox">${esc(errMsg(error))}</div>`;
+  S.pendCount = data.length; refreshPendCount();
+  const rech = (await sb.from('cheques').select(SEL).eq('estatus', 'rechazado').eq('es_historial', false).order('actualizado_en', { ascending: false }).limit(20)).data || [];
+  let html = '';
+  if (!data.length) html += '<div class="card mut" style="text-align:center">No hay cheques pendientes. Todo al día.</div>';
+  html += data.map(c => cardPend(c)).join('');
+  if (rech.length) html += `<h3>Rechazados (esperan corrección)</h3>` + rech.map(c => cardPend(c, true)).join('');
+  $('#pendList').outerHTML = html;
+}
+function cardPend(c, rechazado = false) {
+  const fol = foliosActivos(c); const fac = archActivos(c, 'factura').length;
+  const sinFac = !fac && !c.sin_factura_motivo;
+  const cuadra = sumFolios(c) === cents(c.monto);
+  return `<div class="card" id="cp-${c.id}">
+    <div class="row" style="align-items:flex-start">
+      <div class="grow">
+        <div class="b" style="font-size:17px">${esc(c.beneficiario)}</div>
+        <div class="mut sm">Póliza ${pad(c.poliza_numero)} · Cheque ${c.numero_cheque} · ${esc(chequeraNombre(c.chequera_id))} · ${fdate(c.fecha)}</div>
+      </div>
+      <div class="money big">${fmt(c.monto)}</div>
+    </div>
+    ${c.concepto ? `<div style="margin-top:6px">${esc(c.concepto)}</div>` : ''}
+    <div class="mut sm" style="margin-top:4px">Capturó: ${esc(c.capturado_por_nombre || '')}${c.solicito ? ' · Solicitó: ' + esc(c.solicito) : ''}</div>
+    <table style="margin-top:8px"><thead><tr><th>Cargo</th><th>Folio</th><th>Detalle</th><th class="r">Monto</th></tr></thead><tbody>
+      ${fol.map(f => `<tr><td>${esc(cargoNombre(f.cargo_id))}</td><td>${esc(f.folio_numero)}</td><td>${esc([f.proveedor, f.descripcion, f.obra].filter(Boolean).join(' · '))}</td><td class="r money">${fmt(f.monto)}</td></tr>`).join('')}
+    </tbody></table>
+    <div class="row" style="margin-top:8px">
+      ${cuadra ? '<span class="chip cobrado">Folios cuadran al centavo</span>' : '<span class="chip rechazado">NO CUADRA</span>'}
+      ${fac ? `<button class="btn ghost sm" data-act="verarch" data-id="${c.id}" data-tipo="factura">Ver factura</button>` : (c.sin_factura_motivo ? `<span class="chip warn">Sin factura: ${esc(c.sin_factura_motivo)}</span>` : '<span class="chip rechazado">Falta factura</span>')}
+      <button class="btn ghost sm" data-act="poliza" data-id="${c.id}">Póliza PDF</button>
+      <button class="btn ghost sm" data-act="detalle" data-id="${c.id}">Detalle</button>
+    </div>
+    ${rechazado ? `<div class="warnbox">Rechazado: ${esc(c.motivo_rechazo || '')}</div>` : ''}
+    ${esAdmin() && !rechazado ? `<div class="row" style="margin-top:12px">
+      <button class="btn ok grow" data-act="autorizar" data-id="${c.id}" ${sinFac || !cuadra ? 'disabled' : ''}>Autorizar</button>
+      <button class="btn bad grow" data-act="rechazar" data-id="${c.id}">Rechazar</button></div>
+      ${sinFac ? '<div class="warnbox">No se puede autorizar: falta la factura (o el motivo de por qué no lleva).</div>' : ''}` : ''}
+    ${rechazado && puedeCapturar() ? `<div class="row" style="margin-top:10px"><button class="btn gold" data-act="editar" data-id="${c.id}">Corregir y reenviar</button></div>` : ''}
+  </div>`;
+}
+async function loadCheque(id) {
+  const { data, error } = await sb.from('cheques').select(SEL).eq('id', id).single();
+  if (error) throw error; return data;
+}
+function dlgAutorizar(id, c) {
+  openModal(`<h2>Autorizar cheque</h2>
+    <div class="card"><div class="b">${esc(c.beneficiario)}</div><div class="money big">${fmt(c.monto)}</div><div class="mut sm">Póliza ${pad(c.poliza_numero)} · Cheque ${c.numero_cheque}</div></div>
+    <label class="f">Comentario (opcional)</label><textarea id="cmt"></textarea>
+    <div class="row" style="margin-top:14px"><button class="btn ok grow" data-act="okautorizar" data-id="${id}">Sí, autorizar</button><button class="btn ghost" data-act="close">Cancelar</button></div>`);
+}
+function dlgMotivo(titulo, act, id, btnClass = 'bad', btnTxt = 'Confirmar') {
+  openModal(`<h2>${titulo}</h2><label class="f">Motivo (obligatorio)</label><textarea id="mot"></textarea>
+    <div class="row" style="margin-top:14px"><button class="btn ${btnClass} grow" data-act="${act}" data-id="${id}">${btnTxt}</button><button class="btn ghost" data-act="close">Volver</button></div>`);
+}
+
+/* ===================== VISTA: LISTA DE CHEQUES ===================== */
+function viewCheques() {
+  const f = S.filt;
+  $('#view').innerHTML = `<h2>Cheques</h2>
+  <div class="card">
+    <input type="text" id="fq" placeholder="Buscar beneficiario, No. cheque, póliza o folio…" value="${esc(f.q)}">
+    <div class="grid2" style="margin-top:8px">
+      <select id="fest">${[['nuevos', 'Nuevos (con póliza)'], ['pendiente', 'Pendientes'], ['porcobrar', 'Autorizados por cobrar'], ['cobrado', 'Cobrados'], ['rechazado', 'Rechazados'], ['cancelado', 'Cancelados'], ['historial', 'Historial (archivo)'], ['todos', 'Todos']].map(([v, l]) => `<option value="${v}" ${f.est === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
+      <select id="fch"><option value="">Todas las chequeras</option>${S.chequeras.map(c => `<option value="${c.id}" ${String(f.chequera) === String(c.id) ? 'selected' : ''}>${esc(c.nombre)}</option>`).join('')}</select>
+    </div>
+  </div>
+  <div id="resumen"></div><div id="lst" class="spin">Cargando…</div><div id="more" class="r"></div>`;
+  let t; $('#fq').oninput = e => { clearTimeout(t); t = setTimeout(() => { f.q = e.target.value.trim(); loadList(true); }, 350); };
+  $('#fest').onchange = e => { f.est = e.target.value; loadList(true); };
+  $('#fch').onchange = e => { f.chequera = e.target.value; loadList(true); };
+  loadList(true);
+}
+async function loadList(reset) {
+  const f = S.filt; if (reset) { S.page = 0; S.list = []; $('#lst').innerHTML = '<div class="spin">Cargando…</div>'; }
+  let q = sb.from('cheques').select(SEL, { count: 'exact' });
+  if (f.est === 'nuevos') q = q.eq('es_historial', false);
+  else if (f.est === 'historial') q = q.eq('es_historial', true);
+  else if (f.est === 'porcobrar') q = q.eq('es_historial', false).eq('estatus', 'autorizado').eq('cobrado', false);
+  else if (f.est === 'cobrado') q = q.eq('es_historial', false).eq('cobrado', true);
+  else if (['pendiente', 'rechazado', 'cancelado'].includes(f.est)) q = q.eq('es_historial', false).eq('estatus', f.est);
+  if (f.chequera) q = q.eq('chequera_id', Number(f.chequera));
+  if (f.q) {
+    const term = f.q.replace(/[,()%*]/g, ' ').trim(); const conds = [`beneficiario.ilike.%${term}%`, `concepto.ilike.%${term}%`];
+    if (/^\d+$/.test(term) && term.length < 10) { conds.push(`numero_cheque.eq.${term}`, `poliza_numero.eq.${term}`); }
+    const { data: fo } = await sb.from('cheque_folios').select('cheque_id').eq('activo', true).or(`folio_numero.ilike.${term},proveedor.ilike.%${term}%`).limit(200);
+    const ids = [...new Set((fo || []).map(x => x.cheque_id))];
+    if (ids.length) conds.push(`id.in.(${ids.join(',')})`);
+    q = q.or(conds.join(','));
+  }
+  q = q.order('fecha', { ascending: false }).order('numero_cheque', { ascending: false }).range(S.page * PAGE, S.page * PAGE + PAGE - 1);
+  const { data, error, count } = await q;
+  if (error) { $('#lst').innerHTML = `<div class="warnbox">${esc(errMsg(error))}</div>`; return; }
+  S.count = count; S.list = S.list.concat(data); S.page++;
+  if (f.est === 'porcobrar' || f.est === 'nuevos') {
+    const { data: pc } = await sb.from('cheques').select('monto').eq('es_historial', false).eq('estatus', 'autorizado').eq('cobrado', false);
+    const tot = (pc || []).reduce((a, x) => a + cents(x.monto), 0) / 100;
+    $('#resumen').innerHTML = `<div class="card row"><div class="grow"><div class="mut sm">Autorizados por cobrar</div><div class="money big">${fmt(tot)}</div></div><div class="mut sm">${(pc || []).length} cheque(s)</div></div>`;
+  } else $('#resumen').innerHTML = '';
+  $('#lst').outerHTML = `<div id="lst">${S.list.length ? S.list.map(rowCheque).join('') : '<div class="card mut" style="text-align:center">Sin resultados.</div>'}</div>`;
+  $('#more').innerHTML = S.list.length < S.count ? `<button class="btn ghost" data-act="mas">Ver más (${S.list.length} de ${S.count})</button>` : (S.count ? `<span class="mut sm">${S.count} cheque(s)</span>` : '');
+}
+function rowCheque(c) {
+  const fol = foliosActivos(c);
+  return `<div class="card cheque-item" data-act="detalle" data-id="${c.id}">
+    <div class="row" style="align-items:flex-start">
+      <div class="grow"><div class="b">${esc(c.beneficiario)}</div>
+        <div class="mut sm">${c.es_historial ? '' : 'Póliza ' + pad(c.poliza_numero) + ' · '}Cheque ${c.numero_cheque} · ${esc(chequeraNombre(c.chequera_id))} · ${fdate(c.fecha)}</div>
+        ${c.concepto ? `<div class="sm">${esc(c.concepto)}</div>` : ''}
+        ${!c.es_historial && fol.length ? `<div class="mut sm">Folios: ${fol.map(f => esc(cargoNombre(f.cargo_id)) + ' ' + esc(f.folio_numero)).join(' · ')}</div>` : ''}</div>
+      <div class="r"><div class="money">${fmt(c.monto)}</div>${estadoChip(c)}</div>
+    </div></div>`;
+}
+
+/* ===================== DETALLE ===================== */
+async function openDetail(id) {
+  openModal('<div class="spin">Cargando…</div>');
+  try {
+    const c = await loadCheque(id);
+    const { data: bit } = await sb.from('bitacora').select('*').eq('cheque_id', id).order('creado_en', { ascending: true });
+    const fol = foliosActivos(c); const cuadra = sumFolios(c) === cents(c.monto);
+    const arch = archActivos(c);
+    const tipoTxt = { factura: 'Factura', comprobante_cobro: 'Comprobante de cobro', otro: 'Otro' };
+    const hist = c.es_historial;
+    let acciones = '';
+    if (!hist) {
+      if (esAdmin() && c.estatus === 'pendiente') acciones += `<button class="btn ok" data-act="autorizar" data-id="${id}">Autorizar</button><button class="btn bad" data-act="rechazar" data-id="${id}">Rechazar</button>`;
+      if (puedeCapturar() && ['pendiente', 'rechazado'].includes(c.estatus)) acciones += `<button class="btn gold" data-act="editar" data-id="${id}">Editar</button>`;
+      if (c.estatus === 'autorizado' && !c.cobrado && ['administrador', 'capturista', 'contador'].includes(rol())) acciones += `<button class="btn" data-act="cobrar" data-id="${id}">Marcar cobrado</button>`;
+      if (esAdmin() && c.cobrado) acciones += `<button class="btn ghost" data-act="descobrar" data-id="${id}">Desmarcar cobro</button>`;
+      if (esAdmin() && !c.cobrado && c.estatus !== 'cancelado') acciones += `<button class="btn ghost" data-act="cancelar" data-id="${id}">Cancelar cheque</button>`;
+      acciones += `<button class="btn ghost" data-act="poliza" data-id="${id}">Póliza PDF</button>`;
+    }
+    const puedeSubir = !hist && c.estatus !== 'cancelado';
+    openModal(`
+      <h2 style="margin-top:0">${esc(c.beneficiario)}</h2>
+      <div class="row" style="margin-bottom:8px">${estadoChip(c)}<span class="money big grow r">${fmt(c.monto)}</span></div>
+      <div class="card"><div class="kv">
+        ${hist ? '' : `<div>Póliza</div><div class="b">${pad(c.poliza_numero)}</div>`}
+        <div>Cheque</div><div>${c.numero_cheque} · ${esc(chequeraNombre(c.chequera_id))}</div>
+        <div>Fecha</div><div>${fdate(c.fecha)}</div>
+        ${c.concepto ? `<div>Concepto</div><div>${esc(c.concepto)}</div>` : ''}
+        ${c.solicito ? `<div>Solicitó</div><div>${esc(c.solicito)}</div>` : ''}
+        ${c.capturado_por_nombre ? `<div>Capturó</div><div>${esc(c.capturado_por_nombre)}</div>` : ''}
+        ${c.autorizado_por_nombre ? `<div>Autorizó</div><div>${esc(c.autorizado_por_nombre)} · ${fdt(c.fecha_autorizacion)}${c.comentario_autorizacion ? '<br><span class="mut">' + esc(c.comentario_autorizacion) + '</span>' : ''}</div>` : ''}
+        ${c.motivo_rechazo ? `<div>Rechazo</div><div>${esc(c.motivo_rechazo)}</div>` : ''}
+        ${c.motivo_cancelacion ? `<div>Cancelación</div><div>${esc(c.motivo_cancelacion)}</div>` : ''}
+        ${c.sin_factura_motivo ? `<div>Sin factura</div><div>${esc(c.sin_factura_motivo)}</div>` : ''}
+        ${c.cobrado ? `<div>Cobrado</div><div>${fdate(c.fecha_cobro)}</div>` : ''}
+        ${c.nota_historial ? `<div>Nota</div><div>${esc(c.nota_historial)}</div>` : ''}
+      </div></div>
+      ${hist ? '<div class="warnbox">Cheque del historial (archivo). No lleva póliza ni folios del sistema.</div>' : `
+      <h3>Folios</h3><div class="card" style="padding:6px 10px"><table><thead><tr><th>Cargo</th><th>Folio</th><th>Detalle</th><th class="r">Monto</th></tr></thead><tbody>
+        ${fol.map(f => `<tr><td>${esc(cargoNombre(f.cargo_id))}</td><td>${esc(f.folio_numero)}</td><td>${esc([f.proveedor, f.descripcion, f.obra].filter(Boolean).join(' · '))}</td><td class="r money">${fmt(f.monto)}</td></tr>`).join('') || '<tr><td colspan="4" class="mut">Sin folios</td></tr>'}
+      </tbody></table></div>
+      ${cuadra ? '<div class="okbox">Folios y cheque cuadran al centavo.</div>' : `<div class="warnbox">No cuadra: folios ${fmt(sumFolios(c) / 100)} vs cheque ${fmt(c.monto)}.</div>`}`}
+      <h3>Documentos</h3><div class="card files">
+        ${arch.length ? arch.map(a => `<div class="row" style="margin-bottom:6px"><span class="chip historial">${tipoTxt[a.tipo]}</span><button class="lnk grow" style="text-align:left" data-act="verpath" data-path="${esc(a.path)}">${esc(a.nombre || 'archivo')}</button>${puedeCapturar() ? `<button class="btn ghost sm" data-act="quitar" data-id="${a.id}">Quitar</button>` : ''}</div>`).join('') : '<span class="mut">Aún no hay documentos.</span>'}
+        ${puedeSubir ? `<div class="row" style="margin-top:10px">
+          ${puedeCapturar() ? `<button class="btn ghost sm" data-act="subir" data-id="${id}" data-tipo="factura">+ Factura</button>` : ''}
+          ${c.estatus === 'autorizado' && ['administrador', 'capturista', 'contador'].includes(rol()) ? `<button class="btn ghost sm" data-act="subir" data-id="${id}" data-tipo="comprobante_cobro">+ Comprobante de cobro</button>` : ''}
+          ${puedeCapturar() ? `<button class="btn ghost sm" data-act="subir" data-id="${id}" data-tipo="otro">+ Otro</button>` : ''}</div>` : ''}
+      </div>
+      ${acciones ? `<div class="row" style="margin:12px 0">${acciones}</div>` : ''}
+      <h3>Bitácora</h3><div>${(bit || []).map(b => `<div class="log"><b>${esc(b.accion.replace(/_/g, ' '))}</b> · ${esc(b.usuario_nombre || '')}<br><span class="mut">${fdt(b.creado_en)}</span></div>`).join('') || '<span class="mut">Sin movimientos</span>'}</div>
+    `);
+  } catch (e) { openModal(`<div class="warnbox">${esc(errMsg(e))}</div>`); }
+}
+
+/* ===================== ARCHIVOS ===================== */
+function pickFiles(multiple = true) {
+  return new Promise(res => {
+    const i = document.createElement('input'); i.type = 'file'; i.accept = 'image/*,application/pdf'; i.multiple = multiple;
+    i.onchange = () => res([...i.files]); i.click();
+  });
+}
+function loadImg(file, maxDim = 1800) {
+  return new Promise((res, rej) => {
+    const url = URL.createObjectURL(file); const im = new Image();
+    im.onload = () => {
+      let { width: w, height: h } = im; const k = Math.min(1, maxDim / Math.max(w, h)); w = Math.round(w * k); h = Math.round(h * k);
+      const cv = document.createElement('canvas'); cv.width = w; cv.height = h; cv.getContext('2d').drawImage(im, 0, 0, w, h);
+      URL.revokeObjectURL(url); res({ data: cv.toDataURL('image/jpeg', 0.82), w, h });
+    };
+    im.onerror = () => rej(new Error('No se pudo leer la imagen.')); im.src = url;
+  });
+}
+async function filesToPdf(files) {
+  if (files.length === 1 && files[0].type === 'application/pdf') return files[0];
+  if (files.some(f => f.type === 'application/pdf')) throw new Error('No mezcles PDFs con fotos: sube el PDF solo.');
+  const { jsPDF } = window.jspdf; const doc = new jsPDF({ unit: 'mm', format: 'a4' }); let first = true;
+  for (const f of files) {
+    const im = await loadImg(f); if (!first) doc.addPage(); first = false;
+    const pw = 210, ph = 297, m = 8, r = Math.min((pw - 2 * m) / im.w, (ph - 2 * m) / im.h);
+    doc.addImage(im.data, 'JPEG', m + ((pw - 2 * m) - im.w * r) / 2, m, im.w * r, im.h * r);
+  }
+  return doc.output('blob');
+}
+async function subirArchivo(chequeId, tipo, files) {
+  const blob = await filesToPdf(files);
+  const path = `${chequeId}/${tipo}-${Date.now()}.pdf`;
+  const up = await sb.storage.from(BUCKET).upload(path, blob, { contentType: 'application/pdf' });
+  if (up.error) throw up.error;
+  const nombre = files.length === 1 ? files[0].name.replace(/\.(jpe?g|png|webp|heic)$/i, '.pdf') : `${tipo}-${files.length}-fotos.pdf`;
+  await rpc('registrar_archivo', { p_cheque: chequeId, p_tipo: tipo, p_path: path, p_nombre: nombre });
+}
+async function abrirPath(path) {
+  const w = window.open('', '_blank');
+  const { data, error } = await sb.storage.from(BUCKET).createSignedUrl(path, 300);
+  if (error) { if (w) w.close(); return toast(errMsg(error), 'err'); }
+  if (w) w.location = data.signedUrl; else location.href = data.signedUrl;
+}
+
+/* ===================== FORMULARIO NUEVO / EDITAR ===================== */
+const newLine = () => ({ cargo_id: '', folio_numero: '', touched: false, proveedor: '', descripcion: '', obra: '', monto: '' });
+async function viewNuevo(editCheque) {
+  await loadCatalogs();
+  if (!S.F) {
+    S.F = { editId: null, clave: crypto.randomUUID(), files: [], lines: [newLine()],
+      h: { chequera_id: '', numero_cheque: '', fecha: today(), beneficiario: '', monto: '', concepto: '', solicito: S.perfil.nombre, sin_factura_motivo: '' } };
+    if (editCheque) {
+      const c = editCheque; S.F.editId = c.id; S.F.clave = null;
+      S.F.h = { chequera_id: c.chequera_id, numero_cheque: c.numero_cheque, fecha: c.fecha, beneficiario: c.beneficiario, monto: c.monto, concepto: c.concepto || '', solicito: c.solicito || '', sin_factura_motivo: c.sin_factura_motivo || '' };
+      S.F.lines = foliosActivos(c).map(f => ({ cargo_id: f.cargo_id, folio_numero: f.folio_numero, touched: true, proveedor: f.proveedor || '', descripcion: f.descripcion || '', obra: f.obra || '', monto: f.monto }));
+      if (!S.F.lines.length) S.F.lines = [newLine()];
+    }
+  }
+  const F = S.F, h = F.h;
+  const { data: bens } = await sb.from('cheques').select('beneficiario').order('creado_en', { ascending: false }).limit(1000);
+  const uniq = [...new Set((bens || []).map(x => x.beneficiario))].slice(0, 400);
+  $('#view').innerHTML = `<h2>${F.editId ? 'Editar cheque' : 'Nuevo cheque'}</h2>
+  <div class="card">
+    <div class="grid2">
+      <div><label class="f">Chequera</label><select id="h_chequera_id"><option value="">Elige…</option>${S.chequeras.map(c => `<option value="${c.id}" ${String(h.chequera_id) === String(c.id) ? 'selected' : ''}>${esc(c.nombre)}</option>`).join('')}</select></div>
+      <div><label class="f">No. de cheque</label><input type="number" inputmode="numeric" id="h_numero_cheque" value="${esc(h.numero_cheque)}"></div>
+      <div><label class="f">Fecha</label><input type="date" id="h_fecha" value="${esc(h.fecha)}"></div>
+      <div><label class="f">Monto del cheque</label><input type="text" inputmode="decimal" id="h_monto" placeholder="0.00" value="${esc(h.monto)}"></div>
+    </div>
+    <label class="f">Beneficiario</label><input type="text" id="h_beneficiario" list="dlBen" value="${esc(h.beneficiario)}" autocomplete="off">
+    <datalist id="dlBen">${uniq.map(b => `<option value="${esc(b)}">`).join('')}</datalist>
+    <label class="f">Concepto</label><input type="text" id="h_concepto" value="${esc(h.concepto)}">
+    <label class="f">Solicitó</label><input type="text" id="h_solicito" value="${esc(h.solicito)}">
+  </div>
+  <h3>Folios que cubre este cheque</h3>
+  <div id="lines"></div>
+  <button class="btn ghost sm" data-act="addline">+ Agregar folio</button>
+  <h3>Factura</h3>
+  <div class="card">
+    <div class="row"><button class="btn ghost sm" data-act="pickfac">Adjuntar factura (foto o PDF)</button><span id="facInfo" class="mut sm">${F.files.length ? F.files.length + ' archivo(s)' : (F.editId ? 'Puedes agregarla desde el detalle' : 'Sin adjuntar')}</span></div>
+    <label class="f">Si no hay factura, ¿por qué?</label><input type="text" id="h_sin_factura_motivo" placeholder="Ej. proveedor la entrega después, pago de nómina…" value="${esc(h.sin_factura_motivo)}">
+    <div class="mut sm" style="margin-top:6px">Para autorizar se necesita la factura o este motivo.</div>
+  </div>
+  <div id="sumbar" class="sumbar"></div>
+  <div class="row" style="margin-top:12px"><button class="btn gold grow" id="btnGuardar" data-act="guardar">${F.editId ? 'Guardar cambios y reenviar a autorización' : 'Generar póliza y enviar a autorización'}</button>${F.editId ? '<button class="btn ghost" data-act="cancelarEdit">Cancelar</button>' : ''}</div>`;
+  ['chequera_id', 'numero_cheque', 'fecha', 'monto', 'beneficiario', 'concepto', 'solicito', 'sin_factura_motivo'].forEach(k => {
+    const el = $('#h_' + k); el.oninput = el.onchange = () => { h[k] = el.value; updateSum(); };
+  });
+  renderLines();
+}
+function suggest() {
+  const cnt = {};
+  S.F.lines.forEach(l => {
+    const id = Number(l.cargo_id); if (!id) return; const s = S.series[id]; const k = cnt[id] = (cnt[id] || 0) + 1;
+    l._ph = !s ? '' : (s.modo === 'automatica' ? `Auto (#${s.ultimo_numero + k})` : (s.ultimo_numero > 0 ? `Sugerido #${s.ultimo_numero + k}` : 'Escribe el folio'));
+    if (!l.touched && s && s.modo === 'sugerida' && s.ultimo_numero > 0) l.folio_numero = String(s.ultimo_numero + k);
+    if (!l.touched && s && s.modo === 'automatica') l.folio_numero = '';
+  });
+}
+function renderLines() {
+  suggest();
+  $('#lines').innerHTML = S.F.lines.map((l, i) => `<div class="line" data-i="${i}">
+    <div class="row"><b class="grow">Folio ${i + 1}</b>${S.F.lines.length > 1 ? `<button class="btn ghost sm" data-act="rmline" data-i="${i}">Quitar</button>` : ''}</div>
+    <div class="grid2">
+      <div><label class="f">Cargo</label><select data-k="cargo_id"><option value="">Elige…</option>${S.cargos.map(c => `<option value="${c.id}" ${String(l.cargo_id) === String(c.id) ? 'selected' : ''}>${esc(c.nombre)}</option>`).join('')}</select></div>
+      <div><label class="f">No. de folio</label><input type="text" inputmode="numeric" data-k="folio_numero" placeholder="${esc(l._ph || '')}" value="${esc(l.folio_numero)}"></div>
+    </div>
+    <div class="grid2">
+      <div><label class="f">Proveedor</label><input type="text" data-k="proveedor" value="${esc(l.proveedor)}"></div>
+      <div><label class="f">Obra / villa</label><input type="text" data-k="obra" value="${esc(l.obra)}"></div>
+    </div>
+    <label class="f">Descripción</label><input type="text" data-k="descripcion" value="${esc(l.descripcion)}">
+    <label class="f">Monto del folio</label>
+    <div class="row"><input type="text" inputmode="decimal" data-k="monto" class="grow" placeholder="0.00" value="${esc(l.monto)}" style="flex:1"><button class="btn ghost sm" data-act="resto" data-i="${i}">Completar con lo que falta</button></div>
+  </div>`).join('');
+  $('#lines').oninput = $('#lines').onchange = ev => {
+    const el = ev.target; const k = el.dataset.k; if (!k) return; const i = Number(el.closest('.line').dataset.i); const l = S.F.lines[i];
+    l[k] = el.value; if (k === 'folio_numero') l.touched = true;
+    if (k === 'cargo_id') { l.touched = false; if (ev.type === 'change') { renderLines(); } }
+    updateSum();
+  };
+  updateSum();
+}
+function updateSum() {
+  const F = S.F; if (!F) return;
+  const tot = cents(parseMoney(F.h.monto) || 0), sum = F.lines.reduce((a, l) => a + cents(parseMoney(l.monto) || 0), 0), diff = tot - sum;
+  const ok = tot > 0 && diff === 0;
+  const sb_ = $('#sumbar'); if (!sb_) return;
+  sb_.className = 'sumbar ' + (ok ? 'okk' : (tot > 0 || sum > 0 ? 'noo' : ''));
+  sb_.innerHTML = `<div><div class="mut sm">Cheque</div><div class="money">${fmt(tot / 100)}</div></div><div><div class="mut sm">Suma de folios</div><div class="money">${fmt(sum / 100)}</div></div>
+    <div class="grow r"><div class="mut sm">Diferencia</div><div class="money big" style="color:${ok ? 'var(--ok)' : 'var(--bad)'}">${ok ? 'Cuadra ✓' : fmt(diff / 100)}</div></div>`;
+}
+async function guardarCheque() {
+  const F = S.F, h = F.h; const btn = $('#btnGuardar');
+  const tot = parseMoney(h.monto);
+  const err = [];
+  if (!h.chequera_id) err.push('Elige la chequera.');
+  if (!(Number(h.numero_cheque) > 0)) err.push('Captura el número de cheque.');
+  if (!h.fecha) err.push('Captura la fecha.');
+  if (!h.beneficiario.trim()) err.push('Captura el beneficiario.');
+  if (!(tot > 0)) err.push('Captura el monto del cheque.');
+  F.lines.forEach((l, i) => {
+    if (!l.cargo_id) err.push(`Folio ${i + 1}: elige el cargo.`);
+    if (!(parseMoney(l.monto) > 0)) err.push(`Folio ${i + 1}: captura el monto.`);
+    const s = S.series[Number(l.cargo_id)]; if (s && s.modo === 'sugerida' && !String(l.folio_numero).trim()) err.push(`Folio ${i + 1}: escribe el número de folio.`);
+  });
+  const sum = F.lines.reduce((a, l) => a + cents(parseMoney(l.monto) || 0), 0);
+  if (!err.length && sum !== cents(tot)) err.push(`Los folios suman ${fmt(sum / 100)} y el cheque es por ${fmt(tot)}. Deben cuadrar al centavo.`);
+  if (err.length) return toast(err[0], 'err');
+  const payload = {
+    chequera_id: Number(h.chequera_id), numero_cheque: Number(h.numero_cheque), fecha: h.fecha, beneficiario: h.beneficiario.trim(), monto: tot,
+    concepto: h.concepto.trim(), solicito: h.solicito.trim(), sin_factura_motivo: h.sin_factura_motivo.trim(),
+    folios: F.lines.map(l => ({ cargo_id: Number(l.cargo_id), folio_numero: String(l.folio_numero).trim() || null, proveedor: l.proveedor, descripcion: l.descripcion, obra: l.obra, monto: parseMoney(l.monto) }))
+  };
+  btn.disabled = true; btn.textContent = 'Guardando…';
+  try {
+    let c;
+    if (F.editId) c = await rpc('editar_cheque', { p_id: F.editId, p: payload });
+    else { payload.clave_submision = F.clave; c = await rpc('capturar_cheque', { p: payload }); }
+    let subidaErr = '';
+    if (F.files.length) { try { await subirArchivo(c.id, 'factura', F.files); } catch (e) { subidaErr = errMsg(e); } }
+    const wasEdit = !!F.editId; S.F = null; refreshPendCount();
+    openModal(`<h2 style="margin-top:0">${wasEdit ? 'Cheque actualizado' : 'Póliza generada'}</h2>
+      <div class="card"><div class="kv"><div>Póliza</div><div class="b big">${pad(c.poliza_numero)}</div><div>Cheque</div><div>${c.numero_cheque}</div><div>Beneficiario</div><div>${esc(c.beneficiario)}</div><div>Monto</div><div class="money">${fmt(c.monto)}</div>
+        <div>Folios</div><div>${(c.folios || []).map(f => esc(cargoNombre(f.cargo_id)) + ' ' + esc(f.folio_numero)).join('<br>')}</div></div></div>
+      <div class="okbox">Quedó pendiente de autorización del Ing. Cristóbal.</div>
+      ${subidaErr ? `<div class="warnbox">El cheque se guardó, pero la factura no se pudo subir: ${esc(subidaErr)}. Súbela desde el detalle.</div>` : ''}
+      <div class="row" style="margin-top:12px"><button class="btn gold" data-act="poliza" data-id="${c.id}">Descargar póliza PDF</button><button class="btn ghost" data-act="detalle" data-id="${c.id}">Ver cheque</button><button class="btn ghost" data-act="otro">Capturar otro</button></div>`);
+  } catch (e) { toast(errMsg(e), 'err'); btn.disabled = false; btn.textContent = F.editId ? 'Guardar cambios y reenviar a autorización' : 'Generar póliza y enviar a autorización'; }
+}
+
+/* ===================== POLIZA PDF ===================== */
+async function polizaPDF(id) {
+  let c; try { c = await loadCheque(id); } catch (e) { return toast(errMsg(e), 'err'); }
+  const { jsPDF } = window.jspdf; const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  const NAVY = [20, 52, 92], GOLD = [201, 154, 60], GRAY = [110, 115, 125];
+  const W = 210, M = 14; let y = 0;
+  doc.setFillColor(...NAVY); doc.rect(0, 0, W, 26, 'F'); doc.setFillColor(...GOLD); doc.rect(0, 26, W, 1.6, 'F');
+  doc.setTextColor(255); doc.setFont('helvetica', 'bold'); doc.setFontSize(16); doc.text('JOCRIS', M, 12);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.text('PÓLIZA DE CHEQUE', M, 19);
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(18); doc.text('PÓLIZA No. ' + pad(c.poliza_numero), W - M, 13, { align: 'right' });
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.text(fdate(c.fecha), W - M, 20, { align: 'right' });
+  y = 40; doc.setTextColor(0);
+  const kv = (k, v, yy) => { doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(...GRAY); doc.text(k, M, yy); doc.setTextColor(0); doc.setFont('helvetica', 'normal'); doc.setFontSize(11); const t = doc.splitTextToSize(String(v || ''), W - M * 2 - 38); doc.text(t, M + 38, yy); return yy + Math.max(7, t.length * 5.4); };
+  y = kv('BENEFICIARIO', c.beneficiario, y);
+  y = kv('CHEQUE No.', `${c.numero_cheque}   ·   ${chequeraNombre(c.chequera_id)}`, y);
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(...GRAY); doc.text('IMPORTE', M, y); doc.setTextColor(0); doc.setFontSize(15); doc.text(fmt(c.monto), M + 38, y); y += 6;
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); const letra = doc.splitTextToSize('(' + montoLetra(c.monto) + ')', W - M * 2 - 38); doc.text(letra, M + 38, y); y += letra.length * 5 + 3;
+  if (c.concepto) y = kv('CONCEPTO', c.concepto, y);
+  y += 3;
+  const cols = [M, M + 34, M + 52, M + 112, W - M]; // cargo, folio, detalle, monto(right)
+  const head = () => { doc.setFillColor(...NAVY); doc.rect(M, y, W - 2 * M, 8, 'F'); doc.setTextColor(255); doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.text('CARGO', cols[0] + 2, y + 5.5); doc.text('FOLIO', cols[1] + 2, y + 5.5); doc.text('PROVEEDOR / DETALLE', cols[2] + 2, y + 5.5); doc.text('MONTO', cols[4] - 2, y + 5.5, { align: 'right' }); y += 8; doc.setTextColor(0); };
+  head();
+  const fol = foliosActivos(c); let sum = 0;
+  fol.forEach((f, i) => {
+    const det = doc.splitTextToSize([f.proveedor, f.obra, f.descripcion].filter(Boolean).join(' · ') || '—', 58);
+    const rh = Math.max(det.length * 4.6, 6) + 3;
+    if (y + rh > 250) { doc.addPage(); y = 20; head(); }
+    if (i % 2) { doc.setFillColor(245, 246, 249); doc.rect(M, y, W - 2 * M, rh, 'F'); }
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5);
+    doc.text(doc.splitTextToSize(cargoNombre(f.cargo_id), 30), cols[0] + 2, y + 5);
+    doc.text(String(f.folio_numero), cols[1] + 2, y + 5);
+    doc.text(det, cols[2] + 2, y + 5);
+    doc.setFont('helvetica', 'bold'); doc.text(fmt(f.monto), cols[4] - 2, y + 5, { align: 'right' });
+    y += rh; sum += cents(f.monto); doc.setDrawColor(220, 222, 228); doc.line(M, y, W - M, y);
+  });
+  y += 7; doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(...NAVY); doc.text('TOTAL FOLIOS', cols[3] - 12, y); doc.setTextColor(0); doc.text(fmt(sum / 100), cols[4] - 2, y, { align: 'right' });
+  y += 6; doc.setFontSize(9.5);
+  if (sum === cents(c.monto)) { doc.setTextColor(30, 138, 76); doc.text('Cuadre: folios = importe del cheque', cols[4] - 2, y, { align: 'right' }); }
+  else { doc.setTextColor(179, 38, 30); doc.text('NO CUADRA con el importe del cheque', cols[4] - 2, y, { align: 'right' }); }
+  doc.setTextColor(0);
+  if (y > 225) { doc.addPage(); y = 20; }
+  y = Math.max(y + 22, 238);
+  const sig = (x, label, name, sub) => { doc.setDrawColor(0); doc.line(x, y, x + 54, y); doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.text(label, x + 27, y + 4.5, { align: 'center' }); doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); const t = doc.splitTextToSize(name || '', 54); doc.text(t, x + 27, y + 9, { align: 'center' }); if (sub) { doc.setTextColor(...GRAY); doc.setFontSize(7.5); doc.text(sub, x + 27, y + 9 + t.length * 3.8 + 1.5, { align: 'center' }); doc.setTextColor(0); } };
+  sig(M, 'SOLICITÓ / CAPTURÓ', c.solicito || c.capturado_por_nombre, c.solicito && c.capturado_por_nombre ? 'Capturó: ' + c.capturado_por_nombre : '');
+  if (c.estatus === 'autorizado') sig(M + 63, 'AUTORIZÓ', c.autorizado_por_nombre, 'Autorizado en línea ' + fdt(c.fecha_autorizacion));
+  else sig(M + 63, 'AUTORIZÓ', 'PENDIENTE DE AUTORIZACIÓN', c.estatus === 'rechazado' ? 'RECHAZADO' : '');
+  sig(M + 126, 'CONTADOR', '', '');
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(...GRAY);
+  doc.text(`Documento generado por el sistema · Póliza ${pad(c.poliza_numero)} · ${c.estatus.toUpperCase()}${c.cobrado ? ' · COBRADO ' + fdate(c.fecha_cobro) : ''} · ${new Date().toLocaleString('es-MX')}`, W / 2, 289, { align: 'center' });
+  doc.save(`Poliza_${pad(c.poliza_numero)}_${c.beneficiario.replace(/[^A-Za-z0-9]+/g, '_').slice(0, 30)}.pdf`);
+}
+
+/* ===================== FOLIOS (SERIES) ===================== */
+async function viewSeries() {
+  await loadCatalogs();
+  $('#view').innerHTML = `<h2>Series de folios por cargo</h2>
+  <div class="mut sm" style="margin-bottom:10px">Último folio usado en cada cargo. Cancún se asigna automático; los demás se sugieren y puedes cambiarlos (hay folios que se pagan en efectivo).</div>
+  ${S.cargos.map(c => { const s = S.series[c.id] || { ultimo_numero: 0, modo: 'sugerida' }; return `<div class="card row">
+    <div class="grow"><div class="b">${esc(c.nombre)}</div><div class="mut sm">${s.modo === 'automatica' ? 'Automático' : 'Sugerido'}</div></div>
+    ${puedeCapturar() ? `<input type="number" inputmode="numeric" style="width:110px" id="ser_${c.id}" value="${s.ultimo_numero}"><button class="btn sm" data-act="saveserie" data-id="${c.id}">Guardar</button>` : `<div class="money big">${s.ultimo_numero}</div>`}
+  </div>`; }).join('')}`;
+}
+
+/* ===================== BITACORA ===================== */
+async function viewBit() {
+  $('#view').innerHTML = `<h2>Bitácora</h2><div id="bl" class="spin">Cargando…</div>`;
+  const { data, error } = await sb.from('bitacora').select('*, cheques(poliza_numero,numero_cheque,beneficiario)').order('creado_en', { ascending: false }).limit(150);
+  if (error) return $('#bl').innerHTML = `<div class="warnbox">${esc(errMsg(error))}</div>`;
+  $('#bl').outerHTML = `<div class="card">${data.map(b => `<div class="log"><b>${esc(b.accion.replace(/_/g, ' '))}</b> · ${esc(b.usuario_nombre || '')} · <span class="mut">${fdt(b.creado_en)}</span>
+    ${b.cheques ? `<br><a href="#" data-act="detalle" data-id="${b.cheque_id}">${b.cheques.poliza_numero ? 'Póliza ' + pad(b.cheques.poliza_numero) + ' · ' : ''}Cheque ${b.cheques.numero_cheque} · ${esc(b.cheques.beneficiario)}</a>` : (b.detalle && b.detalle.cargo ? `<br><span class="mut">${esc(b.detalle.cargo)}: ${b.detalle.antes} → ${b.detalle.despues}</span>` : '')}</div>`).join('') || '<span class="mut">Sin movimientos</span>'}</div>`;
+}
+
+/* ===================== MENU CUENTA ===================== */
+function menuCuenta() {
+  openModal(`<h2 style="margin-top:0">Mi cuenta</h2><div class="card"><div class="b">${esc(S.perfil.nombre)}</div><div class="mut">${esc(S.perfil.correo)} · ${esc(S.perfil.rol)}</div></div>
+  <h3>Cambiar contraseña</h3><label class="f">Nueva contraseña (mínimo 8 caracteres)</label><input type="password" id="np1" autocomplete="new-password"><label class="f">Repítela</label><input type="password" id="np2" autocomplete="new-password">
+  <div class="row" style="margin-top:12px"><button class="btn" data-act="cambiarpass">Guardar contraseña</button><button class="btn ghost" data-act="salir">Cerrar sesión</button></div>`);
+}
+
+/* ===================== EVENTOS ===================== */
+document.addEventListener('click', async ev => {
+  const tabBtn = ev.target.closest('nav.tabs button'); if (tabBtn) return go(tabBtn.dataset.tab);
+  const el = ev.target.closest('[data-act]'); if (!el) return; const act = el.dataset.act, id = el.dataset.id;
+  if (el.tagName === 'A') ev.preventDefault();
+  try {
+    switch (act) {
+      case 'ovl': if (ev.target === el) closeModal(); break;
+      case 'close': closeModal(); break;
+      case 'menu': menuCuenta(); break;
+      case 'salir': await sb.auth.signOut(); S.perfil = null; closeModal(); renderLogin(); break;
+      case 'cambiarpass': {
+        const a = $('#np1').value, b = $('#np2').value; if (a.length < 8) return toast('Mínimo 8 caracteres.', 'err'); if (a !== b) return toast('No coinciden.', 'err');
+        const { error } = await sb.auth.updateUser({ password: a }); if (error) return toast(errMsg(error), 'err'); toast('Contraseña actualizada.', 'ok'); closeModal(); break; }
+      case 'detalle': openDetail(id); break;
+      case 'mas': loadList(false); break;
+      case 'poliza': polizaPDF(id); break;
+      case 'verarch': { const c = await loadCheque(id); const a = archActivos(c, el.dataset.tipo)[0]; if (a) abrirPath(a.path); break; }
+      case 'verpath': abrirPath(el.dataset.path); break;
+      case 'autorizar': { const c = await loadCheque(id); dlgAutorizar(id, c); break; }
+      case 'okautorizar': { el.disabled = true; await rpc('autorizar_cheque', { p_id: id, p_comentario: $('#cmt').value }); closeModal(); toast('Cheque autorizado.', 'ok'); refreshView(); break; }
+      case 'rechazar': dlgMotivo('Rechazar cheque', 'okrechazar', id, 'bad', 'Rechazar'); break;
+      case 'okrechazar': { const m = $('#mot').value.trim(); if (!m) return toast('Escribe el motivo.', 'err'); await rpc('rechazar_cheque', { p_id: id, p_motivo: m }); closeModal(); toast('Cheque rechazado.', 'ok'); refreshView(); break; }
+      case 'cancelar': dlgMotivo('Cancelar cheque', 'okcancelar', id, 'bad', 'Cancelar cheque'); break;
+      case 'okcancelar': { const m = $('#mot').value.trim(); if (!m) return toast('Escribe el motivo.', 'err'); await rpc('cancelar_cheque', { p_id: id, p_motivo: m }); closeModal(); toast('Cheque cancelado; sus folios quedaron libres.', 'ok'); refreshView(); break; }
+      case 'cobrar': {
+        const c = await loadCheque(id);
+        if (!archActivos(c, 'comprobante_cobro').length) { openModal(`<h2 style="margin-top:0">Falta el comprobante</h2><div class="warnbox">Sube primero el comprobante de que el cheque fue cobrado o depositado.</div><div class="row"><button class="btn gold" data-act="subir" data-id="${id}" data-tipo="comprobante_cobro">Subir comprobante</button><button class="btn ghost" data-act="close">Cerrar</button></div>`); break; }
+        openModal(`<h2 style="margin-top:0">Marcar como cobrado</h2><label class="f">Fecha de cobro</label><input type="date" id="fc" value="${today()}"><div class="row" style="margin-top:14px"><button class="btn ok grow" data-act="okcobrar" data-id="${id}">Confirmar</button><button class="btn ghost" data-act="close">Volver</button></div>`); break; }
+      case 'okcobrar': await rpc('marcar_cobrado', { p_id: id, p_fecha_cobro: $('#fc').value, p_cobrado: true }); closeModal(); toast('Cheque marcado como cobrado.', 'ok'); refreshView(); break;
+      case 'descobrar': await rpc('marcar_cobrado', { p_id: id, p_fecha_cobro: null, p_cobrado: false }); toast('Cobro desmarcado.', 'ok'); openDetail(id); refreshView(true); break;
+      case 'subir': {
+        const files = await pickFiles(true); if (!files.length) break; toast('Subiendo…');
+        await subirArchivo(id, el.dataset.tipo, files); toast('Documento guardado.', 'ok'); openDetail(id); refreshView(true); break; }
+      case 'quitar': dlgMotivo('Quitar documento', 'okquitar', id, 'bad', 'Quitar'); break;
+      case 'okquitar': { const m = $('#mot').value.trim(); if (!m) return toast('Escribe el motivo.', 'err'); await rpc('quitar_archivo', { p_archivo: id, p_motivo: m }); toast('Documento quitado.', 'ok'); closeModal(); refreshView(true); break; }
+      case 'editar': { const c = await loadCheque(id); closeModal(); S.F = null; S.tab = 'nuevo'; document.querySelectorAll('nav.tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === 'nuevo')); await viewNuevo(c); window.scrollTo(0, 0); break; }
+      case 'cancelarEdit': S.F = null; go('cheques'); break;
+      case 'otro': closeModal(); S.F = null; go('nuevo'); break;
+      case 'addline': S.F.lines.push(newLine()); renderLines(); break;
+      case 'rmline': S.F.lines.splice(Number(el.dataset.i), 1); renderLines(); break;
+      case 'resto': {
+        const F = S.F, i = Number(el.dataset.i); const tot = cents(parseMoney(F.h.monto) || 0);
+        const otros = F.lines.reduce((a, l, j) => j === i ? a : a + cents(parseMoney(l.monto) || 0), 0); const falta = tot - otros;
+        if (falta > 0) { F.lines[i].monto = (falta / 100).toFixed(2); renderLines(); } else toast('No falta nada por repartir.', 'err'); break; }
+      case 'pickfac': { const files = await pickFiles(true); S.F.files = files; $('#facInfo').textContent = files.length ? files.length + ' archivo(s) listo(s) para subir' : 'Sin adjuntar'; break; }
+      case 'guardar': guardarCheque(); break;
+      case 'saveserie': {
+        const v = Number($('#ser_' + id).value); await rpc('ajustar_serie', { p_cargo_id: Number(id), p_ultimo: v }); toast('Serie actualizada.', 'ok'); await loadCatalogs(); break; }
+    }
+  } catch (e) { toast(errMsg(e), 'err'); const b = el.tagName === 'BUTTON' ? el : null; if (b) b.disabled = false; }
+});
+function refreshView(soft) {
+  if (S.tab === 'pend') viewPend(); else if (S.tab === 'cheques') loadList(true); else if (S.tab === 'bit') viewBit();
+  refreshPendCount();
+}
+sb.auth.onAuthStateChange(ev => { if (ev === 'SIGNED_OUT' && S.perfil) { S.perfil = null; renderLogin(); } });
+boot();
+</script>
+</body>
+</html>
