@@ -407,11 +407,19 @@ function dlgMotivo(titulo, act, id, btnClass = 'bad', btnTxt = 'Confirmar') {
 }
 
 /* ===================== VISTA: LISTA DE CHEQUES ===================== */
-function mesesOpc() {
+async function cargarMeses() {
+  if (!S.mesesCache || Date.now() - S.mesesCache.t > 60000) {
+    let rows = [], from = 0;
+    for (;;) { const { data, error } = await sb.from('cheques').select('fecha,chequera_id').order('fecha', { ascending: false }).range(from, from + 999); if (error || !data) break; rows = rows.concat(data); if (data.length < 1000) break; from += 1000; }
+    S.mesesCache = { t: Date.now(), rows };
+  }
   const N = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
-  const hoy = new Date(); const out = []; let y = hoy.getFullYear(), m = hoy.getMonth();
-  while (y > 2025 || (y === 2025 && m >= 0)) { out.push({ v: `${y}-${String(m + 1).padStart(2, '0')}`, t: N[m].toUpperCase() + ' ' + y }); m--; if (m < 0) { m = 11; y--; } if (out.length >= 36) break; }
-  return out;
+  const f = S.filt, set = new Set();
+  S.mesesCache.rows.forEach(r => { if (!f.chequera || String(r.chequera_id) === String(f.chequera)) set.add(String(r.fecha).slice(0, 7)); });
+  const meses = [...set].sort().reverse();
+  const sel = $('#fmes'); if (!sel) return;
+  if (f.mes && !set.has(f.mes)) f.mes = '';
+  sel.innerHTML = '<option value="">Todos los meses</option>' + meses.map(m => { const [y, mm] = m.split('-'); return `<option value="${m}" ${f.mes === m ? 'selected' : ''}>${N[Number(mm) - 1].toUpperCase()} ${y}</option>`; }).join('');
 }
 function viewCheques() {
   const f = S.filt;
@@ -419,12 +427,13 @@ function viewCheques() {
   <div class="card" style="padding:11px"><div class="filters">
     <input type="text" id="fq" placeholder="Buscar beneficiario, cheque o folio" value="${esc(f.q)}">
     <select id="fch" aria-label="Chequera"><option value="">Todas las chequeras</option>${S.chequeras.map(c => `<option value="${c.id}" ${String(f.chequera) === String(c.id) ? 'selected' : ''}>${esc(c.nombre)}</option>`).join('')}</select>
-    <select id="fmes" aria-label="Mes"><option value="">Todos los meses</option>${mesesOpc().map(m => `<option value="${m.v}" ${f.mes === m.v ? 'selected' : ''}>${m.t}</option>`).join('')}</select>
+    <select id="fmes" aria-label="Mes"><option value="">Todos los meses</option></select>
   </div></div>
   <div class="row" style="margin-bottom:12px"><button class="btn ghost sm" data-act="huecos">Huecos de numeración</button>${puedeCapturar() ? '<button class="btn ghost sm" data-act="cancelado">Registrar cancelado</button>' : ''}</div><div id="resumen"></div><div id="lst" class="spin">Cargando…</div><div id="more" class="r"></div>`;
   let t; $('#fq').oninput = e => { clearTimeout(t); t = setTimeout(() => { f.q = e.target.value.trim(); loadList(true); }, 350); };
-  $('#fch').onchange = e => { f.chequera = e.target.value; loadList(true); };
+  $('#fch').onchange = async e => { f.chequera = e.target.value; await cargarMeses(); loadList(true); };
   $('#fmes').onchange = e => { f.mes = e.target.value; loadList(true); };
+  const mes0 = f.mes; cargarMeses().then(() => { if (f.mes !== mes0) loadList(true); });
   loadList(true);
 }
 async function loadList(reset) {
