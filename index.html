@@ -284,6 +284,18 @@ function dlgAutorizar(id, c) {
     <label class="f">Comentario (opcional)</label><textarea id="cmt"></textarea>
     <div class="row" style="margin-top:14px"><button class="btn ok grow" data-act="okautorizar" data-id="${id}">Sí, autorizar</button><button class="btn ghost" data-act="close">Cancelar</button></div>`);
 }
+let ccFiles = [];
+function dlgCancelado() {
+  ccFiles = [];
+  openModal(`<h2 style="margin-top:0">Registrar cheque cancelado</h2>
+  <div class="mut sm">Para un cheque que ya salió cancelado de origen (error de impresión, dañado…). No lleva monto ni folios; se le asigna póliza para no romper la numeración. Guarda el cheque físico con su talón.</div>
+  <div class="grid2"><div><label class="f">Chequera</label><select id="cc_ch"><option value="">Elige…</option>${S.chequeras.map(c => `<option value="${c.id}">${esc(c.nombre)}</option>`).join('')}</select></div>
+  <div><label class="f">No. de cheque</label><input type="number" inputmode="numeric" id="cc_num"></div></div>
+  <label class="f">Fecha</label><input type="date" id="cc_fecha" value="${today()}">
+  <label class="f">Motivo</label><input type="text" id="cc_mot" placeholder="Ej. error de impresión">
+  <div class="row" style="margin-top:10px"><button class="btn ghost sm" data-act="ccfoto">Foto del cheque cancelado</button><span id="ccInfo" class="mut sm">Sin foto</span></div>
+  <div class="row" style="margin-top:14px"><button class="btn gold grow" data-act="okcancelado">Registrar</button><button class="btn ghost" data-act="close">Cancelar</button></div>`);
+}
 function dlgMotivo(titulo, act, id, btnClass = 'bad', btnTxt = 'Confirmar') {
   openModal(`<h2>${titulo}</h2><label class="f">Motivo (obligatorio)</label><textarea id="mot"></textarea>
     <div class="row" style="margin-top:14px"><button class="btn ${btnClass} grow" data-act="${act}" data-id="${id}">${btnTxt}</button><button class="btn ghost" data-act="close">Volver</button></div>`);
@@ -300,7 +312,7 @@ function viewCheques() {
       <select id="fch"><option value="">Todas las chequeras</option>${S.chequeras.map(c => `<option value="${c.id}" ${String(f.chequera) === String(c.id) ? 'selected' : ''}>${esc(c.nombre)}</option>`).join('')}</select>
     </div>
   </div>
-  <div id="resumen"></div><div id="lst" class="spin">Cargando…</div><div id="more" class="r"></div>`;
+  <div class="row" style="margin-bottom:10px"><button class="btn ghost sm" data-act="huecos">Revisar huecos de numeración</button>${puedeCapturar() ? '<button class="btn ghost sm" data-act="cancelado">Registrar cheque cancelado</button>' : ''}</div><div id="resumen"></div><div id="lst" class="spin">Cargando…</div><div id="more" class="r"></div>`;
   let t; $('#fq').oninput = e => { clearTimeout(t); t = setTimeout(() => { f.q = e.target.value.trim(); loadList(true); }, 350); };
   $('#fest').onchange = e => { f.est = e.target.value; loadList(true); };
   $('#fch').onchange = e => { f.chequera = e.target.value; loadList(true); };
@@ -363,10 +375,11 @@ async function openDetail(id) {
       if (puedeCapturar() && ['pendiente', 'rechazado'].includes(c.estatus)) acciones += `<button class="btn gold" data-act="editar" data-id="${id}">Editar</button>`;
       if (c.estatus === 'autorizado' && !c.cobrado && ['administrador', 'capturista', 'contador'].includes(rol())) acciones += `<button class="btn" data-act="cobrar" data-id="${id}">Marcar cobrado</button>`;
       if (esAdmin() && c.cobrado) acciones += `<button class="btn ghost" data-act="descobrar" data-id="${id}">Desmarcar cobro</button>`;
-      if (esAdmin() && !c.cobrado && c.estatus !== 'cancelado') acciones += `<button class="btn ghost" data-act="cancelar" data-id="${id}">Cancelar cheque</button>`;
+      const mismoDia = c.creado_en && new Date(c.creado_en).toLocaleDateString('en-CA', { timeZone: 'America/Monterrey' }) === new Date().toLocaleDateString('en-CA', { timeZone: 'America/Monterrey' });
+      if ((esAdmin() || (puedeCapturar() && mismoDia)) && !c.cobrado && c.estatus !== 'cancelado') acciones += `<button class="btn ghost" data-act="cancelar" data-id="${id}">Cancelar cheque</button>`;
       acciones += `<button class="btn ghost" data-act="poliza" data-id="${id}">Póliza PDF</button>`;
     }
-    const puedeSubir = !hist && c.estatus !== 'cancelado';
+    const puedeSubir = !hist && (c.estatus !== 'cancelado' || puedeCapturar());
     openModal(`
       <h2 style="margin-top:0">${esc(c.beneficiario)}</h2>
       <div class="row" style="margin-bottom:8px">${estadoChip(c)}<span class="money big grow r">${fmt(c.monto)}</span></div>
@@ -384,7 +397,7 @@ async function openDetail(id) {
         ${c.cobrado ? `<div>Cobrado</div><div>${fdate(c.fecha_cobro)}</div>` : ''}
         ${c.nota_historial ? `<div>Nota</div><div>${esc(c.nota_historial)}</div>` : ''}
       </div></div>
-      ${hist ? '<div class="warnbox">Cheque del historial (archivo). No lleva póliza ni folios del sistema.</div>' : `
+      ${hist ? '<div class="warnbox">Cheque del historial (archivo). No lleva póliza ni folios del sistema.</div>' : (c.estatus === 'cancelado' && !fol.length) ? '<div class="warnbox">Cheque cancelado: no lleva monto ni folios.</div>' : `
       <h3>Folios</h3><div class="card" style="padding:6px 10px"><table><thead><tr><th>Cargo</th><th>Folio</th><th>Detalle</th><th class="r">Monto</th></tr></thead><tbody>
         ${fol.map(f => `<tr><td>${esc(cargoNombre(f.cargo_id))}</td><td>${esc(f.folio_numero)}</td><td>${esc([f.proveedor, f.descripcion, f.obra].filter(Boolean).join(' · '))}</td><td class="r money">${fmt(f.monto)}</td></tr>`).join('') || '<tr><td colspan="4" class="mut">Sin folios</td></tr>'}
       </tbody></table></div>
@@ -392,9 +405,9 @@ async function openDetail(id) {
       <h3>Documentos</h3><div class="card files">
         ${arch.length ? arch.map(a => `<div class="row" style="margin-bottom:6px"><span class="chip historial">${tipoTxt[a.tipo]}</span><button class="lnk grow" style="text-align:left" data-act="verpath" data-path="${esc(a.path)}">${esc(a.nombre || 'archivo')}</button>${puedeCapturar() ? `<button class="btn ghost sm" data-act="quitar" data-id="${a.id}">Quitar</button>` : ''}</div>`).join('') : '<span class="mut">Aún no hay documentos.</span>'}
         ${puedeSubir ? `<div class="row" style="margin-top:10px">
-          ${puedeCapturar() ? `<button class="btn ghost sm" data-act="subir" data-id="${id}" data-tipo="factura">+ Factura</button>` : ''}
+          ${puedeCapturar() && c.estatus !== 'cancelado' ? `<button class="btn ghost sm" data-act="subir" data-id="${id}" data-tipo="factura">+ Factura</button>` : ''}
           ${c.estatus === 'autorizado' && ['administrador', 'capturista', 'contador'].includes(rol()) ? `<button class="btn ghost sm" data-act="subir" data-id="${id}" data-tipo="comprobante_cobro">+ Comprobante de cobro</button>` : ''}
-          ${puedeCapturar() ? `<button class="btn ghost sm" data-act="subir" data-id="${id}" data-tipo="otro">+ Otro</button>` : ''}</div>` : ''}
+          ${puedeCapturar() ? `<button class="btn ghost sm" data-act="subir" data-id="${id}" data-tipo="otro">${c.estatus === 'cancelado' ? '+ Foto del cheque cancelado' : '+ Otro'}</button>` : ''}</div>` : ''}
       </div>
       ${acciones ? `<div class="row" style="margin:12px 0">${acciones}</div>` : ''}
       <h3>Bitácora</h3><div>${(bit || []).map(b => `<div class="log"><b>${esc(b.accion.replace(/_/g, ' '))}</b> · ${esc(b.usuario_nombre || '')}<br><span class="mut">${fdt(b.creado_en)}</span></div>`).join('') || '<span class="mut">Sin movimientos</span>'}</div>
@@ -463,7 +476,7 @@ async function viewNuevo(editCheque) {
   const F = S.F, h = F.h;
   const { data: bens } = await sb.from('cheques').select('beneficiario').order('creado_en', { ascending: false }).limit(1000);
   const uniq = [...new Set((bens || []).map(x => x.beneficiario))].slice(0, 400);
-  $('#view').innerHTML = `<h2>${F.editId ? 'Editar cheque' : 'Nuevo cheque'}</h2>
+  $('#view').innerHTML = `<h2>${F.editId ? 'Editar cheque' : 'Nuevo cheque'}</h2>${F.editId ? '' : '<div class="mut sm" style="margin:-6px 0 10px">¿El cheque ya salió cancelado de origen? <a href="#" data-act="cancelado">Regístralo aquí</a></div>'}
   <div class="card">
     <div class="grid2">
       <div><label class="f">Chequera</label><select id="h_chequera_id"><option value="">Elige…</option>${S.chequeras.map(c => `<option value="${c.id}" ${String(h.chequera_id) === String(c.id) ? 'selected' : ''}>${esc(c.nombre)}</option>`).join('')}</select></div>
@@ -610,7 +623,8 @@ async function polizaPDF(id) {
   });
   y += 7; doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(...NAVY); doc.text('TOTAL FOLIOS', cols[3] - 12, y); doc.setTextColor(0); doc.text(fmt(sum / 100), cols[4] - 2, y, { align: 'right' });
   y += 6; doc.setFontSize(9.5);
-  if (sum === cents(c.monto)) { doc.setTextColor(30, 138, 76); doc.text('Cuadre: folios = importe del cheque', cols[4] - 2, y, { align: 'right' }); }
+  if (c.estatus === 'cancelado') { doc.setTextColor(179, 38, 30); doc.setFontSize(14); doc.text('CHEQUE CANCELADO', cols[4] - 2, y, { align: 'right' }); }
+  else if (sum === cents(c.monto)) { doc.setTextColor(30, 138, 76); doc.text('Cuadre: folios = importe del cheque', cols[4] - 2, y, { align: 'right' }); }
   else { doc.setTextColor(179, 38, 30); doc.text('NO CUADRA con el importe del cheque', cols[4] - 2, y, { align: 'right' }); }
   doc.setTextColor(0);
   if (y > 225) { doc.addPage(); y = 20; }
@@ -689,6 +703,19 @@ document.addEventListener('click', async ev => {
       case 'quitar': dlgMotivo('Quitar documento', 'okquitar', id, 'bad', 'Quitar'); break;
       case 'okquitar': { const m = $('#mot').value.trim(); if (!m) return toast('Escribe el motivo.', 'err'); await rpc('quitar_archivo', { p_archivo: id, p_motivo: m }); toast('Documento quitado.', 'ok'); closeModal(); refreshView(true); break; }
       case 'editar': { const c = await loadCheque(id); closeModal(); S.F = null; S.tab = 'nuevo'; document.querySelectorAll('nav.tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === 'nuevo')); await viewNuevo(c); window.scrollTo(0, 0); break; }
+      case 'cancelado': dlgCancelado(); break;
+      case 'okcancelado': {
+        const ch = Number($('#cc_ch').value), num = Number($('#cc_num').value), fe = $('#cc_fecha').value, mo = $('#cc_mot').value.trim();
+        if (!ch || !num || !fe || !mo) return toast('Llena chequera, número, fecha y motivo.', 'err');
+        el.disabled = true; const c = await rpc('registrar_cheque_cancelado', { p_chequera: ch, p_numero: num, p_fecha: fe, p_motivo: mo });
+        let warn = ''; if (ccFiles.length) { try { await subirArchivo(c.id, 'otro', ccFiles); } catch (e) { warn = errMsg(e); } }
+        ccFiles = []; closeModal(); toast(`Cheque ${num} registrado como cancelado (póliza ${pad(c.poliza_numero)}).` + (warn ? ' La foto no se pudo subir.' : ''), warn ? 'err' : 'ok'); refreshView(); break; }
+      case 'ccfoto': { ccFiles = await pickFiles(true); $('#ccInfo').textContent = ccFiles.length ? ccFiles.length + ' archivo(s)' : 'Sin foto'; break; }
+      case 'huecos': {
+        openModal('<div class="spin">Revisando…</div>');
+        const res = await Promise.all(S.chequeras.map(async q => ({ q, h: await rpc('huecos_chequera', { p_chequera: q.id }) })));
+        const con = res.filter(r => r.h.length);
+        openModal(`<h2 style="margin-top:0">Huecos de numeración</h2>` + (con.length ? con.map(r => `<div class="card"><div class="b">${esc(r.q.nombre)}</div><div class="warnbox">Faltan los cheques: ${r.h.join(', ')}.<br>Regístralos como emitidos o como cancelados.</div></div>`).join('') : '<div class="okbox">No hay huecos: todas las chequeras llevan numeración continua desde el primer cheque capturado.</div>') + '<div class="mut sm">Se revisa desde el primer cheque capturado en el sistema (el historial no cuenta).</div>'); break; }
       case 'cancelarEdit': S.F = null; go('cheques'); break;
       case 'otro': closeModal(); S.F = null; go('nuevo'); break;
       case 'addline': S.F.lines.push(newLine()); renderLines(); break;
