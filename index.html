@@ -350,6 +350,7 @@ function cardPend(c, rechazado = false) {
   const fol = foliosActivos(c); const fac = archActivos(c, 'factura').length;
   const sinFac = false; // la factura ya no es requisito para autorizar
   const cuadra = sumFolios(c) === cents(c.monto);
+  const hayFoto = archActivos(c, 'foto_cheque').length > 0;
   return `<div class="card" id="cp-${c.id}">
     <div class="row" style="align-items:flex-start">
       <div class="grow">
@@ -367,12 +368,13 @@ function cardPend(c, rechazado = false) {
       ${cuadra ? '' : '<span class="chip rechazado">NO CUADRA</span>'}
       ${fac ? `<button class="btn ghost sm" data-act="verarch" data-id="${c.id}" data-tipo="factura">Ver factura</button>` : '<span class="chip warn">PDTE. FACTURA</span>'}
       ${archActivos(c, 'folio').length ? `<button class="btn ghost sm" data-act="verarch" data-id="${c.id}" data-tipo="folio">Ver folio</button>` : ''}
+      ${hayFoto ? `<button class="btn ghost sm" data-act="verarch" data-id="${c.id}" data-tipo="foto_cheque">Ver foto del cheque</button>` : '<span class="chip rechazado">FALTA FOTO DEL CHEQUE</span>'}
       <button class="btn ghost sm" data-act="poliza" data-id="${c.id}">Ver póliza</button>
       <button class="btn ghost sm" data-act="detalle" data-id="${c.id}">Detalle</button>
     </div>
     ${rechazado ? `<div class="warnbox">Rechazado: ${esc(c.motivo_rechazo || '')}</div>` : ''}
     ${esAdmin() && !rechazado ? `<div class="row" style="margin-top:12px">
-      <button class="btn ok grow" data-act="autorizar" data-id="${c.id}" ${sinFac || !cuadra ? 'disabled' : ''}>Autorizar</button>
+      <button class="btn ok grow" data-act="autorizar" data-id="${c.id}" ${sinFac || !cuadra || !hayFoto ? 'disabled' : ''}>Autorizar</button>
       <button class="btn bad grow" data-act="rechazar" data-id="${c.id}">Rechazar</button></div>
 ` : ''}
     ${!esAdmin() && !rechazado ? '<div class="chip warn" style="margin-top:10px">PDTE. DE AUTORIZAR</div>' : ''}
@@ -484,11 +486,12 @@ async function openDetail(id) {
     const { data: bit } = await sb.from('bitacora').select('*').eq('cheque_id', id).order('creado_en', { ascending: true });
     const fol = foliosActivos(c); const cuadra = sumFolios(c) === cents(c.monto);
     const arch = archActivos(c);
-    const tipoTxt = { factura: 'Factura', folio: 'Folio', comprobante_cobro: 'Ticket / ficha de depósito', otro: 'Otro' };
+    const tipoTxt = { factura: 'Factura', folio: 'Folio', comprobante_cobro: 'Ticket / ficha de depósito', foto_cheque: 'Foto del cheque', otro: 'Otro' };
     const hist = c.es_historial;
     let acciones = '';
     if (!hist) {
-      if (esAdmin() && c.estatus === 'pendiente') acciones += `<button class="btn ok" data-act="autorizar" data-id="${id}">Autorizar</button><button class="btn bad" data-act="rechazar" data-id="${id}">Rechazar</button>`;
+      const sinFoto = !c.es_historial && c.estatus !== 'cancelado' && !archActivos(c, 'foto_cheque').length;
+      if (esAdmin() && c.estatus === 'pendiente') acciones += `<button class="btn ok" data-act="autorizar" data-id="${id}" ${sinFoto ? 'disabled title="Falta la foto del cheque"' : ''}>Autorizar</button><button class="btn bad" data-act="rechazar" data-id="${id}">Rechazar</button>`;
       if (puedeCapturar() && ['pendiente', 'rechazado'].includes(c.estatus)) acciones += `<button class="btn gold" data-act="editar" data-id="${id}">Editar</button>`;
       if (c.estatus === 'autorizado' && !c.cobrado && ['administrador', 'capturista', 'contador'].includes(rol())) acciones += `<button class="btn" data-act="cobrar" data-id="${id}">Marcar cobrado</button>`;
       if (esAdmin() && c.cobrado) acciones += `<button class="btn ghost" data-act="descobrar" data-id="${id}">Desmarcar cobro</button>`;
@@ -522,7 +525,7 @@ async function openDetail(id) {
       <h3>Documentos</h3><div class="card files">
         ${arch.length ? arch.map(a => `<div class="row" style="margin-bottom:6px"><span class="chip historial">${tipoTxt[a.tipo]}</span><button class="lnk grow" style="text-align:left" data-act="verpath" data-path="${esc(a.path)}">${esc(a.nombre || 'archivo')}</button>${puedeCapturar() ? `<button class="btn ghost sm" data-act="quitar" data-id="${a.id}">Quitar</button>` : ''}</div>`).join('') : '<span class="mut">Aún no hay documentos.</span>'}
         ${puedeSubir ? `<div class="row" style="margin-top:10px">
-          ${puedeCapturar() && c.estatus !== 'cancelado' ? `<button class="btn ghost sm" data-act="subir" data-id="${id}" data-tipo="factura">+ Factura</button><button class="btn ghost sm" data-act="subir" data-id="${id}" data-tipo="folio">+ Folio</button>` : ''}
+          ${puedeCapturar() && c.estatus !== 'cancelado' ? `<button class="btn ghost sm" data-act="subir" data-id="${id}" data-tipo="foto_cheque">+ Foto del cheque</button><button class="btn ghost sm" data-act="subir" data-id="${id}" data-tipo="factura">+ Factura</button><button class="btn ghost sm" data-act="subir" data-id="${id}" data-tipo="folio">+ Folio</button>` : ''}
           ${c.estatus !== 'cancelado' && ['administrador', 'capturista', 'contador'].includes(rol()) ? `<button class="btn ghost sm" data-act="subir" data-id="${id}" data-tipo="comprobante_cobro">+ Ticket / ficha de depósito</button>` : ''}
           ${puedeCapturar() ? `<button class="btn ghost sm" data-act="subir" data-id="${id}" data-tipo="otro">${c.estatus === 'cancelado' ? '+ Foto del cheque cancelado' : '+ Otro'}</button>` : ''}</div>` : ''}
       </div>
@@ -537,6 +540,34 @@ function pickFiles(multiple = true) {
   return new Promise(res => {
     const i = document.createElement('input'); i.type = 'file'; i.accept = 'image/*,application/pdf'; i.multiple = multiple;
     i.onchange = () => res([...i.files]); i.click();
+  });
+}
+/* Elegir origen: en el celular ofrece "Tomar foto" (cámara) y permite varias fotos seguidas; en computadora abre el selector normal. */
+function pickCamara() {
+  return new Promise(res => {
+    const i = document.createElement('input'); i.type = 'file'; i.accept = 'image/*'; i.setAttribute('capture', 'environment');
+    i.onchange = () => res([...i.files]); i.click();
+  });
+}
+function pickFuente() {
+  if (!(window.matchMedia && matchMedia('(pointer:coarse)').matches)) return pickFiles(true);
+  return new Promise(res => {
+    const files = []; const ov = document.createElement('div'); ov.className = 'overlay'; ov.style.zIndex = 70;
+    const cierra = r => { ov.remove(); res(r); };
+    const pinta = () => {
+      ov.innerHTML = `<div class="sheet"><h2 style="margin-top:0">Agregar documento</h2>
+        <div class="row" style="flex-direction:column;gap:10px;align-items:stretch">
+          <button class="btn gold" id="fzCam">📷 Tomar foto ahora</button>
+          <button class="btn ghost" id="fzGal">Elegir de la galería o archivos</button></div>
+        ${files.length ? `<div class="mut sm" style="margin-top:12px">${files.length} archivo(s) listo(s). Si el documento tiene varias hojas, toma una foto de cada una y toca “Listo”.</div>
+          <div class="row" style="margin-top:8px;flex-wrap:wrap;gap:6px">${files.map(f => f.type.startsWith('image/') ? `<img src="${URL.createObjectURL(f)}" style="height:64px;border-radius:8px;border:1px solid var(--line,#ccd)">` : `<span class="chip">${esc(f.name)}</span>`).join('')}</div>` : ''}
+        <div class="row" style="margin-top:14px"><button class="btn ok grow" id="fzOk" ${files.length ? '' : 'disabled'}>Listo${files.length ? ' (' + files.length + ')' : ''}</button><button class="btn ghost" id="fzNo">Cancelar</button></div></div>`;
+      ov.querySelector('#fzCam').onclick = async () => { const f = await pickCamara(); if (f.length) { files.push(...f); pinta(); } };
+      ov.querySelector('#fzGal').onclick = async () => { const f = await pickFiles(true); if (f.length) { files.push(...f); pinta(); } };
+      ov.querySelector('#fzOk').onclick = () => cierra(files);
+      ov.querySelector('#fzNo').onclick = () => cierra([]);
+    };
+    pinta(); document.body.appendChild(ov);
   });
 }
 function loadImg(file, maxDim = 1800) {
@@ -749,7 +780,7 @@ const newLine = () => ({ cargo_id: '', folio_numero: '', touched: false, proveed
 async function viewNuevo(editCheque) {
   await loadCatalogs();
   if (!S.F) {
-    S.F = { editId: null, clave: crypto.randomUUID(), files: [], folioFiles: [], lines: [newLine()],
+    S.F = { editId: null, clave: crypto.randomUUID(), files: [], folioFiles: [], chequeFiles: [], lines: [newLine()],
       h: { chequera_id: '', numero_cheque: '', fecha: today(), beneficiario: '', monto: '', concepto: '', solicito: S.perfil.nombre, sin_factura_motivo: '' } };
     if (editCheque) {
       const c = editCheque; S.F.editId = c.id; S.F.clave = null;
@@ -774,6 +805,11 @@ async function viewNuevo(editCheque) {
     <datalist id="dlBen">${uniq.map(b => `<option value="${esc(b)}">`).join('')}</datalist>
     <label class="f">Concepto</label><input type="text" id="h_concepto" value="${esc(h.concepto)}">
     <label class="f">Solicitó</label><input type="text" id="h_solicito" value="${esc(h.solicito)}">
+  </div>
+  <h3>Foto del cheque ${F.editId ? '' : '(obligatoria)'}</h3>
+  <div class="card">
+    <div class="row"><button class="btn gold sm" data-act="pickcheque">📷 Tomar o adjuntar foto del cheque</button><span id="chqInfo" class="mut sm">${F.chequeFiles.length ? F.chequeFiles.length + ' foto(s) lista(s) para subir' : 'Sin foto'}</span></div>
+    <div class="mut sm" style="margin-top:6px">Foto del cheque ya impreso, <b>antes de firmar</b>, donde se lea el beneficiario y el monto. El Ing. la revisa para autorizar.</div>
   </div>
   <h3>Folios que cubre este cheque</h3>
   <div id="lines"></div>
@@ -923,6 +959,7 @@ async function guardarCheque(confirmado = false) {
   if (!h.fecha) err.push('Captura la fecha.');
   if (!h.beneficiario.trim()) err.push('Captura el beneficiario.');
   if (!(tot > 0)) err.push('Captura el monto del cheque.');
+  if (!F.editId && !F.chequeFiles.length) err.push('Toma o adjunta la foto del cheque (sin firmar).');
   F.lines.forEach((l, i) => {
     if (!l.cargo_id) err.push('Hay un folio sin cargo: elígelo.');
     if (!(parseMoney(l.monto) > 0)) err.push('Hay un folio sin monto: captúralo.');
@@ -951,7 +988,8 @@ async function guardarCheque(confirmado = false) {
     if (F.editId) c = await rpc('editar_cheque', { p_id: F.editId, p: payload });
     else { payload.clave_submision = F.clave; c = await rpc('capturar_cheque', { p: payload }); }
     let subidaErr = '';
-    if (F.files.length) { try { await subirArchivo(c.id, 'factura', F.files); } catch (e) { subidaErr = errMsg(e); } }
+    if (F.chequeFiles.length) { try { await subirArchivo(c.id, 'foto_cheque', F.chequeFiles, `Foto_cheque_${c.numero_cheque}.pdf`); } catch (e) { subidaErr = 'foto del cheque: ' + errMsg(e) + ' (súbela desde el detalle: el Ing. no podrá autorizar sin ella)'; } }
+    if (F.files.length) { try { await subirArchivo(c.id, 'factura', F.files); } catch (e) { subidaErr = (subidaErr ? subidaErr + ' · ' : '') + errMsg(e); } }
     if (F.folioFiles.length) {
       const par = emparejarFolios(F.lines, c.folios || []);
       const nums = F.lines.map((l, k) => l.modo === 'archivo' && par[k] ? par[k].folio_numero : null).filter(Boolean).join('-') || 'FOLIOS';
@@ -1144,7 +1182,7 @@ document.addEventListener('click', async ev => {
       case 'okcobrar': await rpc('marcar_cobrado', { p_id: id, p_fecha_cobro: $('#fc').value, p_cobrado: true }); closeModal(); toast('Cheque marcado como cobrado.', 'ok'); refreshView(); break;
       case 'descobrar': await rpc('marcar_cobrado', { p_id: id, p_fecha_cobro: null, p_cobrado: false }); toast('Cobro desmarcado.', 'ok'); openDetail(id); refreshView(true); break;
       case 'subir': {
-        const files = await pickFiles(true); if (!files.length) break; toast('Subiendo…');
+        const files = await pickFuente(); if (!files.length) break; toast('Subiendo…');
         await subirArchivo(id, el.dataset.tipo, files); toast('Documento guardado.', 'ok'); openDetail(id); refreshView(true); break; }
       case 'quitar': dlgMotivo('Quitar documento', 'okquitar', id, 'bad', 'Quitar'); break;
       case 'okquitar': { const m = $('#mot').value.trim(); if (!m) return toast('Escribe el motivo.', 'err'); await rpc('quitar_archivo', { p_archivo: id, p_motivo: m }); toast('Documento quitado.', 'ok'); closeModal(); refreshView(true); break; }
@@ -1156,7 +1194,7 @@ document.addEventListener('click', async ev => {
         el.disabled = true; const c = await rpc('registrar_cheque_cancelado', { p_chequera: ch, p_numero: num, p_fecha: fe, p_motivo: mo });
         let warn = ''; if (ccFiles.length) { try { await subirArchivo(c.id, 'otro', ccFiles); } catch (e) { warn = errMsg(e); } }
         ccFiles = []; closeModal(); toast(`Cheque ${num} registrado como cancelado.` + (warn ? ' La foto no se pudo subir.' : ''), warn ? 'err' : 'ok'); refreshView(); break; }
-      case 'ccfoto': { ccFiles = await pickFiles(true); $('#ccInfo').textContent = ccFiles.length ? ccFiles.length + ' archivo(s)' : 'Sin foto'; break; }
+      case 'ccfoto': { ccFiles = await pickFuente(); $('#ccInfo').textContent = ccFiles.length ? ccFiles.length + ' archivo(s)' : 'Sin foto'; break; }
       case 'huecos': {
         openModal('<div class="spin">Revisando…</div>');
         const res = await Promise.all(S.chequeras.map(async q => ({ q, h: await rpc('huecos_chequera', { p_chequera: q.id }) })));
@@ -1165,7 +1203,8 @@ document.addEventListener('click', async ev => {
       case 'cancelarEdit': S.F = null; go('cheques'); break;
       case 'otro': closeModal(); S.F = null; go('nuevo'); break;
       case 'modo': { const l = S.F.lines[Number(el.dataset.i)]; l.modo = el.dataset.m; renderLines(); break; }
-      case 'pickfolio': { const fs = await pickFiles(true); S.F.folioFiles = fs; $('#folInfo').textContent = fs.length ? fs.length + ' archivo(s) listo(s) para subir' : 'Sin adjuntar'; break; }
+      case 'pickcheque': { const fs = await pickFuente(); if (fs.length) { S.F.chequeFiles = S.F.chequeFiles.concat(fs); } $('#chqInfo').textContent = S.F.chequeFiles.length ? S.F.chequeFiles.length + ' foto(s) lista(s) para subir' : 'Sin foto'; break; }
+      case 'pickfolio': { const fs = await pickFuente(); S.F.folioFiles = fs; $('#folInfo').textContent = fs.length ? fs.length + ' archivo(s) listo(s) para subir' : 'Sin adjuntar'; break; }
       case 'dlfolio': { const hj = (S.hojas || [])[Number(el.dataset.i)]; if (hj) bajarBlob(hj.blob || hj.doc.output('blob'), hj.nombre); break; }
       case 'firma': dlgFirma(); break;
       case 'firmalimpiar': { const cv = $('#firmaPad'); cv.getContext('2d').clearRect(0, 0, cv.width, cv.height); break; }
@@ -1177,7 +1216,7 @@ document.addEventListener('click', async ev => {
         const F = S.F, i = Number(el.dataset.i); const tot = cents(parseMoney(F.h.monto) || 0);
         const otros = F.lines.reduce((a, l, j) => j === i ? a : a + cents(parseMoney(l.monto) || 0), 0); const falta = tot - otros;
         if (falta > 0) { F.lines[i].monto = (falta / 100).toFixed(2); renderLines(); } else toast('No falta nada por repartir.', 'err'); break; }
-      case 'pickfac': { const files = await pickFiles(true); S.F.files = files; $('#facInfo').textContent = files.length ? files.length + ' archivo(s) listo(s) para subir' : 'Sin adjuntar'; break; }
+      case 'pickfac': { const files = await pickFuente(); S.F.files = files; $('#facInfo').textContent = files.length ? files.length + ' archivo(s) listo(s) para subir' : 'Sin adjuntar'; break; }
       case 'guardar': guardarCheque(); break;
       case 'confirmguardar': closeModal(); guardarCheque(true); break;
       case 'saveserie': {
