@@ -172,6 +172,7 @@ const pad = (n, l = 4) => String(n).padStart(l, '0');
 const rol = () => S.perfil?.rol;
 const puedeCapturar = () => ['administrador', 'capturista'].includes(rol());
 const esAdmin = () => rol() === 'administrador';
+const esSinCargo = c => c && c.nombre === 'SIN CARGO';
 const cargoNombre = id => S.cargos.find(c => c.id === id)?.nombre || '?';
 const chequeraNombre = id => S.chequeras.find(c => c.id === id)?.nombre || '?';
 
@@ -915,7 +916,7 @@ function renderLines() {
   $('#lines').innerHTML = S.F.lines.map((l, i) => `<div class="line" data-i="${i}">
     ${S.F.lines.length > 1 ? `<div class="row"><span class="grow"></span><button class="btn ghost sm" data-act="rmline" data-i="${i}">Quitar este folio</button></div>` : ''}
     <div class="grid2">
-      <div><label class="f">Cargo</label><select data-k="cargo_id"><option value="">Elige…</option>${S.cargos.map(c => `<option value="${c.id}" ${String(l.cargo_id) === String(c.id) ? 'selected' : ''}>${esc(c.nombre)}</option>`).join('')}</select></div>
+      <div><label class="f">Cargo</label><select data-k="cargo_id"><option value="">Elige…</option>${S.cargos.filter(c => !esSinCargo(c) || l.modo === 'sinfolio').map(c => `<option value="${c.id}" ${String(l.cargo_id) === String(c.id) ? 'selected' : ''}>${esc(c.nombre)}</option>`).join('')}</select></div>
       ${l.modo === 'sinfolio' ? `<div><label class="f">No. de folio</label><input type="text" value="SIN FOLIO" disabled></div>` : `<div><label class="f">No. de folio</label><input type="text" inputmode="numeric" data-k="folio_numero" placeholder="${esc(l._ph || '')}" value="${esc(l.folio_numero)}"></div>`}
     </div>
     <div class="grid2">
@@ -929,7 +930,7 @@ function renderLines() {
       <button class="btn ${l.modo === 'sinfolio' ? 'gold' : 'ghost'} sm" data-act="modo" data-i="${i}" data-m="sinfolio">Sin folio</button></div>
     ${l.modo === 'sinfolio' ? `<label class="f">¿Por qué no lleva folio? (obligatorio)</label><input type="text" data-k="motivo_sf" list="dlSF" placeholder="Ej. NÓMINA, PAGO DE SERVICIO, REPOSICIÓN DE CAJA…" value="${esc(l.motivo_sf)}">
       <datalist id="dlSF"><option value="NÓMINA"><option value="PAGO DE SERVICIO"><option value="REPOSICIÓN DE CAJA"><option value="ANTICIPO"><option value="IMPUESTOS"><option value="PAGO A PROVEEDOR CON FACTURA"></datalist>
-      <div class="mut sm" style="margin-top:4px">Se identifica por el cargo, el proveedor, la descripción y este motivo. Queda marcado como SIN FOLIO.</div>` : ''}
+      <div class="mut sm" style="margin-top:4px">Se identifica por el proveedor, la descripción y este motivo. Si no se carga a ningún lado deja SIN CARGO; si sí es de un cargo, cámbialo. Queda marcado como SIN FOLIO.</div>` : ''}
     ${l.modo === 'archivo' ? `<div class="mut sm" style="margin-top:4px">El archivo del folio se adjunta una sola vez, abajo, en “Folio (archivo o foto)”.</div>` : `
       <div class="grid2"><div><label class="f">Vencimiento (opcional)</label><input type="date" data-k="venc" value="${esc(l.venc)}"></div>
       <div><label class="f">Periodo (opcional)</label><input type="text" data-k="periodo" placeholder="Ej. AGOSTO 2026" value="${esc(l.periodo)}"></div></div>
@@ -1069,7 +1070,7 @@ async function viewSeries() {
   await loadCatalogs();
   $('#view').innerHTML = `<h2>Series de folios por cargo</h2>
   <div class="mut sm" style="margin-bottom:10px">Último folio usado en cada cargo. Cancún se asigna automático; los demás se sugieren y puedes cambiarlos (hay folios que se pagan en efectivo).</div>
-  ${S.cargos.map(c => { const s = S.series[c.id] || { ultimo_numero: 0, modo: 'sugerida' }; return `<div class="card row">
+  ${S.cargos.filter(c => !esSinCargo(c)).map(c => { const s = S.series[c.id] || { ultimo_numero: 0, modo: 'sugerida' }; return `<div class="card row">
     <div class="grow"><div class="b">${esc(c.nombre)}</div><div class="mut sm">${s.modo === 'automatica' ? 'Automático' : 'Sugerido'}</div></div>
     ${puedeCapturar() ? `<input type="number" inputmode="numeric" style="width:110px" id="ser_${c.id}" value="${s.ultimo_numero}"><button class="btn sm" data-act="saveserie" data-id="${c.id}">Guardar</button>` : `<div class="money big">${s.ultimo_numero}</div>`}
   </div>`; }).join('')}`;
@@ -1211,7 +1212,11 @@ document.addEventListener('click', async ev => {
         openModal(`<h2 style="margin-top:0">Huecos de numeración</h2>` + (con.length ? con.map(r => `<div class="card"><div class="b">${esc(r.q.nombre)}</div><div class="warnbox">Faltan los cheques: ${r.h.join(', ')}.<br>Regístralos como emitidos o como cancelados.</div></div>`).join('') : '<div class="okbox">No hay huecos: todas las chequeras llevan numeración continua desde el primer cheque capturado.</div>') + '<div class="mut sm">Se revisa desde el primer cheque capturado en el sistema (el historial no cuenta).</div>'); break; }
       case 'cancelarEdit': S.F = null; go('cheques'); break;
       case 'otro': closeModal(); S.F = null; go('nuevo'); break;
-      case 'modo': { const l = S.F.lines[Number(el.dataset.i)]; l.modo = el.dataset.m; renderLines(); break; }
+      case 'modo': {
+        const l = S.F.lines[Number(el.dataset.i)]; l.modo = el.dataset.m; const sc = S.cargos.find(esSinCargo);
+        if (sc) { if (l.modo === 'sinfolio' && !l.cargo_id) l.cargo_id = sc.id; else if (l.modo !== 'sinfolio' && Number(l.cargo_id) === sc.id) l.cargo_id = ''; }
+        renderLines(); break;
+      }
       case 'pickcheque': { const fs = await pickFuente(); if (fs.length) { S.F.chequeFiles = S.F.chequeFiles.concat(fs); } $('#chqInfo').textContent = S.F.chequeFiles.length ? S.F.chequeFiles.length + ' foto(s) lista(s) para subir' : 'Sin foto'; break; }
       case 'pickfolio': { const fs = await pickFuente(); S.F.folioFiles = fs; $('#folInfo').textContent = fs.length ? fs.length + ' archivo(s) listo(s) para subir' : 'Sin adjuntar'; break; }
       case 'dlfolio': { const hj = (S.hojas || [])[Number(el.dataset.i)]; if (hj) bajarBlob(hj.blob || hj.doc.output('blob'), hj.nombre); break; }
