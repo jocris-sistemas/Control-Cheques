@@ -328,9 +328,10 @@ async function viewPend() {
   S.pendCount = data.length + canc.length; refreshPendCount();
   const rech = (await sb.from('cheques').select(SEL).eq('estatus', 'rechazado').eq('es_historial', false).order('actualizado_en', { ascending: false }).limit(20)).data || [];
   let html = '';
-  if (canc.length) html += `<h3>Cheques cancelados por confirmar</h3>` + canc.map(cardCancel).join('');
   if (!data.length && !canc.length) html += `<div class="card empty">${ICON.pend}<div>No hay cheques pendientes. Todo al día.</div></div>`;
-  html += data.map(c => cardPend(c)).join('');
+  // Pendientes y cancelados por confirmar van juntos, por número de cheque del más viejo al más nuevo.
+  const todos = data.concat(canc).sort((a, b) => (a.numero_cheque - b.numero_cheque) || (a.chequera_id - b.chequera_id));
+  html += todos.map(c => c.estatus === 'cancelado' ? cardCancel(c) : cardPend(c)).join('');
   if (rech.length) html += `<h3>Rechazados (esperan corrección)</h3>` + rech.map(c => cardPend(c, true)).join('');
   $('#pendList').outerHTML = html;
 }
@@ -371,6 +372,8 @@ function cardPend(c, rechazado = false) {
       ${fac ? `<button class="btn ghost sm" data-act="verarch" data-id="${c.id}" data-tipo="factura">Ver factura</button>` : '<span class="chip warn">PDTE. FACTURA</span>'}
       ${archActivos(c, 'folio').length ? `<button class="btn ghost sm" data-act="verarch" data-id="${c.id}" data-tipo="folio">Ver folio</button>` : ''}
       ${hayFoto ? `<button class="btn ghost sm" data-act="verarch" data-id="${c.id}" data-tipo="foto_cheque">Ver foto del cheque</button>` : '<span class="chip rechazado">FALTA FOTO DEL CHEQUE</span>'}
+      ${archActivos(c, 'comprobante_cobro').length ? `<button class="btn ghost sm" data-act="verarch" data-id="${c.id}" data-tipo="comprobante_cobro">Ver ficha de depósito</button>` : ''}
+      ${['administrador', 'capturista', 'contador'].includes(rol()) ? `<button class="btn ghost sm" data-act="subir" data-id="${c.id}" data-tipo="comprobante_cobro">+ Ficha de depósito</button>` : ''}
       <button class="btn ghost sm" data-act="poliza" data-id="${c.id}">Ver póliza</button>
       <button class="btn ghost sm" data-act="detalle" data-id="${c.id}">Detalle</button>
     </div>
