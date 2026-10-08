@@ -354,6 +354,7 @@ function cardPend(c, rechazado = false) {
   const sinFac = false; // la factura ya no es requisito para autorizar
   const cuadra = sumFolios(c) === cents(c.monto);
   const hayFoto = archActivos(c, 'foto_cheque').length > 0;
+  const okFoto = hayFoto || !!c.sin_foto_motivo;
   return `<div class="card" id="cp-${c.id}">
     <div class="row" style="align-items:flex-start">
       <div class="grow">
@@ -371,15 +372,17 @@ function cardPend(c, rechazado = false) {
       ${cuadra ? '' : '<span class="chip rechazado">NO CUADRA</span>'}
       ${fac ? `<button class="btn ghost sm" data-act="verarch" data-id="${c.id}" data-tipo="factura">Ver factura</button>` : '<span class="chip warn">PDTE. FACTURA</span>'}
       ${archActivos(c, 'folio').length ? `<button class="btn ghost sm" data-act="verarch" data-id="${c.id}" data-tipo="folio">Ver folio</button>` : ''}
-      ${hayFoto ? `<button class="btn ghost sm" data-act="verarch" data-id="${c.id}" data-tipo="foto_cheque">Ver foto del cheque</button>` : '<span class="chip rechazado">FALTA FOTO DEL CHEQUE</span>'}
+      ${hayFoto ? `<button class="btn ghost sm" data-act="verarch" data-id="${c.id}" data-tipo="foto_cheque">Ver foto del cheque</button>` : c.sin_foto_motivo ? '<span class="chip warn">SIN FOTO</span>' : '<span class="chip rechazado">FALTA FOTO DEL CHEQUE</span>'}
+      ${!okFoto && !rechazado && puedeCapturar() ? `<button class="btn ghost sm" data-act="sinfoto" data-id="${c.id}">No hay foto</button>` : ''}
       ${archActivos(c, 'comprobante_cobro').length ? `<button class="btn ghost sm" data-act="verarch" data-id="${c.id}" data-tipo="comprobante_cobro">Ver ficha de depósito</button>` : ''}
       ${!archActivos(c, 'comprobante_cobro').length && ['administrador', 'capturista', 'contador'].includes(rol()) ? `<button class="btn ghost sm" data-act="subir" data-id="${c.id}" data-tipo="comprobante_cobro">+ Ficha de depósito</button>` : ''}
       <button class="btn ghost sm" data-act="poliza" data-id="${c.id}">Ver póliza</button>
       <button class="btn ghost sm" data-act="detalle" data-id="${c.id}">Detalle</button>
     </div>
+    ${!hayFoto && c.sin_foto_motivo ? `<div class="mut sm" style="margin-top:6px">Sin foto: ${esc(c.sin_foto_motivo)}${c.sin_foto_por_nombre ? ' (' + esc(c.sin_foto_por_nombre) + ')' : ''}</div>` : ''}
     ${rechazado ? `<div class="warnbox">Rechazado: ${esc(c.motivo_rechazo || '')}</div>` : ''}
     ${esAdmin() && !rechazado ? `<div class="row" style="margin-top:12px">
-      <button class="btn ok grow" data-act="autorizar" data-id="${c.id}" ${sinFac || !cuadra || !hayFoto ? 'disabled' : ''}>Autorizar</button>
+      <button class="btn ok grow" data-act="autorizar" data-id="${c.id}" ${sinFac || !cuadra || !okFoto ? 'disabled' : ''}>Autorizar</button>
       <button class="btn bad grow" data-act="rechazar" data-id="${c.id}">Rechazar</button></div>
 ` : ''}
     ${!esAdmin() && !rechazado ? '<div class="chip warn" style="margin-top:10px">PDTE. DE AUTORIZAR</div>' : ''}
@@ -393,6 +396,7 @@ async function loadCheque(id) {
 function dlgAutorizar(id, c) {
   openModal(`<h2>Autorizar cheque</h2>
     <div class="card"><div class="b">${esc(c.beneficiario)}</div><div class="money big">${fmt(c.monto)}</div><div class="mut sm">Póliza / Cheque ${c.numero_cheque}</div></div>
+    ${c.sin_foto_motivo && !archActivos(c, 'foto_cheque').length ? `<div class="warnbox"><b>Sin foto del cheque.</b> Motivo: ${esc(c.sin_foto_motivo)}${c.sin_foto_por_nombre ? ' (marcó ' + esc(c.sin_foto_por_nombre) + ')' : ''}</div>` : ''}
     <label class="f">Comentario (opcional)</label><textarea id="cmt"></textarea>
     <div class="row" style="margin-top:14px"><button class="btn ok grow" data-act="okautorizar" data-id="${id}">Sí, autorizar</button><button class="btn ghost" data-act="close">Cancelar</button></div>`);
 }
@@ -495,7 +499,7 @@ async function openDetail(id) {
     const hist = c.es_historial;
     let acciones = '';
     if (!hist) {
-      const sinFoto = !c.es_historial && c.estatus !== 'cancelado' && !archActivos(c, 'foto_cheque').length;
+      const sinFoto = !c.es_historial && c.estatus !== 'cancelado' && !archActivos(c, 'foto_cheque').length && !c.sin_foto_motivo;
       if (esAdmin() && c.estatus === 'pendiente') acciones += `<button class="btn ok" data-act="autorizar" data-id="${id}" ${sinFoto ? 'disabled title="Falta la foto del cheque"' : ''}>Autorizar</button><button class="btn bad" data-act="rechazar" data-id="${id}">Rechazar</button>`;
       if (puedeCapturar() && ['pendiente', 'rechazado'].includes(c.estatus)) acciones += `<button class="btn gold" data-act="editar" data-id="${id}">Editar</button>`;
       if (c.estatus === 'autorizado' && !c.cobrado && ['administrador', 'capturista', 'contador'].includes(rol())) acciones += `<button class="btn" data-act="cobrar" data-id="${id}">Marcar cobrado</button>`;
@@ -518,6 +522,7 @@ async function openDetail(id) {
         ${c.motivo_rechazo ? `<div>Rechazo</div><div>${esc(c.motivo_rechazo)}</div>` : ''}
         ${c.motivo_cancelacion ? `<div>Cancelación</div><div>${esc(c.motivo_cancelacion)}</div>` : ''}
         ${c.estatus === 'cancelado' && !c.es_historial ? `<div>Confirmación del Ing.</div><div>${c.cancelacion_enterada_en ? 'Enterado: ' + esc(c.cancelacion_enterada_por_nombre || '') + ' · ' + fdt(c.cancelacion_enterada_en) : '<span class="chip warn">Pendiente de confirmar</span>'}</div>` : ''}
+        ${c.sin_foto_motivo ? `<div>Sin foto</div><div>${esc(c.sin_foto_motivo)}<br><span class="mut">${esc(c.sin_foto_por_nombre || '')}${c.sin_foto_en ? ' · ' + fdt(c.sin_foto_en) : ''}</span></div>` : ''}
         ${c.sin_factura_motivo ? `<div>Sin factura</div><div>${esc(c.sin_factura_motivo)}</div>` : ''}
         ${c.cobrado ? `<div>Cobrado</div><div>${fdate(c.fecha_cobro)}</div>` : ''}
         ${c.nota_historial ? `<div>Nota</div><div>${esc(c.nota_historial)}</div>` : ''}
@@ -532,6 +537,7 @@ async function openDetail(id) {
         ${puedeSubir ? `<div class="row" style="margin-top:10px">
           ${puedeCapturar() && c.estatus !== 'cancelado' ? `<button class="btn ghost sm" data-act="subir" data-id="${id}" data-tipo="foto_cheque">+ Foto del cheque</button><button class="btn ghost sm" data-act="subir" data-id="${id}" data-tipo="factura">+ Factura</button><button class="btn ghost sm" data-act="subir" data-id="${id}" data-tipo="folio">+ Folio</button>` : ''}
           ${c.estatus !== 'cancelado' && !archActivos(c, 'comprobante_cobro').length && ['administrador', 'capturista', 'contador'].includes(rol()) ? `<button class="btn ghost sm" data-act="subir" data-id="${id}" data-tipo="comprobante_cobro">+ Ticket / ficha de depósito</button>` : ''}
+          ${puedeCapturar() && c.estatus === 'pendiente' && !archActivos(c, 'foto_cheque').length ? (c.sin_foto_motivo ? `<button class="btn ghost sm" data-act="quitarsf" data-id="${id}">Quitar marca "sin foto"</button>` : `<button class="btn ghost sm" data-act="sinfoto" data-id="${id}">No hay foto</button>`) : ''}
           ${puedeCapturar() ? `<button class="btn ghost sm" data-act="subir" data-id="${id}" data-tipo="otro">${c.estatus === 'cancelado' ? '+ Foto del cheque cancelado' : '+ Otro'}</button>` : ''}</div>` : ''}
       </div>
       ${acciones ? `<div class="row" style="margin:12px 0">${acciones}</div>` : ''}
@@ -1184,6 +1190,9 @@ document.addEventListener('click', async ev => {
       case 'verpath': abrirPath(el.dataset.path); break;
       case 'autorizar': { const c = await loadCheque(id); dlgAutorizar(id, c); break; }
       case 'okautorizar': { el.disabled = true; await rpc('autorizar_cheque', { p_id: id, p_comentario: $('#cmt').value }); closeModal(); toast('Cheque autorizado.', 'ok'); refreshView(); break; }
+      case 'sinfoto': dlgMotivo('Cheque sin foto', 'oksinfoto', id, 'gold', 'Marcar sin foto'); break;
+      case 'oksinfoto': { const m = $('#mot').value.trim(); if (m.length < 5) return toast('Escribe el motivo (por qué no hay foto).', 'err'); await rpc('marcar_sin_foto', { p_id: id, p_motivo: m }); closeModal(); toast('Marcado sin foto; el Ing. ya puede autorizarlo.', 'ok'); refreshView(true); break; }
+      case 'quitarsf': { await rpc('quitar_sin_foto', { p_id: id }); toast('Marca quitada.', 'ok'); openDetail(id); refreshView(true); break; }
       case 'rechazar': dlgMotivo('Rechazar cheque', 'okrechazar', id, 'bad', 'Rechazar'); break;
       case 'okrechazar': { const m = $('#mot').value.trim(); if (!m) return toast('Escribe el motivo.', 'err'); await rpc('rechazar_cheque', { p_id: id, p_motivo: m }); closeModal(); toast('Cheque rechazado.', 'ok'); refreshView(); break; }
       case 'cancelar': dlgMotivo('Cancelar cheque', 'okcancelar', id, 'bad', 'Cancelar cheque'); break;
