@@ -142,6 +142,10 @@ nav.tabs{justify-content:center}nav.tabs button{max-width:220px}
 .empty{text-align:center;color:var(--mut);padding:30px 16px}
 .empty svg{width:42px;height:42px;stroke:#a9b4c4;fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;margin-bottom:6px}
 @media(min-width:900px){main{padding-top:24px}.item{padding:13px 16px}}
+
+.alertahuecos{background:#fff3dc;border-bottom:3px solid var(--gold);color:#5a3b00;padding:9px 16px;font-size:13.5px;cursor:pointer;display:flex;gap:10px;align-items:flex-start}
+.alertahuecos b{color:#8a2a00}
+.alertahuecos .go{margin-left:auto;font-weight:700;white-space:nowrap;color:var(--navy)}
 </style>
 </head>
 <body>
@@ -274,7 +278,7 @@ async function boot() {
   try { const { data: fr } = await sb.from('firmas').select('imagen').maybeSingle(); S.firma = fr ? fr.imagen : null; } catch (e) { S.firma = null; }
   S.tab = 'pend'; // todos entran a Pendientes
   renderShell();
-  refreshPendCount();
+  refreshPendCount(); cargarAlertas(true);
   if (!boot._iv) boot._iv = setInterval(() => { if (S.perfil) refreshPendCount(); }, 60000);
 }
 async function loadCatalogs() {
@@ -303,6 +307,7 @@ function renderShell() {
     <div class="brand"><span class="mark">J</span><div>JOCRIS · Control de Cheques<small>${esc(S.perfil.nombre)} · ${esc(rolTxt(S.perfil.rol))}</small></div></div>
     <button class="acct" data-act="menu" title="Mi cuenta" aria-label="Mi cuenta">${esc(iniciales(S.perfil.nombre))}</button>
   </header>
+  <div id="alertaHuecos" class="hidden"></div>
   <main id="view"></main>
   <nav class="tabs">${tabs.map(([k, l]) => `<button data-tab="${k}" class="${S.tab === k ? 'on' : ''}">${ICON[k] || ''}<span>${l}</span>${k === 'pend' ? `<span class="badge hidden" id="bPend">0</span>` : ''}</button>`).join('')}</nav>`;
   go(S.tab);
@@ -313,7 +318,7 @@ function go(tab) {
   if (tab !== 'nuevo') S.F = null;
   ({ pend: viewPend, cheques: viewCheques, nuevo: viewNuevo, series: viewSeries, bit: viewBit }[tab])();
   window.scrollTo(0, 0);
-  refreshPendCount();
+  refreshPendCount(); cargarAlertas();
 }
 
 /* ===================== CONSULTAS ===================== */
@@ -913,6 +918,36 @@ async function viewNuevo(editCheque) {
   numInfo();
 }
 
+
+/* ===================== ALERTA: CHEQUES SALTADOS / DETENIDOS ===================== */
+async function cargarAlertas(force) {
+  if (!S.perfil || !S.chequeras) return;
+  if (!force && S.alT && Date.now() - S.alT < 120000) return; S.alT = Date.now();
+  try {
+    const [res, det] = await Promise.all([Promise.all(S.chequeras.map(async q => ({ q, h: await rpc('huecos_chequera', { p_chequera: q.id }) }))),
+      sb.from('cheques_detenidos').select('chequera_id,numero,motivo,creado_por_nombre,creado_en')]);
+    const mot = {}; ((det && det.data) || []).forEach(d => { mot[d.chequera_id + '|' + d.numero] = d; });
+    S.huecos = res.filter(r => r.h.length).map(r => ({ q: r.q, nums: r.h.map(n => ({ n, d: mot[r.q.id + '|' + n] || null })) }));
+  } catch (e) { S.huecos = S.huecos || []; }
+  pintaAlertas();
+}
+function pintaAlertas() {
+  const el = $('#alertaHuecos'); if (!el) return;
+  const hs = S.huecos || [];
+  if (!hs.length || !S.perfil || ['contador', 'lector'].includes(rol())) { el.className = 'hidden'; el.innerHTML = ''; return; }
+  el.className = 'alertahuecos'; el.dataset.act = 'huecos';
+  const tot = hs.reduce((a, h) => a + h.nums.length, 0);
+  el.innerHTML = `<div>⚠ <b>${tot} cheque${tot > 1 ? 's' : ''} sin dar de alta:</b> ${hs.map(h => `${esc(h.q.nombre)} ${h.nums.map(x => x.n + (x.d ? ' (' + esc(x.d.motivo) + ')' : '')).join(', ')}`).join(' · ')}</div><span class="go">Ver ›</span>`;
+}
+function dlgHuecos() {
+  const hs = S.huecos || [], cap = puedeCapturar();
+  openModal(`<h2 style="margin-top:0">Cheques sin dar de alta</h2>` + (hs.length ? hs.map((r, i) => `<div class="card"><div class="b">${esc(r.q.nombre)}</div>
+    ${r.nums.map(x => `<div class="warnbox"><b>${x.n}</b> — ${x.d ? 'DETENIDO: ' + esc(x.d.motivo) + `<div class="mut sm">Lo marcó ${esc(x.d.creado_por_nombre || '')} el ${fdate(x.d.creado_en)}</div>` : '<span class="mut">sin motivo registrado</span>'}</div>`).join('')}
+    ${cap && r.nums.some(x => !x.d) ? `<label class="f">Motivo para los que no tienen</label><input type="text" id="mh_${r.q.id}" placeholder="Ej. DETENIDO POR FALTA DE FIRMA"><div class="row" style="margin-top:8px"><button class="btn gold sm" data-act="motivohuecos" data-q="${r.q.id}">Guardar motivo</button></div>` : ''}
+    <div class="mut sm" style="margin-top:6px">Cuando lo captures con ese número, o lo registres como cancelado, la alerta se quita sola.</div></div>`).join('')
+    : '<div class="okbox">No hay huecos: todas las chequeras llevan numeración continua desde el primer cheque capturado.</div>') + '<div class="mut sm">Se revisa desde el primer cheque capturado en el sistema (el historial no cuenta).</div>');
+}
+
 /* ===================== SEGUROS DE CAPTURA (numeración, duplicados, fechas, montos) ===================== */
 S.ult = {};
 async function ultimoChequera(id) {
@@ -937,6 +972,7 @@ async function revisarNumero(h, esEdit) {
     out.avisos.push(`OJO: el ${n} está muy lejos del último de ${nom} (${u.num})${otras.length ? ` y se parece a la numeración de ${otras.join(' / ')}. ¿Elegiste bien la chequera?` : '. Revisa que el número esté bien.'}`);
   } else if (n > u.num + 1) {
     out.avisos.push(`Te estás saltando números: el último es ${u.num} y capturas el ${n} (faltan ${n - u.num - 1 > 1 ? (u.num + 1) + ' al ' + (n - 1) : (u.num + 1)}).`);
+    out.salta = { chequera: id, nums: Array.from({ length: n - u.num - 1 }, (_, i) => u.num + 1 + i) };
   } else if (n < u.num) {
     out.avisos.push(`El ${n} es menor que el último capturado (${u.num}).`);
   }
@@ -974,6 +1010,7 @@ function dlgConfirmarCaptura(h, tot, r) {
     <div class="card"><div class="kv"><div>Chequera</div><div class="b">${esc(nom)}</div><div>No. de cheque</div><div class="b big">${esc(h.numero_cheque)}</div><div>Fecha</div><div>${fdate(h.fecha)}</div><div>Beneficiario</div><div class="b">${esc(h.beneficiario.trim().toUpperCase())}</div><div>Monto</div><div class="money big">${fmt(tot)}</div></div></div>
     ${r.bloqueos.map(t => `<div class="warnbox" style="margin-top:8px;border-color:var(--bad)">${esc(t)}</div>`).join('')}
     ${r.avisos.map(t => `<div class="warnbox" style="margin-top:8px">${esc(t)}</div>`).join('')}
+    ${r.salta && !r.bloqueos.length ? `<label class="f">¿Por qué se salta el ${r.salta.nums.join(', ')}? (obligatorio)</label><input type="text" id="motSalta" placeholder="Ej. DETENIDO POR FALTA DE FIRMA" value="${esc((S.F && S.F.saltaMotivo) || '')}"><div class="mut sm" style="margin-top:4px">Quedará una alerta en la app hasta que lo des de alta.</div>` : ''}
     <div class="row" style="margin-top:14px">${r.bloqueos.length ? '' : `<button class="btn gold grow" data-act="confirmguardar">${r.avisos.length ? 'Sí, lo reviso y está correcto' : 'Sí, es correcto — guardar'}</button>`}<button class="btn ghost ${r.bloqueos.length ? 'grow' : ''}" data-act="close">Volver a revisar</button></div>`);
 }
 function suggest() {
@@ -1053,6 +1090,7 @@ async function guardarCheque(confirmado = false) {
   if (!confirmado) {
     btn.disabled = true; const txt0 = btn.textContent; btn.textContent = 'Revisando…';
     let r; try { r = await revisionCaptura(h, tot, !!F.editId); } catch (e) { r = { bloqueos: [], avisos: [] }; }
+    F._salta = r.salta || null;
     btn.disabled = false; btn.textContent = txt0;
     if (r.bloqueos.length) { if (F.editId) return toast(r.bloqueos[0], 'err'); return dlgConfirmarCaptura(h, tot, r); }
     if (!F.editId) return dlgConfirmarCaptura(h, tot, r);
@@ -1068,6 +1106,8 @@ async function guardarCheque(confirmado = false) {
     if (F.editId) c = await rpc('editar_cheque', { p_id: F.editId, p: payload });
     else { payload.clave_submision = F.clave; c = await rpc('capturar_cheque', { p: payload }); }
     let subidaErr = '';
+    if (!F.editId && F._salta && F.saltaMotivo) { try { await rpc('registrar_detenidos', { p_chequera: F._salta.chequera, p_numeros: F._salta.nums, p_motivo: F.saltaMotivo }); } catch (e) { subidaErr = 'no se pudo guardar la alerta del cheque saltado: ' + errMsg(e); } }
+    S.ult = {}; cargarAlertas(true);
     if (F.chequeFiles.length) { try { await subirArchivo(c.id, 'foto_cheque', F.chequeFiles, `Foto_cheque_${c.numero_cheque}.pdf`); } catch (e) { subidaErr = 'foto del cheque: ' + errMsg(e) + ' (súbela desde el detalle: el Ing. no podrá autorizar sin ella)'; } }
     if (F.files.length) { try { await subirArchivo(c.id, 'factura', F.files); } catch (e) { subidaErr = (subidaErr ? subidaErr + ' · ' : '') + errMsg(e); } }
     if (F.folioFiles.length) {
@@ -1277,13 +1317,16 @@ document.addEventListener('click', async ev => {
         if (!ch || !num || !fe || !mo) return toast('Llena chequera, número, fecha y motivo.', 'err');
         el.disabled = true; const c = await rpc('registrar_cheque_cancelado', { p_chequera: ch, p_numero: num, p_fecha: fe, p_motivo: mo });
         let warn = ''; if (ccFiles.length) { try { await subirArchivo(c.id, 'otro', ccFiles); } catch (e) { warn = errMsg(e); } }
-        ccFiles = []; closeModal(); toast(`Cheque ${num} registrado como cancelado.` + (warn ? ' La foto no se pudo subir.' : ''), warn ? 'err' : 'ok'); refreshView(); break; }
+        ccFiles = []; closeModal(); toast(`Cheque ${num} registrado como cancelado.` + (warn ? ' La foto no se pudo subir.' : ''), warn ? 'err' : 'ok'); cargarAlertas(true); refreshView(); break; }
       case 'ccfoto': { ccFiles = await pickFuente(); $('#ccInfo').textContent = ccFiles.length ? ccFiles.length + ' archivo(s)' : 'Sin foto'; break; }
-      case 'huecos': {
-        openModal('<div class="spin">Revisando…</div>');
-        const res = await Promise.all(S.chequeras.map(async q => ({ q, h: await rpc('huecos_chequera', { p_chequera: q.id }) })));
-        const con = res.filter(r => r.h.length);
-        openModal(`<h2 style="margin-top:0">Huecos de numeración</h2>` + (con.length ? con.map(r => `<div class="card"><div class="b">${esc(r.q.nombre)}</div><div class="warnbox">Faltan los cheques: ${r.h.join(', ')}.<br>Regístralos como emitidos o como cancelados.</div></div>`).join('') : '<div class="okbox">No hay huecos: todas las chequeras llevan numeración continua desde el primer cheque capturado.</div>') + '<div class="mut sm">Se revisa desde el primer cheque capturado en el sistema (el historial no cuenta).</div>'); break; }
+      case 'huecos': { openModal('<div class="spin">Revisando…</div>'); await cargarAlertas(true); dlgHuecos(); break; }
+      case 'motivohuecos': {
+        const q = Number(el.dataset.q), inp = $('#mh_' + q), m = inp ? inp.value.trim() : '';
+        if (m.length < 3) return toast('Escribe el motivo.', 'err');
+        const h = (S.huecos || []).find(x => x.q.id === q); if (!h) break;
+        await rpc('registrar_detenidos', { p_chequera: q, p_numeros: h.nums.filter(x => !x.d).map(x => x.n), p_motivo: m });
+        await cargarAlertas(true); dlgHuecos(); toast('Motivo guardado.', 'ok'); break;
+      }
       case 'cancelarEdit': S.F = null; go('cheques'); break;
       case 'otro': closeModal(); S.F = null; go('nuevo'); break;
       case 'modo': {
@@ -1306,7 +1349,7 @@ document.addEventListener('click', async ev => {
         if (falta > 0) { F.lines[i].monto = (falta / 100).toFixed(2); renderLines(); } else toast('No falta nada por repartir.', 'err'); break; }
       case 'pickfac': { const files = await pickFuente(); S.F.files = files; $('#facInfo').textContent = files.length ? files.length + ' archivo(s) listo(s) para subir' : 'Sin adjuntar'; break; }
       case 'guardar': guardarCheque(); break;
-      case 'confirmguardar': closeModal(); guardarCheque(true); break;
+      case 'confirmguardar': { const ms = $('#motSalta'); if (ms) { if (ms.value.trim().length < 3) return toast('Escribe por qué se salta el cheque (queda como alerta).', 'err'); if (S.F) S.F.saltaMotivo = ms.value.trim(); } closeModal(); guardarCheque(true); break; }
       case 'saveserie': {
         const v = Number($('#ser_' + id).value); await rpc('ajustar_serie', { p_cargo_id: Number(id), p_ultimo: v }); toast('Serie actualizada.', 'ok'); await loadCatalogs(); break; }
     }
