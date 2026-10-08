@@ -373,7 +373,7 @@ function cardPend(c, rechazado = false) {
       ${archActivos(c, 'folio').length ? `<button class="btn ghost sm" data-act="verarch" data-id="${c.id}" data-tipo="folio">Ver folio</button>` : ''}
       ${hayFoto ? `<button class="btn ghost sm" data-act="verarch" data-id="${c.id}" data-tipo="foto_cheque">Ver foto del cheque</button>` : '<span class="chip rechazado">FALTA FOTO DEL CHEQUE</span>'}
       ${archActivos(c, 'comprobante_cobro').length ? `<button class="btn ghost sm" data-act="verarch" data-id="${c.id}" data-tipo="comprobante_cobro">Ver ficha de depósito</button>` : ''}
-      ${['administrador', 'capturista', 'contador'].includes(rol()) ? `<button class="btn ghost sm" data-act="subir" data-id="${c.id}" data-tipo="comprobante_cobro">+ Ficha de depósito</button>` : ''}
+      ${!archActivos(c, 'comprobante_cobro').length && ['administrador', 'capturista', 'contador'].includes(rol()) ? `<button class="btn ghost sm" data-act="subir" data-id="${c.id}" data-tipo="comprobante_cobro">+ Ficha de depósito</button>` : ''}
       <button class="btn ghost sm" data-act="poliza" data-id="${c.id}">Ver póliza</button>
       <button class="btn ghost sm" data-act="detalle" data-id="${c.id}">Detalle</button>
     </div>
@@ -531,7 +531,7 @@ async function openDetail(id) {
         ${arch.length ? arch.map(a => `<div class="row" style="margin-bottom:6px"><span class="chip historial">${tipoTxt[a.tipo]}</span><button class="lnk grow" style="text-align:left" data-act="verpath" data-path="${esc(a.path)}">${esc(a.nombre || 'archivo')}</button>${puedeCapturar() ? `<button class="btn ghost sm" data-act="quitar" data-id="${a.id}">Quitar</button>` : ''}</div>`).join('') : '<span class="mut">Aún no hay documentos.</span>'}
         ${puedeSubir ? `<div class="row" style="margin-top:10px">
           ${puedeCapturar() && c.estatus !== 'cancelado' ? `<button class="btn ghost sm" data-act="subir" data-id="${id}" data-tipo="foto_cheque">+ Foto del cheque</button><button class="btn ghost sm" data-act="subir" data-id="${id}" data-tipo="factura">+ Factura</button><button class="btn ghost sm" data-act="subir" data-id="${id}" data-tipo="folio">+ Folio</button>` : ''}
-          ${c.estatus !== 'cancelado' && ['administrador', 'capturista', 'contador'].includes(rol()) ? `<button class="btn ghost sm" data-act="subir" data-id="${id}" data-tipo="comprobante_cobro">+ Ticket / ficha de depósito</button>` : ''}
+          ${c.estatus !== 'cancelado' && !archActivos(c, 'comprobante_cobro').length && ['administrador', 'capturista', 'contador'].includes(rol()) ? `<button class="btn ghost sm" data-act="subir" data-id="${id}" data-tipo="comprobante_cobro">+ Ticket / ficha de depósito</button>` : ''}
           ${puedeCapturar() ? `<button class="btn ghost sm" data-act="subir" data-id="${id}" data-tipo="otro">${c.estatus === 'cancelado' ? '+ Foto del cheque cancelado' : '+ Otro'}</button>` : ''}</div>` : ''}
       </div>
       ${acciones ? `<div class="row" style="margin:12px 0">${acciones}</div>` : ''}
