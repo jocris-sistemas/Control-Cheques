@@ -204,6 +204,7 @@ const ICON = {
 const rolTxt = r => ({ capturista: 'Administración', administrador: 'Administrador', contador: 'Contador' }[r] || r);
 const iniciales = n => String(n || '?').replace(/^ING\.\s*/i, '').split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase();
 const fdia = d => { const [y, m, dd] = d.split('-'); const M = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre']; return `${Number(dd)} de ${M[Number(m) - 1]} de ${y}`; };
+const folioTxt = f => f.sin_folio ? 'SIN FOLIO' : f.folio_numero;
 const foliosActivos = c => (c.cheque_folios || []).filter(f => f.activo);
 const sumFolios = c => foliosActivos(c).reduce((a, f) => a + cents(f.monto), 0);
 const archActivos = (c, tipo) => (c.archivos || []).filter(a => a.activo && (!tipo || a.tipo === tipo));
@@ -315,7 +316,7 @@ function go(tab) {
 }
 
 /* ===================== CONSULTAS ===================== */
-const SEL = '*, cheque_folios(id,cargo_id,folio_numero,proveedor,descripcion,obra,monto,activo), archivos(id,tipo,activo,nombre,path)';
+const SEL = '*, cheque_folios(id,cargo_id,folio_numero,proveedor,descripcion,obra,monto,activo,sin_folio,sin_folio_motivo), archivos(id,tipo,activo,nombre,path)';
 
 /* ===================== VISTA: AUTORIZAR / PENDIENTES ===================== */
 async function viewPend() {
@@ -362,7 +363,7 @@ function cardPend(c, rechazado = false) {
     ${c.concepto ? `<div style="margin-top:6px">${esc(c.concepto)}</div>` : ''}
     <div class="mut sm" style="margin-top:4px">Capturó: ${esc(c.capturado_por_nombre || '')}${c.solicito ? ' · Solicitó: ' + esc(c.solicito) : ''}</div>
     <table style="margin-top:8px"><thead><tr><th>Cargo</th><th>Folio</th><th>Detalle</th><th class="r">Monto</th></tr></thead><tbody>
-      ${fol.map(f => `<tr><td>${esc(cargoNombre(f.cargo_id))}</td><td>${esc(f.folio_numero)}</td><td>${esc([f.proveedor, f.descripcion, f.obra].filter(Boolean).join(' · '))}</td><td class="r money">${fmt(f.monto)}</td></tr>`).join('')}
+      ${fol.map(f => `<tr><td>${esc(cargoNombre(f.cargo_id))}</td><td>${f.sin_folio ? '<span class="chip warn">SIN FOLIO</span>' : esc(f.folio_numero)}</td><td>${esc([f.proveedor, f.descripcion, f.obra].filter(Boolean).join(' · '))}${f.sin_folio && f.sin_folio_motivo ? `<div class="mut sm">Motivo: ${esc(f.sin_folio_motivo)}</div>` : ''}</td><td class="r money">${fmt(f.monto)}</td></tr>`).join('')}
     </tbody></table>
     <div class="row" style="margin-top:8px">
       ${cuadra ? '' : '<span class="chip rechazado">NO CUADRA</span>'}
@@ -473,7 +474,7 @@ function rowCheque(c) {
     <div class="main"><div class="b ben">${esc(c.beneficiario)}</div>
       <div class="sub">Cheque ${c.numero_cheque} · ${esc(chequeraNombre(c.chequera_id))} · ${fdate(c.fecha)}</div>
       ${c.concepto ? `<div class="sm" style="margin-top:2px">${esc(c.concepto)}</div>` : ''}
-      ${!c.es_historial && fol.length ? `<div class="mut sm" style="margin-top:2px">Folios: ${fol.map(f => esc(cargoNombre(f.cargo_id)) + ' ' + esc(f.folio_numero)).join(' · ')}</div>` : ''}</div>
+      ${!c.es_historial && fol.length ? `<div class="mut sm" style="margin-top:2px">Folios: ${fol.map(f => esc(cargoNombre(f.cargo_id)) + ' ' + esc(folioTxt(f))).join(' · ')}</div>` : ''}</div>
     <div class="side"><div class="money">${fmt(c.monto)}</div>${estadoChip(c)}</div>
   </div>`;
 }
@@ -519,7 +520,7 @@ async function openDetail(id) {
       </div></div>
       ${hist ? '<div class="warnbox">Cheque del historial (archivo). No lleva póliza ni folios del sistema.</div>' : (c.estatus === 'cancelado' && !fol.length) ? '<div class="warnbox">Cheque cancelado: no lleva monto ni folios.</div>' : `
       <h3>Folios</h3><div class="card" style="padding:6px 10px"><table><thead><tr><th>Cargo</th><th>Folio</th><th>Detalle</th><th class="r">Monto</th></tr></thead><tbody>
-        ${fol.map(f => `<tr><td>${esc(cargoNombre(f.cargo_id))}</td><td>${esc(f.folio_numero)}</td><td>${esc([f.proveedor, f.descripcion, f.obra].filter(Boolean).join(' · '))}</td><td class="r money">${fmt(f.monto)}</td></tr>`).join('') || '<tr><td colspan="4" class="mut">Sin folios</td></tr>'}
+        ${fol.map(f => `<tr><td>${esc(cargoNombre(f.cargo_id))}</td><td>${f.sin_folio ? '<span class="chip warn">SIN FOLIO</span>' : esc(f.folio_numero)}</td><td>${esc([f.proveedor, f.descripcion, f.obra].filter(Boolean).join(' · '))}${f.sin_folio && f.sin_folio_motivo ? `<div class="mut sm">Motivo: ${esc(f.sin_folio_motivo)}</div>` : ''}</td><td class="r money">${fmt(f.monto)}</td></tr>`).join('') || '<tr><td colspan="4" class="mut">Sin folios</td></tr>'}
       </tbody></table></div>
       ${cuadra ? '' : `<div class="warnbox">No cuadra: folios ${fmt(sumFolios(c) / 100)} vs cheque ${fmt(c.monto)}.</div>`}`}
       <h3>Documentos</h3><div class="card files">
@@ -776,7 +777,7 @@ async function guardarFirma(dataUrl) {
 }
 
 /* ===================== FORMULARIO NUEVO / EDITAR ===================== */
-const newLine = () => ({ cargo_id: '', folio_numero: '', touched: false, proveedor: '', descripcion: '', obra: '', monto: '', modo: 'archivo', venc: '', periodo: '', conceptos: '' });
+const newLine = () => ({ cargo_id: '', folio_numero: '', touched: false, proveedor: '', descripcion: '', obra: '', monto: '', modo: 'archivo', venc: '', periodo: '', conceptos: '', motivo_sf: '' });
 async function viewNuevo(editCheque) {
   await loadCatalogs();
   if (!S.F) {
@@ -785,7 +786,7 @@ async function viewNuevo(editCheque) {
     if (editCheque) {
       const c = editCheque; S.F.editId = c.id; S.F.clave = null;
       S.F.h = { chequera_id: c.chequera_id, numero_cheque: c.numero_cheque, fecha: c.fecha, beneficiario: c.beneficiario, monto: c.monto, concepto: c.concepto || '', solicito: c.solicito || '', sin_factura_motivo: c.sin_factura_motivo || '' };
-      S.F.lines = foliosActivos(c).map(f => ({ cargo_id: f.cargo_id, folio_numero: f.folio_numero, touched: true, proveedor: f.proveedor || '', descripcion: f.descripcion || '', obra: f.obra || '', monto: f.monto, modo: 'archivo', venc: '', periodo: '', conceptos: '' }));
+      S.F.lines = foliosActivos(c).map(f => ({ cargo_id: f.cargo_id, folio_numero: f.sin_folio ? '' : f.folio_numero, touched: true, proveedor: f.proveedor || '', descripcion: f.descripcion || '', obra: f.obra || '', monto: f.monto, modo: f.sin_folio ? 'sinfolio' : 'archivo', venc: '', periodo: '', conceptos: '', motivo_sf: f.sin_folio_motivo || '' }));
       if (!S.F.lines.length) S.F.lines = [newLine()];
     }
   }
@@ -915,7 +916,7 @@ function renderLines() {
     ${S.F.lines.length > 1 ? `<div class="row"><span class="grow"></span><button class="btn ghost sm" data-act="rmline" data-i="${i}">Quitar este folio</button></div>` : ''}
     <div class="grid2">
       <div><label class="f">Cargo</label><select data-k="cargo_id"><option value="">Elige…</option>${S.cargos.map(c => `<option value="${c.id}" ${String(l.cargo_id) === String(c.id) ? 'selected' : ''}>${esc(c.nombre)}</option>`).join('')}</select></div>
-      <div><label class="f">No. de folio</label><input type="text" inputmode="numeric" data-k="folio_numero" placeholder="${esc(l._ph || '')}" value="${esc(l.folio_numero)}"></div>
+      ${l.modo === 'sinfolio' ? `<div><label class="f">No. de folio</label><input type="text" value="SIN FOLIO" disabled></div>` : `<div><label class="f">No. de folio</label><input type="text" inputmode="numeric" data-k="folio_numero" placeholder="${esc(l._ph || '')}" value="${esc(l.folio_numero)}"></div>`}
     </div>
     <div class="grid2">
       <div><label class="f">Proveedor</label><input type="text" data-k="proveedor" value="${esc(l.proveedor)}"></div>
@@ -924,7 +925,11 @@ function renderLines() {
     <label class="f">Descripción</label><input type="text" data-k="descripcion" value="${esc(l.descripcion)}">
     <label class="f">Hoja de folio</label>
     <div class="row seg"><button class="btn ${l.modo === 'archivo' ? 'gold' : 'ghost'} sm" data-act="modo" data-i="${i}" data-m="archivo">Ya tengo el folio (archivo o foto)</button>
-      <button class="btn ${l.modo === 'sistema' ? 'gold' : 'ghost'} sm" data-act="modo" data-i="${i}" data-m="sistema" ${esCancun(l.cargo_id) ? 'disabled title="Cancún usa su propio formato"' : ''}>Que lo genere el sistema</button></div>
+      <button class="btn ${l.modo === 'sistema' ? 'gold' : 'ghost'} sm" data-act="modo" data-i="${i}" data-m="sistema" ${esCancun(l.cargo_id) ? 'disabled title="Cancún usa su propio formato"' : ''}>Que lo genere el sistema</button>
+      <button class="btn ${l.modo === 'sinfolio' ? 'gold' : 'ghost'} sm" data-act="modo" data-i="${i}" data-m="sinfolio">Sin folio</button></div>
+    ${l.modo === 'sinfolio' ? `<label class="f">¿Por qué no lleva folio? (obligatorio)</label><input type="text" data-k="motivo_sf" list="dlSF" placeholder="Ej. NÓMINA, PAGO DE SERVICIO, REPOSICIÓN DE CAJA…" value="${esc(l.motivo_sf)}">
+      <datalist id="dlSF"><option value="NÓMINA"><option value="PAGO DE SERVICIO"><option value="REPOSICIÓN DE CAJA"><option value="ANTICIPO"><option value="IMPUESTOS"><option value="PAGO A PROVEEDOR CON FACTURA"></datalist>
+      <div class="mut sm" style="margin-top:4px">Se identifica por el cargo, el proveedor, la descripción y este motivo. Queda marcado como SIN FOLIO.</div>` : ''}
     ${l.modo === 'archivo' ? `<div class="mut sm" style="margin-top:4px">El archivo del folio se adjunta una sola vez, abajo, en “Folio (archivo o foto)”.</div>` : `
       <div class="grid2"><div><label class="f">Vencimiento (opcional)</label><input type="date" data-k="venc" value="${esc(l.venc)}"></div>
       <div><label class="f">Periodo (opcional)</label><input type="text" data-k="periodo" placeholder="Ej. AGOSTO 2026" value="${esc(l.periodo)}"></div></div>
@@ -964,7 +969,10 @@ async function guardarCheque(confirmado = false) {
     if (!l.cargo_id) err.push('Hay un folio sin cargo: elígelo.');
     if (!(parseMoney(l.monto) > 0)) err.push('Hay un folio sin monto: captúralo.');
     if (l.modo === 'sistema' && !String(l.proveedor).trim()) err.push('Hay un folio generado por el sistema sin proveedor (es el nombre que sale en el folio).');
-    if (!String(l.folio_numero).trim()) err.push('Hay un folio sin número: escríbelo.');
+    if (l.modo === 'sinfolio') {
+      if (!String(l.motivo_sf).trim()) err.push('Escribe por qué ese cheque no lleva folio.');
+      if (!String(l.descripcion).trim() && !String(l.proveedor).trim()) err.push('Sin folio: escribe al menos el proveedor o la descripción para identificarlo.');
+    } else if (!String(l.folio_numero).trim()) err.push('Hay un folio sin número: escríbelo.');
   });
   const sum = F.lines.reduce((a, l) => a + cents(parseMoney(l.monto) || 0), 0);
   if (!err.length && sum !== cents(tot)) err.push(`Los folios suman ${fmt(sum / 100)} y el cheque es por ${fmt(tot)}. Deben cuadrar al centavo.`);
@@ -980,7 +988,7 @@ async function guardarCheque(confirmado = false) {
   const payload = {
     chequera_id: Number(h.chequera_id), numero_cheque: Number(h.numero_cheque), fecha: h.fecha, beneficiario: h.beneficiario.trim().toUpperCase(), monto: tot,
     concepto: h.concepto.trim().toUpperCase(), solicito: h.solicito.trim().toUpperCase(), sin_factura_motivo: h.sin_factura_motivo.trim().toUpperCase(),
-    folios: F.lines.map(l => ({ cargo_id: Number(l.cargo_id), folio_numero: String(l.folio_numero).trim().toUpperCase() || null, proveedor: l.proveedor.trim().toUpperCase(), descripcion: l.descripcion.trim().toUpperCase(), obra: l.obra.trim().toUpperCase(), monto: parseMoney(l.monto) }))
+    folios: F.lines.map(l => ({ cargo_id: Number(l.cargo_id), sin_folio: l.modo === 'sinfolio', motivo_sin_folio: l.modo === 'sinfolio' ? l.motivo_sf.trim().toUpperCase() : null, folio_numero: l.modo === 'sinfolio' ? null : (String(l.folio_numero).trim().toUpperCase() || null), proveedor: l.proveedor.trim().toUpperCase(), descripcion: l.descripcion.trim().toUpperCase(), obra: l.obra.trim().toUpperCase(), monto: parseMoney(l.monto) }))
   };
   btn.disabled = true; btn.textContent = 'Guardando…';
   try {
@@ -1001,7 +1009,7 @@ async function guardarCheque(confirmado = false) {
     const wasEdit = !!F.editId; S.F = null; refreshPendCount();
     openModal(`<h2 style="margin-top:0">${wasEdit ? 'Cheque actualizado' : 'Póliza generada'}</h2>
       <div class="card"><div class="kv"><div>Póliza = No. de cheque</div><div class="b big">${c.numero_cheque}</div><div>Beneficiario</div><div>${esc(c.beneficiario)}</div><div>Monto</div><div class="money">${fmt(c.monto)}</div>
-        <div>Folios</div><div>${(c.folios || []).map(f => esc(cargoNombre(f.cargo_id)) + ' ' + esc(f.folio_numero)).join('<br>')}</div></div></div>
+        <div>Folios</div><div>${(c.folios || []).map(f => esc(cargoNombre(f.cargo_id)) + ' ' + esc(folioTxt(f))).join('<br>')}</div></div></div>
       <div class="okbox">Quedó pendiente de autorización del Ing. Cristóbal.</div>
       ${subidaErr ? `<div class="warnbox">El cheque se guardó, pero un archivo no se pudo subir: ${esc(subidaErr)}. Súbelo desde el detalle.</div>` : ''}
       ${hojasErr ? `<div class="warnbox">El cheque se guardó, pero no se pudo generar o guardar un folio: ${esc(hojasErr)}.</div>` : ''}
@@ -1100,7 +1108,7 @@ async function respaldoExcel() {
     const byId = {}; ch.forEach(c => { byId[c.id] = c; });
     const si = v => v ? 'SI' : 'NO';
     const cheques = ch.map(c => ({ 'PÓLIZA': c.poliza_numero ?? '', 'CHEQUERA': chequeraNombre(c.chequera_id), 'NO. CHEQUE': c.numero_cheque, 'FECHA': c.fecha, 'BENEFICIARIO': c.beneficiario, 'MONTO': Number(c.monto), 'ESTATUS': String(c.estatus || '').toUpperCase(), 'HISTORIAL (EXCEL ORIGINAL)': si(c.es_historial), 'CONCEPTO': c.concepto || '', 'SOLICITÓ': c.solicito || '', 'CAPTURÓ': c.capturado_por_nombre || '', 'AUTORIZÓ': c.autorizado_por_nombre || '', 'FECHA AUTORIZACIÓN': c.fecha_autorizacion ? String(c.fecha_autorizacion).slice(0, 10) : '', 'COBRADO': si(c.cobrado), 'FECHA COBRO': c.fecha_cobro || '', 'MOTIVO CANCELACIÓN': c.motivo_cancelacion || '', 'MOTIVO RECHAZO': c.motivo_rechazo || '', 'FACTURA': c.sin_factura_motivo || '', 'NOTA': c.nota_historial || '' }));
-    const folios = []; ch.forEach(c => (c.cheque_folios || []).forEach(f => folios.push({ 'PÓLIZA': c.poliza_numero ?? '', 'CHEQUERA': chequeraNombre(c.chequera_id), 'NO. CHEQUE': c.numero_cheque, 'BENEFICIARIO': c.beneficiario, 'CARGO': cargoNombre(f.cargo_id), 'FOLIO': f.folio_numero, 'PROVEEDOR': f.proveedor || '', 'DESCRIPCIÓN': f.descripcion || '', 'OBRA / VILLA': f.obra || '', 'MONTO': Number(f.monto), 'VIGENTE': si(f.activo) })));
+    const folios = []; ch.forEach(c => (c.cheque_folios || []).forEach(f => folios.push({ 'PÓLIZA': c.poliza_numero ?? '', 'CHEQUERA': chequeraNombre(c.chequera_id), 'NO. CHEQUE': c.numero_cheque, 'BENEFICIARIO': c.beneficiario, 'CARGO': cargoNombre(f.cargo_id), 'FOLIO': f.sin_folio ? 'SIN FOLIO' : f.folio_numero, 'MOTIVO SIN FOLIO': f.sin_folio_motivo || '', 'PROVEEDOR': f.proveedor || '', 'DESCRIPCIÓN': f.descripcion || '', 'OBRA / VILLA': f.obra || '', 'MONTO': Number(f.monto), 'VIGENTE': si(f.activo) })));
     const arch = []; ch.forEach(c => (c.archivos || []).forEach(a => arch.push({ 'PÓLIZA': c.poliza_numero ?? '', 'CHEQUERA': chequeraNombre(c.chequera_id), 'NO. CHEQUE': c.numero_cheque, 'BENEFICIARIO': c.beneficiario, 'TIPO': String(a.tipo || '').toUpperCase(), 'ARCHIVO': a.nombre || '', 'VIGENTE': si(a.activo) })));
     const bita = bit.map(b => ({ 'FECHA Y HORA': fdt(b.creado_en), 'USUARIO': b.usuario_nombre || '', 'ACCIÓN': String(b.accion || '').replace(/_/g, ' ').toUpperCase(), 'CHEQUERA': b.cheques ? chequeraNombre(b.cheques.chequera_id) : '', 'NO. CHEQUE': b.cheques ? b.cheques.numero_cheque : '', 'BENEFICIARIO': b.cheques ? b.cheques.beneficiario : '' }));
     const wb = XLSX.utils.book_new();
@@ -1126,6 +1134,7 @@ function menuCuenta() {
   openModal(`<h2 style="margin-top:0">Mi cuenta</h2><div class="card"><div class="b">${esc(S.perfil.nombre)}</div><div class="mut">${esc(S.perfil.correo)} · ${esc(rolTxt(S.perfil.rol))}</div></div>
   <h3>Cambiar contraseña</h3><label class="f">Nueva contraseña (mínimo 8 caracteres)</label>${pwField('np1', 'new-password')}<label class="f">Repítela</label>${pwField('np2', 'new-password')}
   <div class="row" style="margin-top:12px"><button class="btn" data-act="cambiarpass">Guardar contraseña</button><button class="btn ghost" data-act="salir">Cerrar sesión</button></div>
+  <h3>Caja de efectivo</h3><a class="btn ghost" href="https://jocris-sistemas.github.io/Caja-Efectivo/" style="text-decoration:none">Ir a Caja de Efectivo</a>
   <h3>Mi firma</h3><div class="mut sm" style="margin-bottom:6px">${S.firma ? 'Ya tienes una firma guardada.' : 'Aún no tienes firma guardada.'}</div><button class="btn ghost" data-act="firma">${S.firma ? 'Cambiar mi firma' : 'Agregar mi firma'}</button>
   <h3>Respaldo</h3><div class="mut sm" style="margin-bottom:6px">Descarga todos los cheques, folios, archivos y la bitácora en un Excel. Se recomienda hacerlo cada semana y guardarlo en tu computadora o en Drive.</div><button class="btn ghost" id="btnRespaldo" data-act="respaldo">Descargar respaldo en Excel</button>
   <h3>Instalar en el celular</h3><button class="btn ghost" data-act="instalar">Instalar app</button>`);
