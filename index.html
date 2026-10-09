@@ -201,8 +201,16 @@ details.dd .ddm button svg{width:18px;height:18px;flex:none;stroke:currentColor;
 .card.up,.item.up{z-index:12}
 @media(min-width:1000px){
   main{max-width:1180px}
-  .cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;align-items:start}
-  .cards .card.cd{margin:0}
+  .cards{display:grid;grid-template-columns:minmax(0,1fr);gap:12px}
+  .cards .card.cd{margin:0;display:grid;grid-template-columns:minmax(0,1fr) 290px;grid-template-areas:"id monto" "body side";column-gap:32px;padding:16px 22px 16px 20px;align-items:start}
+  .card.cd .cd-top{display:contents}
+  .card.cd .cd-id{grid-area:id}
+  .card.cd .cd-monto{grid-area:monto;text-align:right;font-size:24px}
+  .card.cd .cd-body{grid-area:body;min-width:0}
+  .card.cd .cd-side{grid-area:side;display:flex;flex-direction:column;align-items:stretch;padding-top:2px}
+  .card.cd .cd-side .cd-tools{margin-top:8px}
+  .card.cd .cd-side .cd-wait{align-self:flex-start}
+  .card.cd .cd-con{margin-top:6px}
   #lst{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:12px;align-items:stretch}
   #lst .empty{grid-column:1/-1}
 }
@@ -486,21 +494,21 @@ function docsMenu(c) {
   const orden = ['foto_cheque', 'folio', 'factura', 'comprobante_cobro', 'otro'];
   const items = [];
   orden.forEach(t => { const l = archActivos(c, t); l.forEach((a, i) => items.push(`<button data-act="verpath" data-path="${esc(a.path)}">${DOCICO[t] || ''}${t === 'otro' && c.estatus === 'cancelado' ? 'Foto del cheque cancelado' : TIPO_TXT[t]}${l.length > 1 ? ' ' + (i + 1) : ''}</button>`)); });
-  const poliza = c.estatus === 'cancelado' || c.es_historial ? '' : `${items.length ? '<div class="sep"></div>' : ''}<button data-act="poliza" data-id="${c.id}">${DOCICO.poliza}Póliza (ver e imprimir)</button>`;
+  const poliza = c.estatus === 'cancelado' || c.es_historial ? '' : `${items.length ? '<div class="sep"></div>' : ''}<button data-act="poliza" data-id="${c.id}">${DOCICO.poliza}Póliza</button>`;
   if (!items.length && !poliza) return '';
   return `<details class="dd"><summary class="btn ghost sm">Ver documentos</summary><div class="ddm">${items.join('') || '<div class="mut sm" style="padding:8px 12px">Aún no hay documentos</div>'}${poliza}</div></details>`;
 }
 function cardCancel(c) {
   return `<div class="card cd st-cancelado" id="cp-${c.id}">
-    <div class="cd-top"><div class="grow">
+    <div class="cd-top"><div class="grow cd-id">
       <div class="cd-ben">Cheque ${c.numero_cheque} cancelado</div>
       <div class="cd-sub">${esc(chequeraNombre(c.chequera_id))} · ${fdate(c.fecha)}</div></div>
       <div class="money cd-monto">${fmt(c.monto)}</div></div>
-    <div class="warnbox" style="margin-top:10px">Motivo: ${esc(c.motivo_cancelacion || c.concepto || '')}</div>
-    <div class="cd-meta">Lo registró: ${esc(c.capturado_por_nombre || '')}</div>
-    <div class="cd-tools">${docsMenu(c)}<button class="btn ghost sm" data-act="detalle" data-id="${c.id}">Detalle</button></div>
+    <div class="cd-body"><div class="warnbox" style="margin-top:10px">Motivo: ${esc(c.motivo_cancelacion || c.concepto || '')}</div>
+    <div class="cd-meta">Lo registró: ${esc(c.capturado_por_nombre || '')}</div></div>
+    <div class="cd-side"><div class="cd-tools">${docsMenu(c)}<button class="btn ghost sm" data-act="detalle" data-id="${c.id}">Detalle</button></div>
     ${esAdmin() ? `<div class="cd-act"><button class="btn ok grow" data-act="enterar" data-id="${c.id}">Enterado y de acuerdo con la cancelación</button></div>`
-      : '<div class="chip warn cd-wait">Esperando que el Ing. dé por enterada la cancelación</div>'}
+      : '<div class="chip warn cd-wait">Esperando que el Ing. dé por enterada la cancelación</div>'}</div>
   </div>`;
 }
 function cardPend(c, rechazado = false) {
@@ -517,12 +525,13 @@ function cardPend(c, rechazado = false) {
   const resumen = fol.map(f => esc(cargoNombre(f.cargo_id)) + ' ' + (f.sin_folio ? 'sin folio' : esc(f.folio_numero))).join(' · ');
   return `<div class="card cd st-${rechazado ? 'rechazado' : 'pendiente'}" id="cp-${c.id}">
     <div class="cd-top">
-      <div class="grow">
+      <div class="grow cd-id">
         <div class="cd-ben">${esc(c.beneficiario)}</div>
         <div class="cd-sub">Cheque ${c.numero_cheque} · ${esc(chequeraNombre(c.chequera_id))} · ${fdate(c.fecha)}</div>
       </div>
       <div class="money cd-monto">${fmt(c.monto)}</div>
     </div>
+    <div class="cd-body">
     ${c.concepto ? `<div class="cd-con">${esc(c.concepto)}</div>` : ''}
     ${alertas ? `<div class="alerts">${alertas}</div>` : ''}
     <details class="fol"><summary><b>${fol.length} folio${fol.length === 1 ? '' : 's'}</b><span class="mut">${resumen ? ' · ' + resumen : ''}</span></summary>
@@ -532,6 +541,8 @@ function cardPend(c, rechazado = false) {
     <div class="cd-meta">Capturó: ${esc(c.capturado_por_nombre || '')}${c.solicito ? ' · Solicitó: ' + esc(c.solicito) : ''}</div>
     ${!hayFoto && c.sin_foto_motivo ? `<div class="cd-meta">Sin foto: ${esc(c.sin_foto_motivo)}${c.sin_foto_por_nombre ? ' (' + esc(c.sin_foto_por_nombre) + ')' : ''}</div>` : ''}
     ${rechazado ? `<div class="warnbox">Rechazado: ${esc(c.motivo_rechazo || '')}</div>` : ''}
+    </div>
+    <div class="cd-side">
     <div class="cd-tools">
       ${docsMenu(c)}
       <button class="btn ghost sm" data-act="detalle" data-id="${c.id}">Detalle</button>
@@ -543,6 +554,7 @@ function cardPend(c, rechazado = false) {
 ` : ''}
     ${!esAdmin() && !rechazado ? '<div class="chip warn cd-wait">PDTE. DE AUTORIZAR</div>' : ''}
     ${rechazado && puedeCapturar() ? `<div class="cd-act"><button class="btn gold grow" data-act="editar" data-id="${c.id}">Corregir y reenviar</button></div>` : ''}
+    </div>
   </div>`;
 }
 async function loadCheque(id) {
@@ -1493,7 +1505,7 @@ function menuCuenta() {
   <div class="row" style="margin-top:12px"><button class="btn" data-act="cambiarpass">Guardar contraseña</button><button class="btn ghost" data-act="salir">Cerrar sesión</button></div>
   ${puedeArchivos() ? `<h3>Documentos</h3><button class="btn ghost" data-act="horiztodos">Pasar PDFs anchos a hoja horizontal</button>` : ''}
   <h3>Apariencia</h3><div class="tema">${[['auto', 'Automático'], ['light', 'Claro'], ['dark', 'Oscuro']].map(([v, t]) => `<button class="btn ghost sm ${temaPref() === v ? 'on' : ''}" data-act="tema" data-v="${v}">${t}</button>`).join('')}</div>
-  <h3>Caja de efectivo</h3><a class="btn ghost" href="https://jocris-sistemas.github.io/Caja-Efectivo/" style="text-decoration:none">Ir a Caja de Efectivo</a>
+  <h3>Acumulado semanal</h3><a class="btn ghost" href="https://jocris-sistemas.github.io/Caja-Efectivo/" style="text-decoration:none">Ir a Acumulado semanal</a>
   <h3>Mi firma</h3><div class="mut sm" style="margin-bottom:6px">${S.firma ? 'Ya tienes una firma guardada.' : 'Aún no tienes firma guardada.'}</div><button class="btn ghost" data-act="firma">${S.firma ? 'Cambiar mi firma' : 'Agregar mi firma'}</button>
   <h3>Respaldo</h3><div class="mut sm" style="margin-bottom:6px">Descarga todos los cheques, folios, archivos y la bitácora en un Excel. Se recomienda hacerlo cada semana y guardarlo en tu computadora o en Drive.</div><button class="btn ghost" id="btnRespaldo" data-act="respaldo">Descargar respaldo en Excel</button>
   <h3>Instalar en el celular</h3><button class="btn ghost" data-act="instalar">Instalar app</button>`);
