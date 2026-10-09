@@ -811,10 +811,7 @@ async function viewRep() {
       </div>
       <div class="repgrid">
         <div class="card"><h3 class="rh">Gasto por semana</h3>${barrasHtml(wItems, 'Cheques autorizados, de lunes a domingo, últimas 12 semanas.')}</div>
-        <div class="card"><h3 class="rh">Por cargo · ${nomPer}</h3>${barrasHtml(cargoTop, 'Suma de los folios de cada cargo en los cheques autorizados.')}</div>
         <div class="card"><h3 class="rh">Principales beneficiarios · ${nomPer}</h3>${barrasHtml(benArr)}</div>
-        <div class="card"><h3 class="rh">Cheques por cobrar, por antigüedad</h3>${barrasHtml(bk)}
-          ${viejos.length ? `<div class="rsub">Los más antiguos (más de 30 días)</div>${viejos.map(c => `<div class="rrow"><button class="lnk" data-act="detalle" data-id="${c.id}">Cheque ${c.numero_cheque} · ${esc(c.beneficiario)}</button><span class="mut sm">${edad(c)} días · ${fmt(c.monto)}</span></div>`).join('')}` : ''}</div>
         <div class="card wide"><h3 class="rh">Pendientes por completar</h3>
           <div class="mut sm" style="margin-bottom:8px">${incompletos.length ? `${nFoto} sin foto del cheque · ${nFac} sin factura (cheques de los últimos 90 días, pendientes o autorizados)` : 'Todo completo. No falta ninguna foto ni factura.'}</div>
           ${incompletos.slice(0, 15).map(x => `<div class="rrow"><button class="lnk" data-act="detalle" data-id="${x.c.id}">Cheque ${x.c.numero_cheque} · ${esc(x.c.beneficiario)}</button><span class="rtags">${x.f.map(t => `<span class="chip warn">${t}</span>`).join('')}<span class="mut sm">${x.dias} día${x.dias === 1 ? '' : 's'}</span></span></div>`).join('')}
