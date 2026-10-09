@@ -950,7 +950,7 @@ async function openDetail(id) {
         ${puedeSubir && puedeArchivos() ? `<div class="row" style="margin-top:10px">
           ${c.estatus !== 'cancelado' ? `<button class="btn ghost sm" data-act="subir" data-id="${id}" data-tipo="foto_cheque">+ Foto del cheque</button><button class="btn ghost sm" data-act="subir" data-id="${id}" data-tipo="factura">+ Factura</button><button class="btn ghost sm" data-act="subir" data-id="${id}" data-tipo="folio">+ Folio</button>` : ''}
           ${c.estatus !== 'cancelado' && !archActivos(c, 'comprobante_cobro').length ? `<button class="btn ghost sm" data-act="subir" data-id="${id}" data-tipo="comprobante_cobro">+ Ticket / ficha de depósito</button>` : ''}
-          <button class="btn ghost sm" data-act="subir" data-id="${id}" data-tipo="otro">${c.estatus === 'cancelado' ? '+ Foto del cheque cancelado' : '+ Otro'}</button></div>`
+          <button class="btn ghost sm" data-act="subir" data-id="${id}" data-tipo="otro">${c.estatus === 'cancelado' ? '+ Foto del cheque cancelado' : '+ Otro'}</button>${c.estatus !== 'cancelado' ? `<button class="btn ghost sm" data-act="copiardocs" data-id="${id}">Copiar documentos de un cheque cancelado</button>` : ''}</div>`
           : (!hist && puedeCapturar() ? '<div class="mut sm" style="margin-top:8px">Para agregar, reemplazar o quitar documentos de un cheque ya capturado, avisa a Pedro o al Ing.</div>' : '')}
         ${!hist && puedeTocar(c) && c.estatus === 'pendiente' && !archActivos(c, 'foto_cheque').length ? `<div class="row" style="margin-top:8px">${c.sin_foto_motivo ? `<button class="btn ghost sm" data-act="quitarsf" data-id="${id}">Quitar marca "sin foto"</button>` : `<button class="btn ghost sm" data-act="sinfoto" data-id="${id}">No hay foto</button>`}</div>` : ''}
       </div>
@@ -1453,13 +1453,13 @@ async function viewNuevo(editCheque, copiaDe) {
       const c = copiaDe, fl = foliosDeCancelado(c), u = await ultimoChequera(c.chequera_id);
       S.F.h = { chequera_id: c.chequera_id, numero_cheque: u.num != null ? String(u.num + 1) : '', fecha: today(), beneficiario: c.beneficiario, monto: (fl.reduce((a, f) => a + cents(f.monto), 0) / 100).toFixed(2), concepto: c.concepto || '', solicito: c.solicito || S.perfil.nombre, sin_factura_motivo: c.sin_factura_motivo || '' };
       S.F.lines = fl.map(f => ({ cargo_id: f.cargo_id, folio_numero: f.sin_folio ? '' : f.folio_numero, touched: true, proveedor: f.proveedor || '', descripcion: f.descripcion || '', obra: f.obra || '', monto: f.monto, modo: f.sin_folio ? 'sinfolio' : 'archivo', venc: '', periodo: '', conceptos: '', motivo_sf: f.sin_folio_motivo || '' }));
-      S.F.copia = { id: c.id, numero: c.numero_cheque, arch: [...archActivos(c, 'factura'), ...archActivos(c, 'folio')].map(a => ({ tipo: a.tipo, path: a.path, nombre: a.nombre, on: true })) };
+      S.F.copia = { id: c.id, numero: c.numero_cheque, arch: archActivos(c).filter(a => a.tipo !== 'foto_cheque').map(a => ({ tipo: a.tipo, path: a.path, nombre: a.nombre, on: true })) };
     }
   }
   const F = S.F, h = F.h;
   const { data: bens } = await sb.from('cheques').select('beneficiario').order('creado_en', { ascending: false }).limit(1000);
   const uniq = [...new Set((bens || []).map(x => x.beneficiario))].slice(0, 400);
-  $('#view').innerHTML = `<div class="pagehead"><h2>${F.editId ? 'Editar cheque' : 'Nuevo cheque'}</h2></div>${F.copia ? `<div class="okbox" style="margin-bottom:10px"><b>Nuevo cheque con los datos del ${F.copia.numero} (cancelado).</b> Ya van copiados chequera, beneficiario, monto, concepto y folios. Pon el <b>número del cheque nuevo</b> y toma su foto.${F.copia.arch.length ? `<div style="margin-top:6px">Archivos que se copian al cheque nuevo:</div>${F.copia.arch.map((a, i) => `<label class="row" style="gap:8px;margin-top:4px"><input type="checkbox" data-act="copiaarch" data-i="${i}" ${a.on ? 'checked' : ''} style="width:auto"> <span>${a.tipo === 'factura' ? 'Factura' : 'Folio'}: ${esc(a.nombre)}</span></label>`).join('')}` : '<div class="mut sm" style="margin-top:6px">El cheque cancelado no tenía factura ni folio subidos.</div>'}</div>` : ''}${F.editId ? '' : '<div class="mut sm" style="margin:-6px 0 10px">¿El cheque ya salió cancelado de origen? <a href="#" data-act="cancelado">Regístralo aquí</a></div>'}
+  $('#view').innerHTML = `<div class="pagehead"><h2>${F.editId ? 'Editar cheque' : 'Nuevo cheque'}</h2></div>${F.copia ? `<div class="okbox" style="margin-bottom:10px"><b>Nuevo cheque con los datos del ${F.copia.numero} (cancelado).</b> Ya van copiados chequera, beneficiario, monto, concepto, folios y todos sus documentos (menos la foto del cheque). Pon el <b>número del cheque nuevo</b> y toma su foto.${F.copia.arch.length ? `<div style="margin-top:6px">Archivos que se copian al cheque nuevo:</div>${F.copia.arch.map((a, i) => `<label class="row" style="gap:8px;margin-top:4px"><input type="checkbox" data-act="copiaarch" data-i="${i}" ${a.on ? 'checked' : ''} style="width:auto"> <span>${({ factura: 'Factura', folio: 'Folio', comprobante_cobro: 'Comprobante', otro: 'Documento' })[a.tipo] || 'Archivo'}: ${esc(a.nombre)}</span></label>`).join('')}` : '<div class="mut sm" style="margin-top:6px">El cheque cancelado no tenía documentos subidos.</div>'}</div>` : ''}${F.editId ? '' : '<div class="mut sm" style="margin:-6px 0 10px">¿El cheque ya salió cancelado de origen? <a href="#" data-act="cancelado">Regístralo aquí</a></div>'}
   <div class="card">
     <div class="grid2">
       <div><label class="f">Chequera</label><select id="h_chequera_id"><option value="">Elige…</option>${S.chequeras.map(c => `<option value="${c.id}" ${String(h.chequera_id) === String(c.id) ? 'selected' : ''}>${esc(c.nombre)}</option>`).join('')}</select></div>
@@ -1929,6 +1929,27 @@ document.addEventListener('click', async ev => {
       case 'prevdl': bajarBlob(S.prev.blob, S.prev.nombre); break;
       case 'prevopen': compartirPrev(); break;
       case 'detalle': openDetail(id); break;
+      case 'copiardocs': {
+        openModal('<div class="spin">Buscando cheques cancelados…</div>');
+        const c = await loadCheque(id);
+        const { data } = await sb.from('cheques').select(SEL).eq('chequera_id', c.chequera_id).eq('estatus', 'cancelado').eq('es_historial', false).order('numero_cheque', { ascending: false }).limit(30);
+        const docs = x => archActivos(x).filter(a => a.tipo !== 'foto_cheque');
+        const lst = (data || []).filter(x => docs(x).length);
+        openModal(`<h2 style="margin-top:0">Copiar documentos al cheque ${c.numero_cheque}</h2>
+          <div class="mut sm" style="margin-bottom:8px">Se copian todos los documentos (factura, folio, contrato…) menos la foto del cheque. Los que ya tiene este cheque no se repiten.</div>
+          ${lst.length ? lst.map(x => `<div class="card"><div class="b">Cheque ${x.numero_cheque} cancelado · ${esc(x.beneficiario)}</div><div class="mut sm" style="margin:4px 0 8px">${docs(x).map(a => esc(a.nombre || a.tipo)).join(' · ')}</div><button class="btn gold sm" data-act="cpdgo" data-id="${id}" data-q="${x.id}">Copiar estos ${docs(x).length} documento(s)</button></div>`).join('') : '<div class="warnbox">No hay cheques cancelados de esta chequera con documentos.</div>'}
+          <div class="row" style="margin-top:10px"><button class="btn ghost" data-act="detalle" data-id="${id}">Volver</button></div>`);
+        break;
+      }
+      case 'cpdgo': {
+        el.disabled = true; el.textContent = 'Copiando…';
+        const [c, q] = [await loadCheque(id), await loadCheque(el.dataset.q)];
+        const ya = new Set(archActivos(c).map(a => (a.nombre || '') + '|' + a.tipo)); let ok = 0, fail = 0;
+        for (const a of archActivos(q).filter(a => a.tipo !== 'foto_cheque' && !ya.has((a.nombre || '') + '|' + a.tipo))) {
+          try { const { data, error } = await sb.storage.from(BUCKET).download(a.path); if (error) throw error; await subirBlob(id, a.tipo, data, a.nombre); ok++; } catch (e) { fail++; }
+        }
+        toast(`Copiados: ${ok}${fail ? ' · con error: ' + fail : ''}`, fail ? 'err' : 'ok'); refreshView(true); openDetail(id); break;
+      }
       case 'enterar': { el.disabled = true; await rpc('enterar_cancelacion', { p_id: id }); toast('Cancelación confirmada.', 'ok'); refreshView(); break; }
       case 'mas': loadList(false); break;
       case 'poliza': { const dd = el.closest('details.dd'); if (dd) dd.removeAttribute('open'); polizaPDF(id); break; }
