@@ -450,6 +450,9 @@ const rolTxt = r => ({ capturista: 'Administración', administrador: 'Administra
 const iniciales = n => String(n || '?').replace(/^ING\.\s*/i, '').split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase();
 const fdia = d => { const [y, m, dd] = d.split('-'); const M = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre']; return `${Number(dd)} de ${M[Number(m) - 1]} de ${y}`; };
 const folioTxt = f => f.sin_folio ? 'SIN FOLIO' : f.folio_numero;
+// Folios que tenía un cheque justo antes de cancelarse (al cancelar se desactivan todos de golpe).
+const foliosDeCancelado = c => { const all = c.cheque_folios || []; if (!all.length) return []; const t = f => Date.parse(f.creado_en) || 0; const mx = Math.max(...all.map(t)); return all.filter(f => !f.activo && Math.abs(t(f) - mx) < 5000); };
+const puedeReexpedir = c => c.estatus === 'cancelado' && !c.es_historial && puedeTocar(c) && foliosDeCancelado(c).length > 0;
 const foliosActivos = c => (c.cheque_folios || []).filter(f => f.activo);
 const sumFolios = c => foliosActivos(c).reduce((a, f) => a + cents(f.monto), 0);
 const archActivos = (c, tipo) => (c.archivos || []).filter(a => a.activo && (!tipo || a.tipo === tipo));
@@ -564,7 +567,7 @@ function go(tab) {
 }
 
 /* ===================== CONSULTAS ===================== */
-const SEL = '*, cheque_folios(id,cargo_id,folio_numero,proveedor,descripcion,obra,monto,activo,sin_folio,sin_folio_motivo), archivos(id,tipo,activo,nombre,path)';
+const SEL = '*, cheque_folios(id,cargo_id,folio_numero,proveedor,descripcion,obra,monto,activo,sin_folio,sin_folio_motivo,creado_en), archivos(id,tipo,activo,nombre,path)';
 
 /* ===================== VISTA: AUTORIZAR / PENDIENTES ===================== */
 async function viewPend() {
@@ -616,7 +619,7 @@ function cardCancel(c) {
       <div class="money cd-monto">${fmt(c.monto)}</div></div>
     <div class="cd-body"><div class="warnbox" style="margin-top:10px">Motivo: ${esc(c.motivo_cancelacion || c.concepto || '')}</div>
     <div class="cd-meta">Lo registró: ${esc(c.capturado_por_nombre || '')}</div></div>
-    <div class="cd-side"><div class="cd-tools">${docsMenu(c)}<button class="btn ghost sm" data-act="detalle" data-id="${c.id}">Detalle</button></div>
+    <div class="cd-side"><div class="cd-tools">${docsMenu(c)}<button class="btn ghost sm" data-act="detalle" data-id="${c.id}">Detalle</button>${puedeReexpedir(c) ? `<button class="btn gold sm" data-act="reexpedir" data-id="${c.id}">Crear nuevo igual</button>` : ''}</div>
     ${esAdmin() ? `<div class="cd-act"><button class="btn ok grow" data-act="enterar" data-id="${c.id}">Enterado y de acuerdo con la cancelación</button></div>`
       : '<div class="chip warn cd-wait">Esperando que el Ing. dé por enterada la cancelación</div>'}</div>
   </div>`;
@@ -916,6 +919,7 @@ async function openDetail(id) {
       const mismoDia = c.creado_en && new Date(c.creado_en).toLocaleDateString('en-CA', { timeZone: 'America/Monterrey' }) === new Date().toLocaleDateString('en-CA', { timeZone: 'America/Monterrey' });
       if ((esAdmin() || (puedeOperar() && mismoDia)) && !c.cobrado && c.estatus !== 'cancelado') acciones += `<button class="btn ghost" data-act="cancelar" data-id="${id}">Cancelar cheque</button>`;
       acciones += `<button class="btn ghost" data-act="poliza" data-id="${id}">Ver póliza</button>`;
+      if (puedeReexpedir(c)) acciones += `<button class="btn gold" data-act="reexpedir" data-id="${id}">Crear nuevo cheque igual</button>`;
     }
     const puedeSubir = !hist && (c.estatus !== 'cancelado' || puedeCapturar());
     openModal(`
@@ -1434,7 +1438,7 @@ async function guardarFirma(dataUrl) {
 
 /* ===================== FORMULARIO NUEVO / EDITAR ===================== */
 const newLine = () => ({ cargo_id: '', folio_numero: '', touched: false, proveedor: '', descripcion: '', obra: '', monto: '', modo: 'archivo', venc: '', periodo: '', conceptos: '', motivo_sf: '' });
-async function viewNuevo(editCheque) {
+async function viewNuevo(editCheque, copiaDe) {
   await loadCatalogs();
   if (!S.F) {
     S.F = { editId: null, clave: crypto.randomUUID(), files: [], folioFiles: [], chequeFiles: [], lines: [newLine()],
@@ -1445,11 +1449,17 @@ async function viewNuevo(editCheque) {
       S.F.lines = foliosActivos(c).map(f => ({ cargo_id: f.cargo_id, folio_numero: f.sin_folio ? '' : f.folio_numero, touched: true, proveedor: f.proveedor || '', descripcion: f.descripcion || '', obra: f.obra || '', monto: f.monto, modo: f.sin_folio ? 'sinfolio' : 'archivo', venc: '', periodo: '', conceptos: '', motivo_sf: f.sin_folio_motivo || '' }));
       if (!S.F.lines.length) S.F.lines = [newLine()];
     }
+    if (copiaDe) {
+      const c = copiaDe, fl = foliosDeCancelado(c), u = await ultimoChequera(c.chequera_id);
+      S.F.h = { chequera_id: c.chequera_id, numero_cheque: u.num != null ? String(u.num + 1) : '', fecha: today(), beneficiario: c.beneficiario, monto: (fl.reduce((a, f) => a + cents(f.monto), 0) / 100).toFixed(2), concepto: c.concepto || '', solicito: c.solicito || S.perfil.nombre, sin_factura_motivo: c.sin_factura_motivo || '' };
+      S.F.lines = fl.map(f => ({ cargo_id: f.cargo_id, folio_numero: f.sin_folio ? '' : f.folio_numero, touched: true, proveedor: f.proveedor || '', descripcion: f.descripcion || '', obra: f.obra || '', monto: f.monto, modo: f.sin_folio ? 'sinfolio' : 'archivo', venc: '', periodo: '', conceptos: '', motivo_sf: f.sin_folio_motivo || '' }));
+      S.F.copia = { id: c.id, numero: c.numero_cheque, arch: [...archActivos(c, 'factura'), ...archActivos(c, 'folio')].map(a => ({ tipo: a.tipo, path: a.path, nombre: a.nombre, on: true })) };
+    }
   }
   const F = S.F, h = F.h;
   const { data: bens } = await sb.from('cheques').select('beneficiario').order('creado_en', { ascending: false }).limit(1000);
   const uniq = [...new Set((bens || []).map(x => x.beneficiario))].slice(0, 400);
-  $('#view').innerHTML = `<div class="pagehead"><h2>${F.editId ? 'Editar cheque' : 'Nuevo cheque'}</h2></div>${F.editId ? '' : '<div class="mut sm" style="margin:-6px 0 10px">¿El cheque ya salió cancelado de origen? <a href="#" data-act="cancelado">Regístralo aquí</a></div>'}
+  $('#view').innerHTML = `<div class="pagehead"><h2>${F.editId ? 'Editar cheque' : 'Nuevo cheque'}</h2></div>${F.copia ? `<div class="okbox" style="margin-bottom:10px"><b>Nuevo cheque con los datos del ${F.copia.numero} (cancelado).</b> Ya van copiados chequera, beneficiario, monto, concepto y folios. Pon el <b>número del cheque nuevo</b> y toma su foto.${F.copia.arch.length ? `<div style="margin-top:6px">Archivos que se copian al cheque nuevo:</div>${F.copia.arch.map((a, i) => `<label class="row" style="gap:8px;margin-top:4px"><input type="checkbox" data-act="copiaarch" data-i="${i}" ${a.on ? 'checked' : ''} style="width:auto"> <span>${a.tipo === 'factura' ? 'Factura' : 'Folio'}: ${esc(a.nombre)}</span></label>`).join('')}` : '<div class="mut sm" style="margin-top:6px">El cheque cancelado no tenía factura ni folio subidos.</div>'}</div>` : ''}${F.editId ? '' : '<div class="mut sm" style="margin:-6px 0 10px">¿El cheque ya salió cancelado de origen? <a href="#" data-act="cancelado">Regístralo aquí</a></div>'}
   <div class="card">
     <div class="grid2">
       <div><label class="f">Chequera</label><select id="h_chequera_id"><option value="">Elige…</option>${S.chequeras.map(c => `<option value="${c.id}" ${String(h.chequera_id) === String(c.id) ? 'selected' : ''}>${esc(c.nombre)}</option>`).join('')}</select></div>
@@ -1695,6 +1705,13 @@ async function guardarCheque(confirmado = false) {
       const par = emparejarFolios(F.lines, c.folios || []);
       const nums = F.lines.map((l, k) => l.modo === 'archivo' && par[k] ? par[k].folio_numero : null).filter(Boolean).join('-') || 'FOLIOS';
       try { await subirArchivo(c.id, 'folio', F.folioFiles, ('Folio_' + nums).replace(/[^A-Za-z0-9-]+/g, '_') + '.pdf'); } catch (e) { subidaErr = (subidaErr ? subidaErr + ' · ' : '') + 'folio: ' + errMsg(e); }
+    }
+    if (F.copia) {
+      const fallos = [];
+      for (const a of F.copia.arch.filter(x => x.on)) {
+        try { const { data, error } = await sb.storage.from(BUCKET).download(a.path); if (error) throw error; await subirBlob(c.id, a.tipo, data, a.nombre); } catch (e) { fallos.push(a.nombre); }
+      }
+      if (fallos.length) subidaErr = (subidaErr ? subidaErr + ' · ' : '') + 'no se pudo copiar: ' + fallos.join(', ') + ' (súbelos desde el detalle)';
     }
     S.hojas = []; let hojasErr = '';
     try { S.hojas = armarHojas(F.lines, c.folios || [], h); } catch (e) { hojasErr = errMsg(e); }
@@ -1985,6 +2002,8 @@ document.addEventListener('click', async ev => {
       }
       case 'cancelarEdit': S.F = null; go('cheques'); break;
       case 'otro': closeModal(); S.F = null; go('nuevo'); break;
+      case 'reexpedir': { const c = await loadCheque(id); closeModal(); S.F = null; S.tab = 'nuevo'; document.querySelectorAll('nav.tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === 'nuevo')); await viewNuevo(null, c); window.scrollTo(0, 0); break; }
+      case 'copiaarch': { if (S.F && S.F.copia) S.F.copia.arch[Number(el.dataset.i)].on = el.checked; return; }
       case 'modo': {
         const l = S.F.lines[Number(el.dataset.i)]; l.modo = el.dataset.m; const sc = S.cargos.find(esSinCargo);
         if (sc) { if (l.modo === 'sinfolio' && !l.cargo_id) l.cargo_id = sc.id; else if (l.modo !== 'sinfolio' && Number(l.cargo_id) === sc.id) l.cargo_id = ''; }
