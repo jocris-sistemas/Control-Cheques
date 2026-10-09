@@ -311,6 +311,7 @@ details.dd .ddm button svg{width:18px;height:18px;flex:none;stroke:currentColor;
 :root[data-theme="dark"] .item:hover{box-shadow:0 2px 4px rgba(0,0,0,.4),0 8px 20px rgba(0,0,0,.35)}
 :root[data-theme="dark"] .empty svg{stroke:#5b6e88}
 :root[data-theme="dark"] img#firmaAct{background:#fff!important}
+.pdfpages{max-height:68vh;overflow:auto;background:#e4e8ee;border:1px solid var(--line);border-radius:8px;padding:6px}.pdfpg{display:block;width:100%;height:auto;background:#fff;margin:0 auto 8px;box-shadow:0 1px 4px rgba(0,0,0,.25)}
 </style>
 </head>
 <body>
@@ -1711,12 +1712,47 @@ async function guardarCheque(confirmado = false) {
 }
 
 /* ===================== VISTA PREVIA DE PDF ===================== */
+let _pdfjsP = null;
+function cargarPdfJs() {
+  if (window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+  if (_pdfjsP) return _pdfjsP;
+  const V = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/';
+  _pdfjsP = new Promise((ok, no) => { const sc = document.createElement('script'); sc.src = V + 'pdf.min.js';
+    sc.onload = () => { try { window.pdfjsLib.GlobalWorkerOptions.workerSrc = V + 'pdf.worker.min.js'; ok(window.pdfjsLib); } catch (e) { _pdfjsP = null; no(e); } };
+    sc.onerror = () => { _pdfjsP = null; no(new Error('No se pudo cargar el visor de PDF.')); }; document.head.appendChild(sc); });
+  return _pdfjsP;
+}
+// Dibuja cada hoja del PDF como imagen (en el celular el navegador no sabe mostrar PDF dentro de la página).
+async function pintarPdf(blob, cont) {
+  const lib = await cargarPdfJs(); const data = new Uint8Array(await blob.arrayBuffer());
+  const pdf = await lib.getDocument({ data }).promise; cont.innerHTML = '';
+  const w = cont.clientWidth || 340, dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+  for (let n = 1; n <= pdf.numPages; n++) {
+    const page = await pdf.getPage(n); const v0 = page.getViewport({ scale: 1 }); const vp = page.getViewport({ scale: (w / v0.width) * dpr });
+    const cv = document.createElement('canvas'); cv.width = Math.floor(vp.width); cv.height = Math.floor(vp.height); cv.className = 'pdfpg';
+    cont.appendChild(cv); await page.render({ canvasContext: cv.getContext('2d'), viewport: vp }).promise;
+  }
+}
 function previewPDF(doc, nombre, titulo) {
   const blob = doc.output('blob'); const url = URL.createObjectURL(blob); S.prev = { blob, nombre, url };
   openModal(`<h2 style="margin-top:0">${esc(titulo)}</h2>
-    <iframe id="pdfFrame" src="${url}" title="Vista previa" style="width:100%;height:66vh;border:1px solid var(--line);border-radius:8px;background:#fff"></iframe>
-    <div class="row" style="margin-top:10px;flex-wrap:wrap;gap:8px"><button class="btn gold" data-act="prevprint">Imprimir</button><button class="btn ghost" data-act="prevdl">Descargar PDF</button><button class="btn ghost" data-act="prevopen">Abrir en otra pestaña</button></div>
-    <div class="mut sm" style="margin-top:6px">Revisa cómo quedó antes de imprimir. Si en el celular no se ve aquí, usa “Abrir en otra pestaña”.</div>`);
+    <div id="pdfPages" class="pdfpages"><div class="mut sm" style="padding:30px;text-align:center">Preparando vista previa…</div></div>
+    <div class="row" style="margin-top:10px;flex-wrap:wrap;gap:8px"><button class="btn gold" data-act="prevprint">Imprimir</button><button class="btn ghost" data-act="prevdl">Descargar PDF</button><button class="btn ghost" data-act="prevopen">Compartir / abrir en otra app</button></div>
+    <div class="mut sm" style="margin-top:6px">Revisa cómo quedó antes de imprimir. En el celular, “Imprimir” abre el PDF en tu visor para mandarlo a la impresora.</div>`);
+  const cont = $('#pdfPages');
+  pintarPdf(blob, cont).catch(e => { cont.innerHTML = `<iframe id="pdfFrame" src="${url}" title="Vista previa" style="width:100%;height:60vh;border:0;background:#fff"></iframe><div class="warnbox" style="margin:8px">No se pudo dibujar la vista previa aquí (${esc(errMsg(e))}). Usa “Descargar PDF”.</div>`; });
+}
+const esMovil = () => /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && window.innerWidth < 900);
+async function compartirPrev() {
+  const f = new File([S.prev.blob], S.prev.nombre, { type: 'application/pdf' });
+  try { if (navigator.canShare && navigator.canShare({ files: [f] })) { await navigator.share({ files: [f], title: S.prev.nombre }); return; } } catch (e) { if (e && e.name === 'AbortError') return; }
+  bajarBlob(S.prev.blob, S.prev.nombre); toast('PDF descargado. Ábrelo desde tus descargas.', 'ok');
+}
+function imprimirPrev() {
+  if (esMovil()) return compartirPrev();
+  const fr = document.createElement('iframe'); fr.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0'; fr.src = S.prev.url;
+  fr.onload = () => { try { fr.contentWindow.focus(); fr.contentWindow.print(); } catch (e) { bajarBlob(S.prev.blob, S.prev.nombre); } setTimeout(() => fr.remove(), 60000); };
+  document.body.appendChild(fr);
 }
 /* ===================== POLIZA PDF ===================== */
 async function polizaPDF(id) {
@@ -1872,9 +1908,9 @@ document.addEventListener('click', async ev => {
       case 'cambiarpass': {
         const a = $('#np1').value, b = $('#np2').value; if (a.length < 8) return toast('Mínimo 8 caracteres.', 'err'); if (a !== b) return toast('No coinciden.', 'err');
         const { error } = await sb.auth.updateUser({ password: a }); if (error) return toast(errMsg(error), 'err'); toast('Contraseña actualizada.', 'ok'); closeModal(); break; }
-      case 'prevprint': { const f = $('#pdfFrame'); try { f.contentWindow.focus(); f.contentWindow.print(); } catch (e) { window.open(S.prev.url, '_blank'); } break; }
+      case 'prevprint': imprimirPrev(); break;
       case 'prevdl': bajarBlob(S.prev.blob, S.prev.nombre); break;
-      case 'prevopen': window.open(S.prev.url, '_blank'); break;
+      case 'prevopen': compartirPrev(); break;
       case 'detalle': openDetail(id); break;
       case 'enterar': { el.disabled = true; await rpc('enterar_cancelacion', { p_id: id }); toast('Cancelación confirmada.', 'ok'); refreshView(); break; }
       case 'mas': loadList(false); break;
