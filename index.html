@@ -476,7 +476,7 @@ function montoLetra(n) {
 /* ===================== AUTENTICACION ===================== */
 const EYE = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
 const EYE_OFF = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
-const pwField = (id, ac) => `<div class="pw"><input type="password" id="${id}" autocomplete="${ac}" autocapitalize="off" autocorrect="off" spellcheck="false" required><button type="button" class="eye" data-act="verpass" data-for="${id}" aria-label="Mostrar u ocultar contraseña" title="Mostrar / ocultar">${EYE}</button></div>`;
+const pwField = (id, ac) => `<div class="pw"><input type="password" id="${id}" autocomplete="${ac}" autocapitalize="off" autocorrect="off" spellcheck="false" data-nocaps required><button type="button" class="eye" data-act="verpass" data-for="${id}" aria-label="Mostrar u ocultar contraseña" title="Mostrar / ocultar">${EYE}</button></div>`;
 function renderLogin(msg = '') {
   $('#app').innerHTML = `
   <div class="login">
@@ -1834,9 +1834,9 @@ function menuCuenta() {
 }
 
 /* ===================== EVENTOS ===================== */
-// Todo lo que se escribe en la app va en MAYÚSCULAS (correo y contraseña no se tocan).
+// Todo lo que se escribe en la app va en MAYÚSCULAS (correo y contraseña no se tocan, aunque se muestre la contraseña).
 document.addEventListener('input', ev => {
-  const el = ev.target; if (!el.matches || !el.matches('input[type=text], textarea')) return;
+  const el = ev.target; if (!el.matches || !el.matches('input[type=text], textarea') || el.hasAttribute('data-nocaps')) return;
   const v = el.value, u = v.toUpperCase(); if (v === u) return;
   const a = el.selectionStart, b = el.selectionEnd; el.value = u; try { el.setSelectionRange(a, b); } catch (e) {}
 }, true);
