@@ -216,6 +216,47 @@ details.dd .ddm button svg{width:18px;height:18px;flex:none;stroke:currentColor;
 }
 .tema{display:flex;gap:8px}.tema .btn{flex:1}.tema .btn.on{background:var(--navy);color:#fff;border-color:var(--navy)}
 
+.crwrap{position:relative;margin:12px auto;touch-action:none;user-select:none;overflow:hidden;border-radius:8px;background:#111}
+.crwrap canvas{display:block}
+.crbox{position:absolute;border:2px solid #ffd27a;box-shadow:0 0 0 9999px rgba(0,0,0,.5);cursor:move}
+.crbox i{position:absolute;width:30px;height:30px;background:#ffd27a;border:2px solid #fff;border-radius:50%;box-sizing:border-box}
+.crbox i[data-h=nw]{left:-15px;top:-15px;cursor:nwse-resize}.crbox i[data-h=ne]{right:-15px;top:-15px;cursor:nesw-resize}
+.crbox i[data-h=sw]{left:-15px;bottom:-15px;cursor:nesw-resize}.crbox i[data-h=se]{right:-15px;bottom:-15px;cursor:nwse-resize}
+/* ---- Reportes ---- */
+.kpis{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-bottom:12px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px;box-shadow:var(--shadow)}
+.kpi .big{font-size:22px;font-weight:800;letter-spacing:-.01em;margin-top:2px}
+.repgrid{display:grid;grid-template-columns:minmax(0,1fr);gap:12px}.repgrid .card{margin:0}
+.rh{margin:0 0 10px;font-size:14px}
+.bars{display:flex;flex-direction:column;gap:9px}
+.brow .bhead{display:flex;justify-content:space-between;gap:10px;font-size:13.5px}
+.brow .bl{overflow-wrap:anywhere}.brow .bv{white-space:nowrap;font-weight:700}
+.brow .bt{height:8px;border-radius:4px;background:rgba(120,140,170,.16);margin-top:4px;overflow:hidden}
+.brow .bt i{display:block;height:100%;background:var(--navy);border-radius:0 4px 4px 0}
+.brow .bn{font-size:12px;color:var(--mut)}
+.rrow .lnk{background:none;border:0;padding:0;font:inherit;color:var(--navy);text-decoration:underline;text-underline-offset:2px;cursor:pointer;box-shadow:none}
+:root[data-theme="dark"] .rrow .lnk{color:#8fb4e8}
+.rsub{margin:12px 0 4px;font-size:12.5px;color:var(--mut);font-weight:700}
+.rrow{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:7px 0;border-top:1px solid var(--line);font-size:13.5px}
+.rrow .lnk{text-align:left;overflow-wrap:anywhere}.rtags{display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+.rtags .chip{font-size:11px;padding:2px 8px}
+@media(min-width:760px){.kpis{grid-template-columns:repeat(4,minmax(0,1fr))}.repgrid{grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}.repgrid .wide{grid-column:1/-1}}
+/* ---- Lote y deshacer ---- */
+#undo{position:fixed;left:50%;transform:translateX(-50%);bottom:96px;background:#1f2a3a;color:#fff;padding:10px 6px 12px 16px;border-radius:12px;z-index:99;max-width:92%;font-size:14px;box-shadow:0 6px 20px rgba(0,0,0,.3);display:flex;gap:10px;align-items:center;overflow:hidden}
+#undo button{background:transparent;color:#ffd27a;border:0;font-weight:700;font-size:14px;cursor:pointer;padding:6px 10px;border-radius:8px}
+#undo .bar{position:absolute;left:0;bottom:0;height:3px;background:#ffd27a;animation:undobar linear forwards}
+@keyframes undobar{from{width:100%}to{width:0}}
+.card.cd.saliendo{opacity:.4;pointer-events:none;transition:opacity .2s}
+.cd-sel{display:flex;gap:9px;align-items:center;font-size:13px;color:var(--mut);margin-top:10px;cursor:pointer;user-select:none}
+.cd-sel input{width:19px;height:19px;accent-color:var(--navy)}
+.selrow{display:flex;gap:8px;margin:0 0 12px}
+.selbar{position:fixed;left:50%;transform:translateX(-50%);bottom:74px;width:min(560px,94%);z-index:40;background:var(--navy);color:#fff;border-radius:14px;padding:10px 12px 10px 16px;display:flex;gap:10px;align-items:center;box-shadow:0 10px 30px rgba(0,0,0,.3)}
+.selbar .grow{line-height:1.25;font-size:14px}.selbar b{font-size:16px}
+.selbar .btn{padding:9px 14px}
+.selbar .btn.ghost{background:transparent;color:#fff;border-color:rgba(255,255,255,.4)}
+@media(min-width:1000px){.selbar{bottom:86px}}
+
+#cmtList .cmt{padding:8px 0;border-bottom:1px solid var(--line);font-size:14px}#cmtList .cmt:last-child{border-bottom:0}#cmtList .cmt div{margin-top:2px;white-space:pre-wrap;overflow-wrap:anywhere}
 /* ---- Modo oscuro ---- */
 :root[data-theme="dark"]{color-scheme:dark;
   --bg:#0d1520;--card:#162131;--ink:#e6ebf3;--mut:#93a2b7;--line:#25344a;--navy:#2a5a96;--navy2:#8fb4e8;
@@ -275,7 +316,7 @@ details.dd .ddm button svg{width:18px;height:18px;flex:none;stroke:currentColor;
 <body>
 <div id="app"></div>
 <div id="modal"></div>
-<div id="toast" class="hidden"></div>
+<div id="toast" class="hidden"></div><div id="undo" class="hidden"></div><div id="selbar" class="selbar hidden"></div>
 
 <script>
 /* ===================== CONFIG ===================== */
@@ -308,7 +349,11 @@ const today = () => { const d = new Date(); return new Date(d.getTime() - d.getT
 const parseMoney = s => { const n = Number(String(s ?? '').replace(/[$,\s]/g, '')); return isFinite(n) ? n : NaN; };
 const pad = (n, l = 4) => String(n).padStart(l, '0');
 const rol = () => S.perfil?.rol;
-const puedeCapturar = () => ['administrador', 'capturista'].includes(rol());
+const puedeCapturar = () => ['administrador', 'capturista', 'contador'].includes(rol());
+/* Operaciones de oficina que el contador no hace (cancelados, series, huecos) */
+const puedeOperar = () => ['administrador', 'capturista'].includes(rol());
+/* El contador solo corrige / marca sin foto en los cheques que él mismo capturó */
+const puedeTocar = c => rol() === 'contador' ? (!!c && c.capturado_por === S.perfil?.id) : puedeCapturar();
 /* Solo Pedro y el Ing. (perfiles.puede_archivos) agregan, reemplazan o quitan documentos de un cheque ya capturado. */
 const puedeArchivos = () => !!S.perfil?.puede_archivos && puedeCapturar();
 const esAdmin = () => rol() === 'administrador';
@@ -321,6 +366,63 @@ function toast(msg, type = '') {
   toast._t = setTimeout(() => t.classList.add('hidden'), type === 'err' ? 6500 : 3000);
 }
 const errMsg = e => (e && (e.message || e.error_description)) || String(e);
+/* Acciones diferidas con "Deshacer" (autorizar) */
+function diferir(texto, fn, ids = [], ms = 6000) {
+  flushDiferido();
+  const box = $('#undo'); box.innerHTML = `<span>${esc(texto)}</span><button data-act="deshacer">Deshacer</button><i class="bar" style="animation-duration:${ms}ms"></i>`;
+  box.classList.remove('hidden');
+  ids.forEach(i => document.getElementById('cp-' + i)?.classList.add('saliendo'));
+  S.dif = { fn, ids, t: setTimeout(flushDiferido, ms) };
+}
+async function flushDiferido() {
+  const d = S.dif; if (!d) return; S.dif = null; clearTimeout(d.t); $('#undo').classList.add('hidden');
+  try { await d.fn(); } catch (e) { toast(errMsg(e), 'err'); refreshView(); }
+}
+function deshacerDiferido() {
+  const d = S.dif; if (!d) return; clearTimeout(d.t); S.dif = null; $('#undo').classList.add('hidden');
+  d.ids.forEach(i => document.getElementById('cp-' + i)?.classList.remove('saliendo'));
+  toast('Listo, no se autorizó.');
+}
+document.addEventListener('visibilitychange', () => { if (document.hidden) flushDiferido(); });
+/* Cierre de sesión por inactividad (45 min) */
+(function () {
+  let t, MS = 45 * 60 * 1000;
+  const rearma = () => { clearTimeout(t); t = setTimeout(async () => { if (!S.perfil || S.dif) return rearma(); try { await sb.auth.signOut(); } catch (e) { } S.perfil = null; renderLogin(); setTimeout(() => toast('Se cerró la sesión por inactividad.'), 300); }, MS); };
+  ['click', 'keydown', 'touchstart', 'scroll'].forEach(e => window.addEventListener(e, rearma, { passive: true }));
+  rearma();
+})();
+/* Selección para autorizar en lote */
+const selIds = () => [...document.querySelectorAll('[data-sel]:checked')].map(i => i.dataset.sel);
+function updateSel() {
+  const bar = $('#selbar'); if (!bar) return;
+  const ids = selIds();
+  if (!ids.length || S.tab !== 'pend') { bar.classList.add('hidden'); return; }
+  const tot = ids.reduce((a, i) => a + cents((S.pendMap?.get(i) || {}).monto || 0), 0) / 100;
+  bar.innerHTML = `<div class="grow"><b>${ids.length}</b> cheque${ids.length === 1 ? '' : 's'} elegido${ids.length === 1 ? '' : 's'}<br><span class="money">${fmt(tot)}</span></div><button class="btn ghost sm" data-act="selquitar">Quitar</button><button class="btn ok" data-act="autsel">Autorizar</button>`;
+  bar.classList.remove('hidden');
+}
+document.addEventListener('keydown', ev => { if (ev.key === 'Enter' && ev.target && ev.target.id === 'cmtTxt') { ev.preventDefault(); const b = document.querySelector('[data-act=comentar]'); if (b) b.click(); } });
+document.addEventListener('change', ev => { if (ev.target.matches && ev.target.matches('[data-sel]')) updateSel(); });
+function dlgAutSel() {
+  const ids = selIds(); S.selIds = ids;
+  const cs = ids.map(i => S.pendMap.get(i)).filter(Boolean); if (!cs.length) return;
+  const tot = cs.reduce((a, c) => a + cents(c.monto), 0) / 100;
+  openModal(`<h2>Autorizar ${cs.length} cheque${cs.length === 1 ? '' : 's'}</h2>
+    <div class="card">${cs.map(c => `<div class="row" style="justify-content:space-between;gap:10px;margin:5px 0"><span>${esc(c.beneficiario)} <span class="mut sm">· cheque ${c.numero_cheque}</span></span><b class="money">${fmt(c.monto)}</b></div>`).join('')}
+    <div class="row" style="justify-content:space-between;margin-top:10px;padding-top:10px;border-top:1px solid var(--line)"><b>Total</b><b class="money">${fmt(tot)}</b></div></div>
+    <label class="f">Comentario (opcional, se guarda en cada cheque)</label><textarea id="cmt"></textarea>
+    <div class="row" style="margin-top:14px"><button class="btn ok grow" data-act="okautsel">Sí, autorizar ${cs.length}</button><button class="btn ghost" data-act="close">Cancelar</button></div>`);
+}
+async function autorizarLote(ids, cm) {
+  let ok = 0; const fail = [];
+  for (const id of ids) {
+    const c = S.pendMap.get(id);
+    try { await rpc('autorizar_cheque', { p_id: id, p_comentario: cm }); ok++; }
+    catch (e) { fail.push(`${c ? c.numero_cheque : id}: ${errMsg(e)}`); }
+  }
+  toast(fail.length ? `${ok} autorizado${ok === 1 ? '' : 's'}; con error: ${fail.join(' | ')}` : `${ok} cheque${ok === 1 ? '' : 's'} autorizado${ok === 1 ? '' : 's'}.`, fail.length ? 'err' : 'ok');
+  refreshView();
+}
 async function rpc(name, args) {
   const { data, error } = await sb.rpc(name, args);
   if (error) throw error;
@@ -338,6 +440,7 @@ const ICON = {
   pend: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.7 2.7L16 9.5"/></svg>',
   cheques: '<svg viewBox="0 0 24 24"><path d="M4 5h16v14H4z"/><path d="M4 10h16M8 15h4"/></svg>',
   nuevo: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>',
+  rep: '<svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>',
   bit: '<svg viewBox="0 0 24 24"><path d="M7 3h8l4 4v14H7z"/><path d="M15 3v4h4M10 12h6M10 16h6"/></svg>',
   money: '<svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/></svg>',
   empty: '<svg viewBox="0 0 24 24"><path d="M5 4h14v16H5z"/><path d="M9 9h6M9 13h6"/></svg>'
@@ -437,6 +540,7 @@ async function refreshPendCount() {
 function renderShell() {
   const tabs = [['pend', esAdmin() ? 'Autorizar' : 'Pendientes'], ['cheques', 'Historial']];
   if (puedeCapturar()) tabs.push(['nuevo', 'Nuevo']);
+  tabs.push(['rep', 'Reportes']);
   tabs.push(['bit', 'Bitácora']);
   $('#app').innerHTML = `
   <header class="top">
@@ -452,7 +556,8 @@ function go(tab) {
   S.tab = tab;
   document.querySelectorAll('nav.tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
   if (tab !== 'nuevo') S.F = null;
-  ({ pend: viewPend, cheques: viewCheques, nuevo: viewNuevo, series: viewSeries, bit: viewBit }[tab])();
+  { const b = $('#selbar'); if (b) b.classList.add('hidden'); }
+  ({ pend: viewPend, cheques: viewCheques, nuevo: viewNuevo, series: viewSeries, bit: viewBit, rep: viewRep }[tab])();
   window.scrollTo(0, 0);
   refreshPendCount(); cargarAlertas();
 }
@@ -467,6 +572,8 @@ async function viewPend() {
   if (error) return $('#pendList').innerHTML = `<div class="warnbox">${esc(errMsg(error))}</div>`;
   const canc = (await sb.from('cheques').select(SEL).eq('estatus', 'cancelado').eq('es_historial', false).is('cancelacion_enterada_en', null).order('actualizado_en', { ascending: true })).data || [];
   S.pendCount = data.length + canc.length; refreshPendCount();
+  S.avisos = await calcAvisos(data);
+  S.pendMap = new Map(data.map(c => [c.id, c])); const bar0 = $('#selbar'); if (bar0) bar0.classList.add('hidden');
   const rech = (await sb.from('cheques').select(SEL).eq('estatus', 'rechazado').eq('es_historial', false).order('actualizado_en', { ascending: false }).limit(20)).data || [];
   let html = '';
   if (data.length || canc.length) {
@@ -476,6 +583,8 @@ async function viewPend() {
   if (!data.length && !canc.length) html += `<div class="card empty">${ICON.pend}<div>No hay cheques pendientes. Todo al día.</div></div>`;
   // Pendientes y cancelados por confirmar van juntos, por número de cheque del más viejo al más nuevo.
   const todos = data.concat(canc).sort((a, b) => (a.numero_cheque - b.numero_cheque) || (a.chequera_id - b.chequera_id));
+  const listos = esAdmin() ? data.filter(c => sumFolios(c) === cents(c.monto) && (archActivos(c, 'foto_cheque').length || c.sin_foto_motivo)).length : 0;
+  if (listos >= 2) html += `<div class="selrow"><button class="btn ghost sm" data-act="selall">Elegir los ${listos} listos para autorizar</button></div>`;
   html += `<div class="cards">` + todos.map(c => c.estatus === 'cancelado' ? cardCancel(c) : cardPend(c)).join('') + `</div>`;
   if (rech.length) html += `<h3>Rechazados (esperan corrección)</h3><div class="cards">` + rech.map(c => cardPend(c, true)).join('') + `</div>`;
   $('#pendList').outerHTML = html;
@@ -511,6 +620,36 @@ function cardCancel(c) {
       : '<div class="chip warn cd-wait">Esperando que el Ing. dé por enterada la cancelación</div>'}</div>
   </div>`;
 }
+/* Alertas para quien autoriza: posible duplicado, folio repetido en el mismo cargo, monto atípico o alto */
+async function calcAvisos(pend) {
+  const out = new Map(); if (!pend.length) return out;
+  try {
+    const desde = new Date(Date.now() - 120 * 86400000).toISOString().slice(0, 10);
+    const { data: rec } = await sb.from('cheques').select('id,numero_cheque,chequera_id,beneficiario,monto,fecha,estatus').gte('fecha', desde).order('fecha', { ascending: false }).limit(1000);
+    const base = (rec || []).filter(r => !['cancelado', 'rechazado'].includes(r.estatus));
+    const nums = [...new Set(pend.flatMap(c => foliosActivos(c).filter(f => !f.sin_folio && f.folio_numero).map(f => String(f.folio_numero))))];
+    let fol = [];
+    if (nums.length) { const r = await sb.from('cheque_folios').select('cheque_id,cargo_id,folio_numero').eq('activo', true).in('folio_numero', nums); fol = r.data || []; }
+    const numDe = id => { const r = base.find(x => x.id === id) || pend.find(x => x.id === id); return r ? r.numero_cheque : '?'; };
+    const norm = t => String(t || '').trim().toUpperCase().replace(/\s+/g, ' ');
+    for (const c of pend) {
+      const av = [], ben = norm(c.beneficiario), m = cents(c.monto), f0 = new Date(c.fecha + 'T12:00:00');
+      const dup = base.filter(r => r.id !== c.id && norm(r.beneficiario) === ben && cents(r.monto) === m && Math.abs(new Date(r.fecha + 'T12:00:00') - f0) <= 15 * 86400000);
+      if (dup.length) av.push(`POSIBLE DUPLICADO · cheque ${dup.map(d => d.numero_cheque).slice(0, 2).join(', ')}`);
+      const prev = base.filter(r => r.id !== c.id && norm(r.beneficiario) === ben && cents(r.monto) > 0);
+      const mx = prev.reduce((a, r) => Math.max(a, cents(r.monto)), 0);
+      if (prev.length >= 2 && m >= 3 * mx && m >= 500000) av.push(`MONTO ATÍPICO · antes máx. ${fmt(mx / 100)}`);
+      else if (m >= 10000000) av.push('MONTO ALTO');
+      for (const f of foliosActivos(c)) {
+        if (f.sin_folio || !f.folio_numero) continue;
+        const otro = fol.find(x => x.cheque_id !== c.id && x.cargo_id === f.cargo_id && String(x.folio_numero) === String(f.folio_numero));
+        if (otro) av.push(`FOLIO ${esc(cargoNombre(f.cargo_id))} ${esc(f.folio_numero)} REPETIDO · cheque ${numDe(otro.cheque_id)}`);
+      }
+      if (av.length) out.set(c.id, av);
+    }
+  } catch (e) { /* los avisos son un extra; nunca bloquean */ }
+  return out;
+}
 function cardPend(c, rechazado = false) {
   const fol = foliosActivos(c); const fac = archActivos(c, 'factura').length;
   const sinFac = false; // la factura ya no es requisito para autorizar
@@ -520,7 +659,8 @@ function cardPend(c, rechazado = false) {
   const alertas = [
     cuadra ? '' : '<span class="chip rechazado">NO CUADRA</span>',
     fac ? '' : '<span class="chip warn">PDTE. FACTURA</span>',
-    hayFoto ? '' : c.sin_foto_motivo ? '<span class="chip warn">SIN FOTO</span>' : '<span class="chip rechazado">FALTA FOTO DEL CHEQUE</span>'
+    hayFoto ? '' : c.sin_foto_motivo ? '<span class="chip warn">SIN FOTO</span>' : '<span class="chip rechazado">FALTA FOTO DEL CHEQUE</span>',
+    ...((S.avisos && S.avisos.get(c.id)) || []).map(t => `<span class="chip rechazado">${t}</span>`)
   ].join('');
   const resumen = fol.map(f => esc(cargoNombre(f.cargo_id)) + ' ' + (f.sin_folio ? 'sin folio' : esc(f.folio_numero))).join(' · ');
   return `<div class="card cd st-${rechazado ? 'rechazado' : 'pendiente'}" id="cp-${c.id}">
@@ -543,17 +683,18 @@ function cardPend(c, rechazado = false) {
     ${rechazado ? `<div class="warnbox">Rechazado: ${esc(c.motivo_rechazo || '')}</div>` : ''}
     </div>
     <div class="cd-side">
+    ${esAdmin() && !rechazado && cuadra && okFoto ? `<label class="cd-sel"><input type="checkbox" data-sel="${c.id}"><span>Elegir para autorizar</span></label>` : ''}
     <div class="cd-tools">
       ${docsMenu(c)}
       <button class="btn ghost sm" data-act="detalle" data-id="${c.id}">Detalle</button>
-      ${!okFoto && !rechazado && puedeCapturar() ? `<button class="btn ghost sm" data-act="sinfoto" data-id="${c.id}">No hay foto</button>` : ''}
+      ${!okFoto && !rechazado && puedeTocar(c) ? `<button class="btn ghost sm" data-act="sinfoto" data-id="${c.id}">No hay foto</button>` : ''}
     </div>
     ${esAdmin() && !rechazado ? `<div class="cd-act">
       <button class="btn ok grow" data-act="autorizar" data-id="${c.id}" ${sinFac || !cuadra || !okFoto ? 'disabled' : ''}>Autorizar</button>
       <button class="btn outbad" data-act="rechazar" data-id="${c.id}">Rechazar</button></div>
 ` : ''}
     ${!esAdmin() && !rechazado ? '<div class="chip warn cd-wait">PDTE. DE AUTORIZAR</div>' : ''}
-    ${rechazado && puedeCapturar() ? `<div class="cd-act"><button class="btn gold grow" data-act="editar" data-id="${c.id}">Corregir y reenviar</button></div>` : ''}
+    ${rechazado && puedeTocar(c) ? `<div class="cd-act"><button class="btn gold grow" data-act="editar" data-id="${c.id}">Corregir y reenviar</button></div>` : ''}
     </div>
   </div>`;
 }
@@ -585,6 +726,99 @@ function dlgMotivo(titulo, act, id, btnClass = 'bad', btnTxt = 'Confirmar') {
     <div class="row" style="margin-top:14px"><button class="btn ${btnClass} grow" data-act="${act}" data-id="${id}">${btnTxt}</button><button class="btn ghost" data-act="close">Volver</button></div>`);
 }
 
+
+/* ===================== VISTA: REPORTES ===================== */
+async function fetchAll(mk) {
+  let all = [], from = 0;
+  for (;;) { const { data, error } = await mk().range(from, from + 999); if (error) throw error; all = all.concat(data || []); if (!data || data.length < 1000) break; from += 1000; }
+  return all;
+}
+const MES3 = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+const isoD = d => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+const diaD = iso => new Date(String(iso).slice(0, 10) + 'T12:00:00');
+const dm = d => `${String(d.getDate()).padStart(2, '0')} ${MES3[d.getMonth()]}`;
+function rangoPeriodo(per) {
+  const h = new Date(); h.setHours(12, 0, 0, 0);
+  if (per === 'mes_ant') { const a = new Date(h.getFullYear(), h.getMonth() - 1, 1, 12), b = new Date(h.getFullYear(), h.getMonth(), 0, 12); return [isoD(a), isoD(b), 'mes anterior']; }
+  if (per === '90') return [isoD(new Date(h.getTime() - 89 * 86400000)), isoD(h), 'últimos 90 días'];
+  if (per === 'anio') return [`${h.getFullYear()}-01-01`, isoD(h), `año ${h.getFullYear()}`];
+  return [isoD(new Date(h.getFullYear(), h.getMonth(), 1, 12)), isoD(h), 'mes en curso'];
+}
+/* Barras horizontales: una sola serie, valor escrito en cada fila (sin depender del color) */
+function barrasHtml(items, nota) {
+  const mx = Math.max(1, ...items.map(i => i.v));
+  if (!items.length) return '<div class="mut sm">Sin datos en este periodo.</div>';
+  return `<div class="bars">${items.map(i => `<div class="brow" title="${esc(i.l)}: ${fmt(i.v / 100)}${i.n ? ' · ' + i.n : ''}"><div class="bhead"><span class="bl">${esc(i.l)}${i.n ? ` <span class="bn">· ${esc(i.n)}</span>` : ''}</span><span class="bv money">${fmt(i.v / 100)}</span></div><div class="bt"><i style="width:${Math.max(1.5, i.v / mx * 100).toFixed(1)}%"></i></div></div>`).join('')}</div>${nota ? `<div class="mut sm" style="margin-top:8px">${nota}</div>` : ''}`;
+}
+async function viewRep() {
+  const per = S.repPer || 'mes';
+  $('#view').innerHTML = `<div class="pagehead"><h2>Reportes</h2><span class="sub">Cheques autorizados, por cobrar y pendientes por completar</span></div>
+    <div class="card" style="padding:11px"><div class="filters"><select id="repPer" aria-label="Periodo">${[['mes', 'Mes en curso'], ['mes_ant', 'Mes anterior'], ['90', 'Últimos 90 días'], ['anio', 'Este año']].map(([v, t]) => `<option value="${v}" ${per === v ? 'selected' : ''}>${t}</option>`).join('')}</select></div></div>
+    <div id="repBody"><div class="sk"></div><div class="sk"></div><div class="sk"></div></div>`;
+  $('#repPer').onchange = e => { S.repPer = e.target.value; viewRep(); };
+  try {
+    const [d0, d1, nomPer] = rangoPeriodo(per);
+    const hoy = diaD(isoD(new Date()));
+    const hace84 = isoD(new Date(hoy.getTime() - 84 * 86400000));
+    const desde = d0 < hace84 ? d0 : hace84;
+    const [aut, porCob, pend] = await Promise.all([
+      fetchAll(() => sb.from('cheques').select('id,numero_cheque,chequera_id,fecha,beneficiario,monto,estatus,cheque_folios(cargo_id,monto,activo)').eq('estatus', 'autorizado').gte('fecha', desde).order('fecha', { ascending: false })),
+      fetchAll(() => sb.from('cheques').select('id,numero_cheque,chequera_id,fecha,beneficiario,monto').eq('estatus', 'autorizado').eq('es_historial', false).eq('cobrado', false).order('fecha', { ascending: true })),
+      fetchAll(() => sb.from('cheques').select('id,numero_cheque,fecha,beneficiario,monto,estatus,sin_foto_motivo,sin_factura_motivo,archivos(tipo,activo)').eq('es_historial', false).in('estatus', ['pendiente', 'autorizado']).gte('fecha', isoD(new Date(hoy.getTime() - 90 * 86400000))).order('fecha', { ascending: true }))]);
+    const enPer = aut.filter(c => c.fecha >= d0 && c.fecha <= d1 && cents(c.monto) > 0);
+    const tot = enPer.reduce((a, c) => a + cents(c.monto), 0);
+    // por semana (lunes a domingo), últimas 12
+    const lunes = iso => { const d = diaD(iso); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return d; };
+    const semanas = []; const l0 = lunes(isoD(hoy));
+    for (let i = 11; i >= 0; i--) { const d = new Date(l0.getTime() - i * 7 * 86400000); d.setHours(12); semanas.push({ k: isoD(d), d, v: 0, n: 0 }); }
+    aut.forEach(c => { if (cents(c.monto) <= 0) return; const k = isoD(lunes(c.fecha)); const w = semanas.find(x => x.k === k); if (w) { w.v += cents(c.monto); w.n++; } });
+    const wItems = semanas.map(w => ({ l: `${dm(w.d)} – ${dm(new Date(w.d.getTime() + 6 * 86400000))}`, v: w.v, n: w.n ? `${w.n} cheque${w.n === 1 ? '' : 's'}` : '' }));
+    // por cargo
+    const pc = new Map();
+    enPer.forEach(c => (c.cheque_folios || []).filter(f => f.activo).forEach(f => pc.set(f.cargo_id, (pc.get(f.cargo_id) || 0) + cents(f.monto))));
+    const cargoArr = [...pc.entries()].map(([k, v]) => ({ l: cargoNombre(k), v })).sort((a, b) => b.v - a.v);
+    const cargoTop = cargoArr.slice(0, 8); const otrosC = cargoArr.slice(8).reduce((a, x) => a + x.v, 0); if (otrosC) cargoTop.push({ l: 'Otros cargos', v: otrosC });
+    // por beneficiario
+    const pb = new Map();
+    enPer.forEach(c => { const k = String(c.beneficiario || '').trim().toUpperCase(); const o = pb.get(k) || { v: 0, n: 0 }; o.v += cents(c.monto); o.n++; pb.set(k, o); });
+    const benArr = [...pb.entries()].map(([k, o]) => ({ l: k, v: o.v, n: `${o.n} cheque${o.n === 1 ? '' : 's'}` })).sort((a, b) => b.v - a.v).slice(0, 8);
+    // por cobrar (antigüedad)
+    const edad = c => Math.max(0, Math.round((hoy - diaD(c.fecha)) / 86400000));
+    const bk = [['0 a 30 días', 0, 30], ['31 a 60 días', 31, 60], ['61 a 90 días', 61, 90], ['Más de 90 días', 91, 99999]].map(([l, a, b]) => {
+      const xs = porCob.filter(c => edad(c) >= a && edad(c) <= b); return { l, v: xs.reduce((s2, c) => s2 + cents(c.monto), 0), n: `${xs.length} cheque${xs.length === 1 ? '' : 's'}` };
+    });
+    const totCob = porCob.reduce((a, c) => a + cents(c.monto), 0);
+    const viejos = porCob.filter(c => edad(c) > 30).slice(0, 6);
+    // pendientes por completar
+    const incompletos = pend.map(c => {
+      const arch = (c.archivos || []).filter(a => a.activo);
+      const f = [];
+      if (!arch.some(a => a.tipo === 'foto_cheque') && !c.sin_foto_motivo) f.push('Falta foto');
+      if (!arch.some(a => a.tipo === 'factura') && !c.sin_factura_motivo) f.push('Falta factura');
+      return { c, f, dias: edad(c) };
+    }).filter(x => x.f.length);
+    const nFoto = incompletos.filter(x => x.f.includes('Falta foto')).length, nFac = incompletos.filter(x => x.f.includes('Falta factura')).length;
+    $('#repBody').innerHTML = `
+      <div class="kpis">
+        <div class="kpi"><div class="mut sm">Autorizado · ${nomPer}</div><div class="money big">${fmt(tot / 100)}</div></div>
+        <div class="kpi"><div class="mut sm">Cheques</div><div class="big">${enPer.length}</div></div>
+        <div class="kpi"><div class="mut sm">Promedio por cheque</div><div class="money big">${fmt(enPer.length ? tot / enPer.length / 100 : 0)}</div></div>
+        <div class="kpi"><div class="mut sm">Por cobrar hoy</div><div class="money big">${fmt(totCob / 100)}</div><div class="mut sm">${porCob.length} cheque${porCob.length === 1 ? '' : 's'}</div></div>
+      </div>
+      <div class="repgrid">
+        <div class="card"><h3 class="rh">Gasto por semana</h3>${barrasHtml(wItems, 'Cheques autorizados, de lunes a domingo, últimas 12 semanas.')}</div>
+        <div class="card"><h3 class="rh">Por cargo · ${nomPer}</h3>${barrasHtml(cargoTop, 'Suma de los folios de cada cargo en los cheques autorizados.')}</div>
+        <div class="card"><h3 class="rh">Principales beneficiarios · ${nomPer}</h3>${barrasHtml(benArr)}</div>
+        <div class="card"><h3 class="rh">Cheques por cobrar, por antigüedad</h3>${barrasHtml(bk)}
+          ${viejos.length ? `<div class="rsub">Los más antiguos (más de 30 días)</div>${viejos.map(c => `<div class="rrow"><button class="lnk" data-act="detalle" data-id="${c.id}">Cheque ${c.numero_cheque} · ${esc(c.beneficiario)}</button><span class="mut sm">${edad(c)} días · ${fmt(c.monto)}</span></div>`).join('')}` : ''}</div>
+        <div class="card wide"><h3 class="rh">Pendientes por completar</h3>
+          <div class="mut sm" style="margin-bottom:8px">${incompletos.length ? `${nFoto} sin foto del cheque · ${nFac} sin factura (cheques de los últimos 90 días, pendientes o autorizados)` : 'Todo completo. No falta ninguna foto ni factura.'}</div>
+          ${incompletos.slice(0, 15).map(x => `<div class="rrow"><button class="lnk" data-act="detalle" data-id="${x.c.id}">Cheque ${x.c.numero_cheque} · ${esc(x.c.beneficiario)}</button><span class="rtags">${x.f.map(t => `<span class="chip warn">${t}</span>`).join('')}<span class="mut sm">${x.dias} día${x.dias === 1 ? '' : 's'}</span></span></div>`).join('')}
+          ${incompletos.length > 15 ? `<div class="mut sm" style="margin-top:6px">Y ${incompletos.length - 15} más.</div>` : ''}</div>
+      </div>`;
+  } catch (e) { $('#repBody').innerHTML = `<div class="warnbox">${esc(errMsg(e))}</div>`; }
+}
+
 /* ===================== VISTA: LISTA DE CHEQUES ===================== */
 async function cargarMeses() {
   if (!S.mesesCache || Date.now() - S.mesesCache.t > 60000) {
@@ -608,7 +842,7 @@ function viewCheques() {
     <select id="fch" aria-label="Chequera"><option value="">Todas las chequeras</option>${S.chequeras.map(c => `<option value="${c.id}" ${String(f.chequera) === String(c.id) ? 'selected' : ''}>${esc(c.nombre)}</option>`).join('')}</select>
     <select id="fmes" aria-label="Mes"><option value="">Todos los meses</option></select>
   </div></div>
-  <div class="row" style="margin-bottom:12px"><button class="btn ghost sm" data-act="huecos">Huecos de numeración</button>${puedeCapturar() ? '<button class="btn ghost sm" data-act="cancelado">Registrar cancelado</button>' : ''}</div><div id="resumen"></div><div id="lst" class="spin">Cargando…</div><div id="more" class="r"></div>`;
+  <div class="row" style="margin-bottom:12px"><button class="btn ghost sm" data-act="huecos">Huecos de numeración</button>${puedeOperar() ? '<button class="btn ghost sm" data-act="cancelado">Registrar cancelado</button>' : ''}</div><div id="resumen"></div><div id="lst" class="spin">Cargando…</div><div id="more" class="r"></div>`;
   let t; $('#fq').oninput = e => { clearTimeout(t); t = setTimeout(() => { f.q = e.target.value.trim(); loadList(true); }, 350); };
   $('#fch').onchange = async e => { f.chequera = e.target.value; await cargarMeses(); loadList(true); };
   $('#fmes').onchange = e => { f.mes = e.target.value; loadList(true); };
@@ -656,11 +890,17 @@ function rowCheque(c) {
 }
 
 /* ===================== DETALLE ===================== */
+/* Comentarios por cheque */
+async function cargaComs(id) {
+  try { const { data } = await sb.from('cheque_comentarios').select('*').eq('cheque_id', id).order('creado_en', { ascending: true }); return data || []; } catch (e) { return []; }
+}
+const comsHtml = l => l.length ? l.map(m => `<div class="cmt"><b>${esc(m.autor_nombre)}</b> <span class="mut sm">${fdt(m.creado_en)}</span><div>${esc(m.texto)}</div></div>`).join('') : '<div class="mut sm">Sin comentarios. Úsalo para dejar una nota o duda sobre este cheque.</div>';
 async function openDetail(id) {
   openModal('<div class="spin">Cargando…</div>');
   try {
     const c = await loadCheque(id);
     const { data: bit } = await sb.from('bitacora').select('*').eq('cheque_id', id).order('creado_en', { ascending: true });
+    const coms = await cargaComs(id);
     const fol = foliosActivos(c); const cuadra = sumFolios(c) === cents(c.monto);
     const arch = archActivos(c);
     const tipoTxt = { factura: 'Factura', folio: 'Folio', comprobante_cobro: 'Ticket / ficha de depósito', foto_cheque: 'Foto del cheque', otro: 'Otro' };
@@ -669,11 +909,11 @@ async function openDetail(id) {
     if (!hist) {
       const sinFoto = !c.es_historial && c.estatus !== 'cancelado' && !archActivos(c, 'foto_cheque').length && !c.sin_foto_motivo;
       if (esAdmin() && c.estatus === 'pendiente') acciones += `<button class="btn ok" data-act="autorizar" data-id="${id}" ${sinFoto ? 'disabled title="Falta la foto del cheque"' : ''}>Autorizar</button><button class="btn bad" data-act="rechazar" data-id="${id}">Rechazar</button>`;
-      if (puedeCapturar() && ['pendiente', 'rechazado'].includes(c.estatus)) acciones += `<button class="btn gold" data-act="editar" data-id="${id}">Editar</button>`;
+      if (puedeTocar(c) && ['pendiente', 'rechazado'].includes(c.estatus)) acciones += `<button class="btn gold" data-act="editar" data-id="${id}">Editar</button>`;
       if (c.estatus === 'autorizado' && !c.cobrado && ['administrador', 'capturista', 'contador'].includes(rol())) acciones += `<button class="btn" data-act="cobrar" data-id="${id}">Marcar cobrado</button>`;
       if (esAdmin() && c.cobrado) acciones += `<button class="btn ghost" data-act="descobrar" data-id="${id}">Desmarcar cobro</button>`;
       const mismoDia = c.creado_en && new Date(c.creado_en).toLocaleDateString('en-CA', { timeZone: 'America/Monterrey' }) === new Date().toLocaleDateString('en-CA', { timeZone: 'America/Monterrey' });
-      if ((esAdmin() || (puedeCapturar() && mismoDia)) && !c.cobrado && c.estatus !== 'cancelado') acciones += `<button class="btn ghost" data-act="cancelar" data-id="${id}">Cancelar cheque</button>`;
+      if ((esAdmin() || (puedeOperar() && mismoDia)) && !c.cobrado && c.estatus !== 'cancelado') acciones += `<button class="btn ghost" data-act="cancelar" data-id="${id}">Cancelar cheque</button>`;
       acciones += `<button class="btn ghost" data-act="poliza" data-id="${id}">Ver póliza</button>`;
     }
     const puedeSubir = !hist && (c.estatus !== 'cancelado' || puedeCapturar());
@@ -707,9 +947,11 @@ async function openDetail(id) {
           ${c.estatus !== 'cancelado' && !archActivos(c, 'comprobante_cobro').length ? `<button class="btn ghost sm" data-act="subir" data-id="${id}" data-tipo="comprobante_cobro">+ Ticket / ficha de depósito</button>` : ''}
           <button class="btn ghost sm" data-act="subir" data-id="${id}" data-tipo="otro">${c.estatus === 'cancelado' ? '+ Foto del cheque cancelado' : '+ Otro'}</button></div>`
           : (!hist && puedeCapturar() ? '<div class="mut sm" style="margin-top:8px">Para agregar, reemplazar o quitar documentos de un cheque ya capturado, avisa a Pedro o al Ing.</div>' : '')}
-        ${!hist && puedeCapturar() && c.estatus === 'pendiente' && !archActivos(c, 'foto_cheque').length ? `<div class="row" style="margin-top:8px">${c.sin_foto_motivo ? `<button class="btn ghost sm" data-act="quitarsf" data-id="${id}">Quitar marca "sin foto"</button>` : `<button class="btn ghost sm" data-act="sinfoto" data-id="${id}">No hay foto</button>`}</div>` : ''}
+        ${!hist && puedeTocar(c) && c.estatus === 'pendiente' && !archActivos(c, 'foto_cheque').length ? `<div class="row" style="margin-top:8px">${c.sin_foto_motivo ? `<button class="btn ghost sm" data-act="quitarsf" data-id="${id}">Quitar marca "sin foto"</button>` : `<button class="btn ghost sm" data-act="sinfoto" data-id="${id}">No hay foto</button>`}</div>` : ''}
       </div>
       ${acciones ? `<div class="row" style="margin:12px 0">${acciones}</div>` : ''}
+      <h3>Comentarios</h3><div class="card" id="cmtBox"><div id="cmtList">${comsHtml(coms)}</div>
+        <div class="row" style="margin-top:10px"><input type="text" id="cmtTxt" maxlength="1000" placeholder="Escribe un comentario…" autocomplete="off" style="flex:1"><button class="btn gold sm" data-act="comentar" data-id="${id}">Enviar</button></div></div>
       <h3>Bitácora</h3><div>${(bit || []).map(b => `<div class="log"><b>${esc(b.accion.replace(/_/g, ' '))}</b> · ${esc(b.usuario_nombre || '')}<br><span class="mut">${fdt(b.creado_en)}</span></div>`).join('') || '<span class="mut">Sin movimientos</span>'}</div>
     `);
   } catch (e) { openModal(`<div class="warnbox">${esc(errMsg(e))}</div>`); }
@@ -761,6 +1003,87 @@ function loadImg(file, maxDim = 1800) {
     im.onerror = () => rej(new Error('No se pudo leer la imagen.')); im.src = url;
   });
 }
+/* ---- Recorte asistido de la foto del cheque ----
+   Sugiere el cuadro buscando los bordes largos del papel; la persona lo ajusta con las esquinas y puede girar. */
+function sugiereCaja(cv) {
+  const k = 400 / Math.max(cv.width, cv.height), w = Math.max(16, Math.round(cv.width * k)), h = Math.max(16, Math.round(cv.height * k));
+  const sm = document.createElement('canvas'); sm.width = w; sm.height = h; const cx = sm.getContext('2d', { willReadFrequently: true }); cx.drawImage(cv, 0, 0, w, h);
+  const px = cx.getImageData(0, 0, w, h).data; let g = new Float32Array(w * h);
+  for (let i = 0; i < w * h; i++) g[i] = 0.299 * px[i * 4] + 0.587 * px[i * 4 + 1] + 0.114 * px[i * 4 + 2];
+  const bl = new Float32Array(w * h);   // desenfoque 3x3
+  for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) { let a = 0; for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) a += g[(y + dy) * w + x + dx]; bl[y * w + x] = a / 9; }
+  g = bl; const hist = new Uint32Array(600); let n = 0;
+  for (let y = 1; y < h - 2; y++) for (let x = 1; x < w - 2; x++) { const i = y * w + x; hist[Math.min(599, Math.round(Math.hypot(g[i + 1] - g[i], g[i + w] - g[i])))]++; n++; }
+  let acc = 0, p93 = 25; for (let v = 0; v < 600; v++) { acc += hist[v]; if (acc >= n * 0.93) { p93 = v; break; } }
+  const T = Math.max(p93, 25), hx = new Float32Array(w), hy = new Float32Array(h);
+  for (let y = 1; y < h - 2; y++) for (let x = 1; x < w - 2; x++) { const i = y * w + x; if (Math.abs(g[i + 1] - g[i]) > T) hx[x]++; if (Math.abs(g[i + w] - g[i]) > T) hy[y]++; }
+  const span = (hh, len) => { const sm5 = new Float32Array(len); let mx = 0; for (let i = 0; i < len; i++) { let a = 0; for (let d = -2; d <= 2; d++) a += hh[Math.min(len - 1, Math.max(0, i + d))]; sm5[i] = a; if (a > mx) mx = a; } if (!mx) return null; let lo = -1, hi = -1; for (let i = 0; i < len; i++) if (sm5[i] >= 0.45 * mx) { if (lo < 0) lo = i; hi = i; } return [lo, hi + 1]; };
+  const sx = span(hx, w), sy = span(hy, h); if (!sx || !sy) return null;
+  const bw = sx[1] - sx[0], bh = sy[1] - sy[0]; if (bw < 10 || bh < 10) return null;
+  const asp = Math.max(bw, bh) / Math.min(bw, bh), fr = (bw * bh) / (w * h);
+  if (asp < 1.8 || asp > 3.8 || fr < 0.12 || fr > 0.92) return null;
+  const m = 0.006; return { x0: Math.max(0, sx[0] / w - m), y0: Math.max(0, sy[0] / h - m), x1: Math.min(1, sx[1] / w + m), y1: Math.min(1, sy[1] / h + m) };
+}
+function cargaCanvas(file, maxDim = 2600) {
+  return new Promise((res, rej) => {
+    const url = URL.createObjectURL(file), im = new Image();
+    im.onload = () => { const k = Math.min(1, maxDim / Math.max(im.width, im.height)), cv = document.createElement('canvas'); cv.width = Math.round(im.width * k); cv.height = Math.round(im.height * k); cv.getContext('2d').drawImage(im, 0, 0, cv.width, cv.height); URL.revokeObjectURL(url); res(cv); };
+    im.onerror = () => { URL.revokeObjectURL(url); rej(new Error('No se pudo leer la imagen.')); }; im.src = url;
+  });
+}
+function giraCanvas(cv, cw) {
+  const o = document.createElement('canvas'); o.width = cv.height; o.height = cv.width; const c = o.getContext('2d');
+  if (cw) { c.translate(o.width, 0); c.rotate(Math.PI / 2); } else { c.translate(0, o.height); c.rotate(-Math.PI / 2); }
+  c.drawImage(cv, 0, 0); return o;
+}
+function ajustarFoto(file) {
+  return new Promise(async res => {
+    let cv; try { cv = await cargaCanvas(file); } catch (e) { return res(file); }
+    let girado = false, dw = 0, dh = 0, B = null;
+    const ov = document.createElement('div'); ov.className = 'overlay'; ov.style.zIndex = 75;
+    ov.innerHTML = `<div class="sheet"><h2 style="margin-top:0">Recorta el cheque</h2>
+      <div class="mut sm">Arrastra las esquinas para dejar solo el cheque. Si está de lado, gíralo.</div>
+      <div id="crWrap" class="crwrap"><canvas id="crCv"></canvas><div id="crBox" class="crbox"><i data-h="nw"></i><i data-h="ne"></i><i data-h="sw"></i><i data-h="se"></i></div></div>
+      <div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn ghost sm" id="crL">↺ Girar</button><button class="btn ghost sm" id="crR">↻ Girar</button><button class="btn ghost sm" id="crAuto">Sugerir recorte</button></div>
+      <div class="row" style="margin-top:14px"><button class="btn ok grow" id="crOk">Usar recorte</button><button class="btn ghost" id="crFull">Foto completa</button></div></div>`;
+    document.body.appendChild(ov);
+    const wrap = ov.querySelector('#crWrap'), cnv = ov.querySelector('#crCv'), box = ov.querySelector('#crBox');
+    const pinta = () => { box.style.left = B.x0 + 'px'; box.style.top = B.y0 + 'px'; box.style.width = (B.x1 - B.x0) + 'px'; box.style.height = (B.y1 - B.y0) + 'px'; };
+    const sugiere = () => { const s = sugiereCaja(cv) || { x0: 0.05, y0: 0.05, x1: 0.95, y1: 0.95 }; B = { x0: s.x0 * dw, y0: s.y0 * dh, x1: s.x1 * dw, y1: s.y1 * dh }; pinta(); };
+    const layout = () => {
+      const maxW = Math.min(ov.querySelector('.sheet').clientWidth - 32, 720), maxH = Math.max(220, window.innerHeight * 0.52), k = Math.min(maxW / cv.width, maxH / cv.height);
+      dw = Math.round(cv.width * k); dh = Math.round(cv.height * k); cnv.width = dw; cnv.height = dh; cnv.getContext('2d').drawImage(cv, 0, 0, dw, dh); wrap.style.width = dw + 'px'; wrap.style.height = dh + 'px'; sugiere();
+    };
+    layout();
+    const MIN = 40; let drag = null;
+    wrap.addEventListener('pointerdown', ev => {
+      const t = ev.target; const h = t.dataset && t.dataset.h; if (!h && t !== box) return;
+      const r = wrap.getBoundingClientRect(); drag = { h, sx: ev.clientX, sy: ev.clientY, B: { ...B }, r }; wrap.setPointerCapture(ev.pointerId); ev.preventDefault();
+    });
+    wrap.addEventListener('pointermove', ev => {
+      if (!drag) return; const dx = ev.clientX - drag.sx, dy = ev.clientY - drag.sy, o = drag.B, n = { ...o }, cl = (v, a, b) => Math.max(a, Math.min(b, v));
+      if (!drag.h) { const w0 = o.x1 - o.x0, h0 = o.y1 - o.y0; n.x0 = cl(o.x0 + dx, 0, dw - w0); n.y0 = cl(o.y0 + dy, 0, dh - h0); n.x1 = n.x0 + w0; n.y1 = n.y0 + h0; }
+      else { if (drag.h.includes('w')) n.x0 = cl(o.x0 + dx, 0, o.x1 - MIN); if (drag.h.includes('e')) n.x1 = cl(o.x1 + dx, o.x0 + MIN, dw); if (drag.h.includes('n')) n.y0 = cl(o.y0 + dy, 0, o.y1 - MIN); if (drag.h.includes('s')) n.y1 = cl(o.y1 + dy, o.y0 + MIN, dh); }
+      B = n; pinta();
+    });
+    const fin = () => { drag = null; }; wrap.addEventListener('pointerup', fin); wrap.addEventListener('pointercancel', fin);
+    const cierra = f => { ov.remove(); res(f); };
+    const nom = file.name.replace(/\.[a-z0-9]+$/i, '');
+    const salida = (c, suf) => new Promise(r2 => c.toBlob(b => r2(new File([b], nom + suf + '.jpg', { type: 'image/jpeg' })), 'image/jpeg', 0.9));
+    ov.querySelector('#crL').onclick = () => { cv = giraCanvas(cv, false); girado = true; layout(); };
+    ov.querySelector('#crR').onclick = () => { cv = giraCanvas(cv, true); girado = true; layout(); };
+    ov.querySelector('#crAuto').onclick = sugiere;
+    ov.querySelector('#crFull').onclick = async () => cierra(girado ? await salida(cv, '') : file);
+    ov.querySelector('#crOk').onclick = async () => {
+      const kx = cv.width / dw, ky = cv.height / dh, x = Math.round(B.x0 * kx), y = Math.round(B.y0 * ky), w = Math.round((B.x1 - B.x0) * kx), h = Math.round((B.y1 - B.y0) * ky);
+      const o = document.createElement('canvas'); o.width = w; o.height = h; o.getContext('2d').drawImage(cv, x, y, w, h, 0, 0, w, h); cierra(await salida(o, '-recorte'));
+    };
+  });
+}
+async function ajustarFotos(files) {
+  const out = []; for (const f of files) out.push(f.type && f.type.startsWith('image/') ? await ajustarFoto(f) : f); return out;
+}
+async function pickFuenteT(tipo) { const fs = await pickFuente(); return tipo === 'foto_cheque' && fs.length ? await ajustarFotos(fs) : fs; }
 async function filesToPdf(files) {
   if (files.length === 1 && files[0].type === 'application/pdf') return files[0];
   if (files.some(f => f.type === 'application/pdf')) throw new Error('No mezcles PDFs con fotos: sube el PDF solo.');
@@ -1197,7 +1520,7 @@ function pintaAlertas() {
   el.innerHTML = `<div>⚠ <b>${tot} cheque${tot > 1 ? 's' : ''} sin dar de alta:</b> ${hs.map(h => `${esc(h.q.nombre)} ${h.nums.map(x => x.n + (x.d ? ' (' + esc(x.d.motivo) + ')' : '')).join(', ')}`).join(' · ')}</div><span class="go">Ver ›</span>`;
 }
 function dlgHuecos() {
-  const hs = S.huecos || [], cap = puedeCapturar();
+  const hs = S.huecos || [], cap = puedeOperar();
   openModal(`<h2 style="margin-top:0">Cheques sin dar de alta</h2>` + (hs.length ? hs.map((r, i) => `<div class="card"><div class="b">${esc(r.q.nombre)}</div>
     ${r.nums.map(x => `<div class="warnbox"><b>${x.n}</b> — ${x.d ? 'DETENIDO: ' + esc(x.d.motivo) + `<div class="mut sm">Lo marcó ${esc(x.d.creado_por_nombre || '')} el ${fdate(x.d.creado_en)}</div>` : '<span class="mut">sin motivo registrado</span>'}</div>`).join('')}
     ${cap && r.nums.some(x => !x.d) ? `<label class="f">Motivo para los que no tienen</label><input type="text" id="mh_${r.q.id}" placeholder="Ej. DETENIDO POR FALTA DE FIRMA"><div class="row" style="margin-top:8px"><button class="btn gold sm" data-act="motivohuecos" data-q="${r.q.id}">Guardar motivo</button></div>` : ''}
@@ -1440,7 +1763,7 @@ async function viewSeries() {
   <div class="mut sm" style="margin-bottom:10px">Último folio usado en cada cargo. Cancún se asigna automático; los demás se sugieren y puedes cambiarlos (hay folios que se pagan en efectivo).</div>
   ${S.cargos.filter(c => !esSinCargo(c)).map(c => { const s = S.series[c.id] || { ultimo_numero: 0, modo: 'sugerida' }; return `<div class="card row">
     <div class="grow"><div class="b">${esc(c.nombre)}</div><div class="mut sm">${s.modo === 'automatica' ? 'Automático' : 'Sugerido'}</div></div>
-    ${puedeCapturar() ? `<input type="number" inputmode="numeric" style="width:110px" id="ser_${c.id}" value="${s.ultimo_numero}"><button class="btn sm" data-act="saveserie" data-id="${c.id}">Guardar</button>` : `<div class="money big">${s.ultimo_numero}</div>`}
+    ${puedeOperar() ? `<input type="number" inputmode="numeric" style="width:110px" id="ser_${c.id}" value="${s.ultimo_numero}"><button class="btn sm" data-act="saveserie" data-id="${c.id}">Guardar</button>` : `<div class="money big">${s.ultimo_numero}</div>`}
   </div>`; }).join('')}`;
 }
 
@@ -1503,7 +1826,6 @@ function menuCuenta() {
   openModal(`<h2 style="margin-top:0">Mi cuenta</h2><div class="card"><div class="b">${esc(S.perfil.nombre)}</div><div class="mut">${esc(S.perfil.correo)} · ${esc(rolTxt(S.perfil.rol))}</div></div>
   <h3>Cambiar contraseña</h3><label class="f">Nueva contraseña (mínimo 8 caracteres)</label>${pwField('np1', 'new-password')}<label class="f">Repítela</label>${pwField('np2', 'new-password')}
   <div class="row" style="margin-top:12px"><button class="btn" data-act="cambiarpass">Guardar contraseña</button><button class="btn ghost" data-act="salir">Cerrar sesión</button></div>
-  ${puedeArchivos() ? `<h3>Documentos</h3><button class="btn ghost" data-act="horiztodos">Pasar PDFs anchos a hoja horizontal</button>` : ''}
   <h3>Apariencia</h3><div class="tema">${[['auto', 'Automático'], ['light', 'Claro'], ['dark', 'Oscuro']].map(([v, t]) => `<button class="btn ghost sm ${temaPref() === v ? 'on' : ''}" data-act="tema" data-v="${v}">${t}</button>`).join('')}</div>
   <h3>Acumulado semanal</h3><a class="btn ghost" href="https://jocris-sistemas.github.io/Caja-Efectivo/" style="text-decoration:none">Ir a Acumulado semanal</a>
   <h3>Mi firma</h3><div class="mut sm" style="margin-bottom:6px">${S.firma ? 'Ya tienes una firma guardada.' : 'Aún no tienes firma guardada.'}</div><button class="btn ghost" data-act="firma">${S.firma ? 'Cambiar mi firma' : 'Agregar mi firma'}</button>
@@ -1560,7 +1882,13 @@ document.addEventListener('click', async ev => {
       case 'verarch': { const c = await loadCheque(id); const a = archActivos(c, el.dataset.tipo)[0]; if (a) abrirPath(a.path); break; }
       case 'verpath': { const dd = el.closest('details.dd'); if (dd) dd.removeAttribute('open'); abrirPath(el.dataset.path); break; }
       case 'autorizar': { const c = await loadCheque(id); dlgAutorizar(id, c); break; }
-      case 'okautorizar': { el.disabled = true; await rpc('autorizar_cheque', { p_id: id, p_comentario: $('#cmt').value }); closeModal(); toast('Cheque autorizado.', 'ok'); refreshView(); break; }
+      case 'okautorizar': { const cm = $('#cmt').value; closeModal(); diferir('Autorizando cheque…', async () => { await rpc('autorizar_cheque', { p_id: id, p_comentario: cm }); toast('Cheque autorizado.', 'ok'); refreshView(); }, [id]); break; }
+      case 'deshacer': deshacerDiferido(); break;
+      case 'comentar': { const inp = $('#cmtTxt'), t = (inp.value || '').trim(); if (!t) return toast('Escribe el comentario.', 'err'); el.disabled = true; try { await rpc('comentar_cheque', { p_cheque: id, p_texto: t }); inp.value = ''; $('#cmtList').innerHTML = comsHtml(await cargaComs(id)); } finally { el.disabled = false; } break; }
+      case 'selall': document.querySelectorAll('[data-sel]').forEach(i => i.checked = true); updateSel(); break;
+      case 'selquitar': document.querySelectorAll('[data-sel]').forEach(i => i.checked = false); updateSel(); break;
+      case 'autsel': dlgAutSel(); break;
+      case 'okautsel': { const ids = S.selIds || [], cm = $('#cmt').value; closeModal(); diferir(`Autorizando ${ids.length} cheque${ids.length === 1 ? '' : 's'}…`, () => autorizarLote(ids, cm), ids); updateSel(); break; }
       case 'sinfoto': dlgMotivo('Cheque sin foto', 'oksinfoto', id, 'gold', 'Marcar sin foto'); break;
       case 'oksinfoto': { const m = $('#mot').value.trim(); if (m.length < 5) return toast('Escribe el motivo (por qué no hay foto).', 'err'); await rpc('marcar_sin_foto', { p_id: id, p_motivo: m }); closeModal(); toast('Marcado sin foto; el Ing. ya puede autorizarlo.', 'ok'); refreshView(true); break; }
       case 'quitarsf': { await rpc('quitar_sin_foto', { p_id: id }); toast('Marca quitada.', 'ok'); openDetail(id); refreshView(true); break; }
@@ -1577,11 +1905,11 @@ document.addEventListener('click', async ev => {
       case 'subir': {
         const c = await loadCheque(id); const hay = archActivos(c, el.dataset.tipo).length > 0;
         if (hay) { dlgMotivoArch('Agregar documento', 'oksubir', id, { tipo: el.dataset.tipo }, 'Elegir archivo…'); break; }
-        const files = await pickFuente(); if (!files.length) break; toast('Subiendo…');
+        const files = await pickFuenteT(el.dataset.tipo); if (!files.length) break; toast('Subiendo…');
         await subirArchivo(id, el.dataset.tipo, files, null, { agregar: true }); toast('Documento guardado.', 'ok'); openDetail(id); refreshView(true); break; }
       case 'oksubir': {
         const m = ($('#mot').value || '').trim(); if (m.length < 5) return toast('Escribe el motivo (mín. 5 letras).', 'err');
-        const files = await pickFuente(); if (!files.length) break; toast('Subiendo…');
+        const files = await pickFuenteT(el.dataset.tipo); if (!files.length) break; toast('Subiendo…');
         await subirArchivo(id, el.dataset.tipo, files, null, { agregar: true, motivo: m }); toast('Documento guardado.', 'ok'); openDetail(id); refreshView(true); break; }
       case 'reemplazar': dlgMotivoArch('Reemplazar documento', 'okreemplazar', el.dataset.id, { cheque: el.dataset.cheque }, 'Elegir el archivo nuevo…'); break;
       case 'okreemplazar': {
@@ -1626,7 +1954,7 @@ document.addEventListener('click', async ev => {
         if (sc) { if (l.modo === 'sinfolio' && !l.cargo_id) l.cargo_id = sc.id; else if (l.modo !== 'sinfolio' && Number(l.cargo_id) === sc.id) l.cargo_id = ''; }
         renderLines(); break;
       }
-      case 'pickcheque': { const fs = await pickFuente(); if (fs.length) { S.F.chequeFiles = S.F.chequeFiles.concat(fs); } $('#chqInfo').textContent = S.F.chequeFiles.length ? S.F.chequeFiles.length + ' foto(s) lista(s) para subir' : 'Sin foto'; break; }
+      case 'pickcheque': { const fs = await pickFuenteT('foto_cheque'); if (fs.length) { S.F.chequeFiles = S.F.chequeFiles.concat(fs); } $('#chqInfo').textContent = S.F.chequeFiles.length ? S.F.chequeFiles.length + ' foto(s) lista(s) para subir' : 'Sin foto'; break; }
       case 'pickfolio': { const fs = await pickFuente(); S.F.folioFiles = fs; $('#folInfo').textContent = fs.length ? fs.length + ' archivo(s) listo(s) para subir' : 'Sin adjuntar'; break; }
       case 'dlfolio': { const hj = (S.hojas || [])[Number(el.dataset.i)]; if (hj) bajarBlob(hj.blob || hj.doc.output('blob'), hj.nombre); break; }
       case 'firma': dlgFirma(); break;
