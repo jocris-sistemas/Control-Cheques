@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="Cheques">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Control de Cheques · Jocris</title>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
 :root{
@@ -335,6 +335,7 @@ function aplicaTema() {
 }
 aplicaTema();
 try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', aplicaTema); } catch (e) { }
+if (!window.supabase) { document.addEventListener('DOMContentLoaded', () => { const a = document.getElementById('app'); if (a) a.innerHTML = '<div class="login"><div class="box"><div class="warnbox">No hay conexión a internet. Conéctate y vuelve a abrir la app.</div><button class="btn gold" onclick="location.reload()">Reintentar</button></div></div>'; }); throw new Error('Sin conexión: no cargó supabase-js'); }
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, autoRefreshToken: true } });
 
 /* ===================== ESTADO ===================== */
@@ -382,6 +383,7 @@ async function flushDiferido() {
 function deshacerDiferido() {
   const d = S.dif; if (!d) return; clearTimeout(d.t); S.dif = null; $('#undo').classList.add('hidden');
   d.ids.forEach(i => document.getElementById('cp-' + i)?.classList.remove('saliendo'));
+  if (d.ids.length > 1) { d.ids.forEach(i => { const cb = document.querySelector(`[data-sel="${i}"]`); if (cb) cb.checked = true; }); updateSel(); }
   toast('Listo, no se autorizó.');
 }
 document.addEventListener('visibilitychange', () => { if (document.hidden) flushDiferido(); });
@@ -482,6 +484,7 @@ const EYE = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke=
 const EYE_OFF = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
 const pwField = (id, ac) => `<div class="pw"><input type="password" id="${id}" autocomplete="${ac}" autocapitalize="off" autocorrect="off" spellcheck="false" data-nocaps required><button type="button" class="eye" data-act="verpass" data-for="${id}" aria-label="Mostrar u ocultar contraseña" title="Mostrar / ocultar">${EYE}</button></div>`;
 function renderLogin(msg = '') {
+  try { closeModal(); } catch (e) { } ['#selbar', '#undo'].forEach(x => { const e = $(x); if (e) e.classList.add('hidden'); });
   $('#app').innerHTML = `
   <div class="login">
     <div class="logo"><b>JOCRIS</b><span>Control de Cheques</span></div>
@@ -513,7 +516,8 @@ function renderLogin(msg = '') {
 async function boot() {
   const { data: { session } } = await sb.auth.getSession();
   if (!session) return renderLogin();
-  const { data: p } = await sb.from('perfiles').select('*').eq('id', session.user.id).maybeSingle();
+  const { data: p, error: pe } = await sb.from('perfiles').select('*').eq('id', session.user.id).maybeSingle();
+  if (pe) { $('#app').innerHTML = `<div class="login"><div class="logo"><b>JOCRIS</b><span>Control de Cheques</span></div><div class="box"><div class="warnbox">No hay conexión con el servidor. Revisa tu internet.</div><button class="btn gold grow" id="btnRetry">Reintentar</button></div></div>`; $('#btnRetry').onclick = () => { $('#app').innerHTML = '<div class="spin">Cargando…</div>'; boot().catch(() => boot()); }; return; }
   if (!p || !p.activo) { await sb.auth.signOut(); return renderLogin('Tu usuario no está activo en el sistema. Avísale a Pedro.'); }
   S.perfil = p;
   $('#app').innerHTML = '<div class="spin">Cargando…</div>';
@@ -573,10 +577,12 @@ const SEL = '*, cheque_folios(id,cargo_id,folio_numero,proveedor,descripcion,obr
 async function viewPend() {
   $('#view').innerHTML = `<div class="pagehead"><h2>${esAdmin() ? 'Por autorizar' : 'Pendientes'}</h2><span class="sub">${esAdmin() ? 'Cheques en espera de tu autorización' : 'Cheques en espera de autorización'}</span></div><div id="pendList"><div class="sk"></div><div class="sk"></div></div>`;
   const { data, error } = await sb.from('cheques').select(SEL).eq('estatus', 'pendiente').eq('es_historial', false).order('creado_en', { ascending: true });
+  if (S.tab !== 'pend' || !$('#pendList')) return;
   if (error) return $('#pendList').innerHTML = `<div class="warnbox">${esc(errMsg(error))}</div>`;
   const canc = (await sb.from('cheques').select(SEL).eq('estatus', 'cancelado').eq('es_historial', false).is('cancelacion_enterada_en', null).order('actualizado_en', { ascending: true })).data || [];
   S.pendCount = data.length + canc.length; refreshPendCount();
   S.avisos = await calcAvisos(data);
+  if (S.tab !== 'pend' || !$('#pendList')) return;
   S.pendMap = new Map(data.map(c => [c.id, c])); const bar0 = $('#selbar'); if (bar0) bar0.classList.add('hidden');
   const rech = (await sb.from('cheques').select(SEL).eq('estatus', 'rechazado').eq('es_historial', false).order('actualizado_en', { ascending: false }).limit(20)).data || [];
   let html = '';
@@ -734,7 +740,7 @@ function dlgMotivo(titulo, act, id, btnClass = 'bad', btnTxt = 'Confirmar') {
 /* ===================== VISTA: REPORTES ===================== */
 async function fetchAll(mk) {
   let all = [], from = 0;
-  for (;;) { const { data, error } = await mk().range(from, from + 999); if (error) throw error; all = all.concat(data || []); if (!data || data.length < 1000) break; from += 1000; }
+  for (;;) { const { data, error } = await mk().order('id').range(from, from + 999); if (error) throw error; all = all.concat(data || []); if (!data || data.length < 1000) break; from += 1000; }
   return all;
 }
 const MES3 = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
@@ -802,6 +808,7 @@ async function viewRep() {
       return { c, f, dias: edad(c) };
     }).filter(x => x.f.length);
     const nFoto = incompletos.filter(x => x.f.includes('Falta foto')).length, nFac = incompletos.filter(x => x.f.includes('Falta factura')).length;
+    if (S.tab !== 'rep' || !$('#repBody')) return;
     $('#repBody').innerHTML = `
       <div class="kpis">
         <div class="kpi"><div class="mut sm">Autorizado · ${nomPer}</div><div class="money big">${fmt(tot / 100)}</div></div>
@@ -851,6 +858,7 @@ function viewCheques() {
   loadList(true);
 }
 async function loadList(reset) {
+  const tok = S.listTok = (S.listTok || 0) + 1; const mb = $('#more button'); if (mb) mb.disabled = true;
   const f = S.filt; if (reset) { S.page = 0; S.list = []; $('#lst').innerHTML = '<div class="sk s"></div><div class="sk s"></div><div class="sk s"></div>'; }
   let q = sb.from('cheques').select(SEL, { count: 'exact' });
   if (f.chequera) q = q.eq('chequera_id', Number(f.chequera));
@@ -866,12 +874,14 @@ async function loadList(reset) {
   // Siempre por número de cheque, del más alto al más bajo (sin importar estatus ni fecha).
   q = q.order('numero_cheque', { ascending: false }).order('fecha', { ascending: false }).order('creado_en', { ascending: false }).range(S.page * PAGE, S.page * PAGE + PAGE - 1);
   const { data, error, count } = await q;
+  if (tok !== S.listTok || !$('#lst')) return;
   if (error) { $('#lst').innerHTML = `<div class="warnbox">${esc(errMsg(error))}</div>`; return; }
   S.count = count; S.list = S.list.concat(data); S.page++;
   const hc = $('#hcount'); if (hc) hc.textContent = (count || 0) + ' cheque(s)';
   if (!f.q) {
     const { data: pc } = await sb.from('cheques').select('monto').eq('es_historial', false).eq('estatus', 'autorizado').eq('cobrado', false);
     const tot = (pc || []).reduce((a, x) => a + cents(x.monto), 0) / 100;
+    if (tok !== S.listTok || !$('#resumen')) return;
     $('#resumen').innerHTML = (pc || []).length ? `<div class="card summary"><div class="ico">${ICON.money}</div><div class="grow"><div class="mut sm">Autorizados por cobrar</div><div class="money big">${fmt(tot)}</div></div><div class="mut sm">${(pc || []).length} cheque(s)</div></div>` : '';
   } else $('#resumen').innerHTML = '';
   const html = S.list.map(c => rowCheque(c)).join('');
@@ -1455,6 +1465,7 @@ async function viewNuevo(editCheque, copiaDe) {
   }
   const F = S.F, h = F.h;
   const { data: bens } = await sb.from('cheques').select('beneficiario').order('creado_en', { ascending: false }).limit(1000);
+  if (S.tab !== 'nuevo') return;
   const uniq = [...new Set((bens || []).map(x => x.beneficiario))].slice(0, 400);
   $('#view').innerHTML = `<div class="pagehead"><h2>${F.editId ? 'Editar cheque' : 'Nuevo cheque'}</h2></div>${F.copia ? `<div class="okbox" style="margin-bottom:10px"><b>Nuevo cheque con los datos del ${F.copia.numero} (cancelado).</b> Ya van copiados chequera, beneficiario, monto, concepto, folios y todos sus documentos (menos la foto del cheque). Pon el <b>número del cheque nuevo</b> y toma su foto.${F.copia.arch.length ? `<div style="margin-top:6px">Archivos que se copian al cheque nuevo:</div>${F.copia.arch.map((a, i) => `<label class="row" style="gap:8px;margin-top:4px"><input type="checkbox" data-act="copiaarch" data-i="${i}" ${a.on ? 'checked' : ''} style="width:auto"> <span>${({ factura: 'Factura', folio: 'Folio', comprobante_cobro: 'Comprobante', otro: 'Documento' })[a.tipo] || 'Archivo'}: ${esc(a.nombre)}</span></label>`).join('')}` : '<div class="mut sm" style="margin-top:6px">El cheque cancelado no tenía documentos subidos.</div>'}</div>` : ''}${F.editId ? '' : '<div class="mut sm" style="margin:-6px 0 10px">¿El cheque ya salió cancelado de origen? <a href="#" data-act="cancelado">Regístralo aquí</a></div>'}
   <div class="card">
@@ -1748,6 +1759,7 @@ async function pintarPdf(blob, cont) {
   }
 }
 function previewPDF(doc, nombre, titulo) {
+  if (S.prev && S.prev.url) { try { URL.revokeObjectURL(S.prev.url); } catch (e) { } }
   const blob = doc.output('blob'); const url = URL.createObjectURL(blob); S.prev = { blob, nombre, url };
   openModal(`<h2 style="margin-top:0">${esc(titulo)}</h2>
     <div id="pdfPages" class="pdfpages"><div class="mut sm" style="padding:30px;text-align:center">Preparando vista previa…</div></div>
@@ -1835,7 +1847,7 @@ function cargarSheetJS() {
 async function traerTodo(tabla, sel, orden) {
   let out = [], from = 0; const N = 1000;
   for (;;) {
-    let q = sb.from(tabla).select(sel); orden.forEach(o => { q = q.order(o, { ascending: false }); });
+    let q = sb.from(tabla).select(sel); orden.forEach(o => { q = q.order(o, { ascending: false }); }); q = q.order('id');
     const { data, error } = await q.range(from, from + N - 1); if (error) throw error;
     out = out.concat(data || []); if (!data || data.length < N) break; from += N;
   }
@@ -1885,11 +1897,14 @@ function menuCuenta() {
 
 /* ===================== EVENTOS ===================== */
 // Todo lo que se escribe en la app va en MAYÚSCULAS (correo y contraseña no se tocan, aunque se muestre la contraseña).
-document.addEventListener('input', ev => {
+const aMayus = ev => {
+  if (ev.isComposing) return;
   const el = ev.target; if (!el.matches || !el.matches('input[type=text], textarea') || el.hasAttribute('data-nocaps')) return;
   const v = el.value, u = v.toUpperCase(); if (v === u) return;
   const a = el.selectionStart, b = el.selectionEnd; el.value = u; try { el.setSelectionRange(a, b); } catch (e) {}
-}, true);
+};
+document.addEventListener('input', aMayus, true);
+document.addEventListener('compositionend', aMayus, true);
 document.addEventListener('click', ev => {
   document.querySelectorAll('details.dd[open]').forEach(d => { if (!d.contains(ev.target)) d.removeAttribute('open'); });
   setTimeout(() => {
@@ -1903,6 +1918,8 @@ document.addEventListener('click', async ev => {
   const tabBtn = ev.target.closest('nav.tabs button'); if (tabBtn) return go(tabBtn.dataset.tab);
   const el = ev.target.closest('[data-act]'); if (!el) return; const act = el.dataset.act, id = el.dataset.id;
   if (el.tagName === 'A') ev.preventDefault();
+  const guard = el.tagName === 'BUTTON' && /^(ok|subir$|cpdgo$|quitarsf$|descobrar$|comentar$|reexpedir$|copiardocs$)/.test(act);
+  if (guard) { if (el.dataset.busy) return; el.dataset.busy = '1'; el.disabled = true; }
   try {
     switch (act) {
       case 'ovl': if (ev.target === el) closeModal(); break;
@@ -1959,7 +1976,7 @@ document.addEventListener('click', async ev => {
       case 'selall': document.querySelectorAll('[data-sel]').forEach(i => i.checked = true); updateSel(); break;
       case 'selquitar': document.querySelectorAll('[data-sel]').forEach(i => i.checked = false); updateSel(); break;
       case 'autsel': dlgAutSel(); break;
-      case 'okautsel': { const ids = S.selIds || [], cm = $('#cmt').value; closeModal(); diferir(`Autorizando ${ids.length} cheque${ids.length === 1 ? '' : 's'}…`, () => autorizarLote(ids, cm), ids); updateSel(); break; }
+      case 'okautsel': { const ids = S.selIds || [], cm = $('#cmt').value; closeModal(); diferir(`Autorizando ${ids.length} cheque${ids.length === 1 ? '' : 's'}…`, () => autorizarLote(ids, cm), ids); document.querySelectorAll('[data-sel]').forEach(i => i.checked = false); updateSel(); break; }
       case 'sinfoto': dlgMotivo('Cheque sin foto', 'oksinfoto', id, 'gold', 'Marcar sin foto'); break;
       case 'oksinfoto': { const m = $('#mot').value.trim(); if (m.length < 5) return toast('Escribe el motivo (por qué no hay foto).', 'err'); await rpc('marcar_sin_foto', { p_id: id, p_motivo: m }); closeModal(); toast('Marcado sin foto; el Ing. ya puede autorizarlo.', 'ok'); refreshView(true); break; }
       case 'quitarsf': { await rpc('quitar_sin_foto', { p_id: id }); toast('Marca quitada.', 'ok'); openDetail(id); refreshView(true); break; }
@@ -1971,7 +1988,7 @@ document.addEventListener('click', async ev => {
         const c = await loadCheque(id);
         if (!archActivos(c, 'comprobante_cobro').length) { openModal(`<h2 style="margin-top:0">Falta el ticket o ficha de depósito</h2><div class="warnbox">Sube primero el ticket o la ficha de depósito del cheque cobrado.${puedeArchivos() ? '' : ' Pídeselo a Pedro o al Ing.'}</div><div class="row">${puedeArchivos() ? `<button class="btn gold" data-act="subir" data-id="${id}" data-tipo="comprobante_cobro">Subir ticket / ficha</button>` : ''}<button class="btn ghost" data-act="close">Cerrar</button></div>`); break; }
         openModal(`<h2 style="margin-top:0">Marcar como cobrado</h2><label class="f">Fecha de cobro</label><input type="date" id="fc" value="${today()}"><div class="row" style="margin-top:14px"><button class="btn ok grow" data-act="okcobrar" data-id="${id}">Confirmar</button><button class="btn ghost" data-act="close">Volver</button></div>`); break; }
-      case 'okcobrar': await rpc('marcar_cobrado', { p_id: id, p_fecha_cobro: $('#fc').value, p_cobrado: true }); closeModal(); toast('Cheque marcado como cobrado.', 'ok'); refreshView(); break;
+      case 'okcobrar': if (!$('#fc').value) return toast('Escribe la fecha de cobro.', 'err'); await rpc('marcar_cobrado', { p_id: id, p_fecha_cobro: $('#fc').value, p_cobrado: true }); closeModal(); toast('Cheque marcado como cobrado.', 'ok'); refreshView(); break;
       case 'descobrar': await rpc('marcar_cobrado', { p_id: id, p_fecha_cobro: null, p_cobrado: false }); toast('Cobro desmarcado.', 'ok'); openDetail(id); refreshView(true); break;
       case 'subir': {
         const c = await loadCheque(id); const hay = archActivos(c, el.dataset.tipo).length > 0;
@@ -2047,6 +2064,7 @@ document.addEventListener('click', async ev => {
         const v = Number($('#ser_' + id).value); await rpc('ajustar_serie', { p_cargo_id: Number(id), p_ultimo: v }); toast('Serie actualizada.', 'ok'); await loadCatalogs(); break; }
     }
   } catch (e) { toast(errMsg(e), 'err'); const b = el.tagName === 'BUTTON' ? el : null; if (b) b.disabled = false; }
+  finally { if (guard) { delete el.dataset.busy; if (el.isConnected && el.textContent !== 'Copiando…') el.disabled = false; } }
 });
 function refreshView(soft) {
   if (S.tab === 'pend') viewPend(); else if (S.tab === 'cheques') loadList(true); else if (S.tab === 'bit') viewBit();
