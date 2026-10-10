@@ -1131,6 +1131,48 @@ function ajustarFoto(file) {
 async function ajustarFotos(files) {
   const out = []; for (const f of files) out.push(f.type && f.type.startsWith('image/') ? await ajustarFoto(f) : f); return out;
 }
+/* ===================== LECTURA AUTOMÁTICA DE LA FOTO DEL CHEQUE ===================== */
+const normNom = t => String(t || '').toUpperCase().normalize('NFD').replace(/\p{M}/gu, '').replace(/[^A-Z0-9 ]/g, ' ').replace(/\b(S|A|DE|C|V|SA|CV|RL|SAB|SC|SAPI)\b/g, ' ').replace(/\s+/g, ' ').trim();
+function similitud(a, b) {
+  const bg = t => { const m = new Map(); for (let i = 0; i < t.length - 1; i++) { const k = t.slice(i, i + 2); m.set(k, (m.get(k) || 0) + 1); } return m; };
+  const A = bg(a), B = bg(b); let inter = 0, n = 0; A.forEach((v, k) => { n += v; if (B.has(k)) inter += Math.min(v, B.get(k)); }); B.forEach(v => n += v);
+  return n ? 2 * inter / n : (a === b ? 1 : 0);
+}
+function difLectura(L, h) {
+  const out = []; if (!L) return out;
+  if (L.numero_cheque && h.numero_cheque && String(Number(L.numero_cheque)) !== String(Number(h.numero_cheque))) out.push(`La foto dice cheque ${L.numero_cheque} y capturaste ${h.numero_cheque}.`);
+  if (L.monto != null && h.monto && cents(L.monto) !== cents(parseMoney(h.monto))) out.push(`La foto dice ${fmt(L.monto)} y capturaste ${fmt(parseMoney(h.monto))}.`);
+  if (L.beneficiario && h.beneficiario && similitud(normNom(L.beneficiario), normNom(h.beneficiario)) < 0.6) out.push(`La foto dice "${L.beneficiario}" y capturaste "${String(h.beneficiario).toUpperCase()}".`);
+  if (L.fecha && h.fecha && L.fecha !== h.fecha) out.push(`La fecha de la foto es ${fdate(L.fecha)} y capturaste ${fdate(h.fecha)}.`);
+  if (L.letra_coincide === false) out.push('En la foto, el importe con letra no coincide con el de número.');
+  if (L.cancelado) out.push('La foto parece de un cheque CANCELADO.');
+  if (L.legible === false) out.push('La foto se ve borrosa: revisa los datos a mano.');
+  return out;
+}
+function pintaLectura() {
+  const box = $('#chqLee'); const F = S.F; if (!box || !F) return;
+  const st = F.lecturaEstado;
+  if (!st) { box.innerHTML = ''; return; }
+  if (st === 'leyendo') { box.innerHTML = '<div class="mut sm" style="margin-top:8px">Leyendo la foto del cheque…</div>'; return; }
+  if (st === 'error') { box.innerHTML = `<div class="mut sm" style="margin-top:8px">No se pudo leer la foto automáticamente${F.lecturaError ? ' (' + esc(F.lecturaError) + ')' : ''}. Revisa los datos a mano.</div>`; return; }
+  const L = F.lectura, dif = difLectura(L, F.h);
+  const dice = [L.numero_cheque ? 'Cheque ' + esc(L.numero_cheque) : '', L.monto != null ? fmt(L.monto) : '', L.beneficiario ? esc(L.beneficiario) : '', L.fecha ? fdate(L.fecha) : ''].filter(Boolean).join(' · ');
+  box.innerHTML = `<div class="${dif.length ? 'warnbox' : 'okbox'}" style="margin-top:8px"><b>La foto dice:</b> ${dice || 'no se alcanzó a leer'}${dif.length ? '<ul style="margin:6px 0 0 18px;padding:0">' + dif.map(t => `<li>${esc(t)}</li>`).join('') + '</ul>' : '<div>Coincide con lo capturado.</div>'}
+    ${dice ? '<button class="btn ghost sm" style="margin-top:8px" data-act="usarlectura">Llenar los datos con lo de la foto</button>' : ''}</div>`;
+}
+async function leerFotoCheque(file) {
+  const F = S.F; if (!F || !file || !/^image\//.test(file.type || '')) return;
+  F.lecturaEstado = 'leyendo'; F.lectura = null; pintaLectura();
+  try {
+    const im = await loadImg(file, 1600); const b64 = String(im.data).split(',')[1];
+    const { data, error } = await sb.functions.invoke('leer-cheque', { body: { imagen: b64, tipo: 'image/jpeg' } });
+    if (S.F !== F) return;
+    if (error) { let m = ''; try { const j = await error.context.json(); m = j.error || ''; if (j.sin_clave) { F.lecturaEstado = null; pintaLectura(); return; } } catch (e) { m = error.message; } throw new Error(m); }
+    if (!data || !data.lectura) throw new Error(data && data.error || 'sin respuesta');
+    F.lectura = data.lectura; F.lecturaEstado = 'ok';
+  } catch (e) { if (S.F !== F) return; F.lecturaEstado = 'error'; F.lecturaError = String(e.message || e).slice(0, 120); }
+  pintaLectura();
+}
 async function pickFuenteT(tipo) { const fs = await pickFuente(); return tipo === 'foto_cheque' && fs.length ? await ajustarFotos(fs) : fs; }
 async function filesToPdf(files) {
   if (files.length === 1 && files[0].type === 'application/pdf') return files[0];
@@ -1521,6 +1563,7 @@ async function viewNuevo(editCheque, copiaDe) {
   <div class="card">
     <div class="row"><button class="btn gold sm" data-act="pickcheque">📷 Tomar o adjuntar foto del cheque</button><span id="chqInfo" class="mut sm">${F.chequeFiles.length ? F.chequeFiles.length + ' foto(s) lista(s) para subir' : 'Sin foto'}</span></div>
     <div class="mut sm" style="margin-top:6px">Foto del cheque ya impreso, <b>antes de firmar</b>, donde se lea el beneficiario y el monto. El Ing. la revisa para autorizar.</div>
+    <div id="chqLee"></div>
   </div>
   <h3>Folios que cubre este cheque</h3>
   <div id="lines"></div>
@@ -1540,7 +1583,7 @@ async function viewNuevo(editCheque, copiaDe) {
   <div class="row" style="margin-top:12px"><button class="btn gold grow" id="btnGuardar" data-act="guardar">${F.editId ? 'Guardar cambios y reenviar a autorización' : 'Generar póliza y enviar a autorización'}</button>${F.editId ? '<button class="btn ghost" data-act="cancelarEdit">Cancelar</button>' : ''}</div>`;
   ['chequera_id', 'numero_cheque', 'fecha', 'monto', 'beneficiario', 'concepto', 'solicito', 'sin_factura_motivo'].forEach(k => {
     const el = $('#h_' + k); el.oninput = el.onchange = async () => {
-      h[k] = el.value; updateSum();
+      h[k] = el.value; updateSum(); if (F.lectura) pintaLectura();
       if (k === 'chequera_id' && !F.editId && h.chequera_id) {
         // Al elegir la chequera se propone el siguiente número consecutivo (se puede cambiar).
         const u = await ultimoChequera(Number(h.chequera_id));
@@ -1550,7 +1593,7 @@ async function viewNuevo(editCheque, copiaDe) {
     };
   });
   renderLines();
-  numInfo();
+  numInfo(); pintaLectura();
 }
 
 
@@ -1725,6 +1768,7 @@ async function guardarCheque(confirmado = false) {
   if (!confirmado) {
     btn.disabled = true; const txt0 = btn.textContent; btn.textContent = 'Revisando…';
     let r; try { r = await revisionCaptura(h, tot, !!F.editId); } catch (e) { r = { bloqueos: [], avisos: [] }; }
+    if (F.lectura) difLectura(F.lectura, h).forEach(t => r.avisos.push('Foto: ' + t));
     F._salta = r.salta || null;
     btn.disabled = false; btn.textContent = txt0;
     if (r.bloqueos.length) { if (F.editId) return toast(r.bloqueos[0], 'err'); return dlgConfirmarCaptura(h, tot, r); }
@@ -1981,6 +2025,15 @@ document.addEventListener('click', async ev => {
       case 'prevdl': bajarBlob(S.prev.blob, S.prev.nombre); break;
       case 'prevopen': compartirPrev(); break;
       case 'detalle': openDetail(id); break;
+      case 'usarlectura': {
+        const F = S.F, L = F && F.lectura; if (!L) break;
+        const set = (k, v) => { if (v == null || v === '') return; F.h[k] = String(v); const e = $('#h_' + k); if (e) e.value = F.h[k]; };
+        if (L.numero_cheque) set('numero_cheque', String(Number(L.numero_cheque)));
+        if (L.monto != null) set('monto', Number(L.monto).toFixed(2));
+        if (L.beneficiario) set('beneficiario', String(L.beneficiario).toUpperCase());
+        if (L.fecha && /^\d{4}-\d{2}-\d{2}$/.test(L.fecha)) set('fecha', L.fecha);
+        updateSum(); programarNumInfo(); pintaLectura(); toast('Datos llenados con la foto. Revísalos.', 'ok'); break;
+      }
       case 'pushon': { await activarPush(); toast('Notificaciones activadas. Te llegará un aviso de prueba.', 'ok'); const a = $('#pushAviso'); if (a) a.innerHTML = ''; const b = $('#pushBox'); if (b) b.innerHTML = await htmlPush(); break; }
       case 'pushoff': { await desactivarPush(); toast('Notificaciones desactivadas en este dispositivo.'); const b = $('#pushBox'); if (b) b.innerHTML = await htmlPush(); break; }
       case 'pushtest': { const sub = await pushActual(); if (sub) await guardarSub(sub); await rpc('probar_push', {}); toast('Aviso de prueba enviado. Debe llegar en unos segundos.', 'ok'); break; }
@@ -2086,7 +2139,7 @@ document.addEventListener('click', async ev => {
         if (sc) { if (l.modo === 'sinfolio' && !l.cargo_id) l.cargo_id = sc.id; else if (l.modo !== 'sinfolio' && Number(l.cargo_id) === sc.id) l.cargo_id = ''; }
         renderLines(); break;
       }
-      case 'pickcheque': { const fs = await pickFuenteT('foto_cheque'); if (fs.length) { S.F.chequeFiles = S.F.chequeFiles.concat(fs); } $('#chqInfo').textContent = S.F.chequeFiles.length ? S.F.chequeFiles.length + ' foto(s) lista(s) para subir' : 'Sin foto'; break; }
+      case 'pickcheque': { const fs = await pickFuenteT('foto_cheque'); if (fs.length) { S.F.chequeFiles = S.F.chequeFiles.concat(fs); leerFotoCheque(fs[0]); } $('#chqInfo').textContent = S.F.chequeFiles.length ? S.F.chequeFiles.length + ' foto(s) lista(s) para subir' : 'Sin foto'; break; }
       case 'pickfolio': { const fs = await pickFuente(); S.F.folioFiles = fs; $('#folInfo').textContent = fs.length ? fs.length + ' archivo(s) listo(s) para subir' : 'Sin adjuntar'; break; }
       case 'dlfolio': { const hj = (S.hojas || [])[Number(el.dataset.i)]; if (hj) bajarBlob(hj.blob || hj.doc.output('blob'), hj.nombre); break; }
       case 'firma': dlgFirma(); break;
