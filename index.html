@@ -426,6 +426,39 @@ async function autorizarLote(ids, cm) {
   toast(fail.length ? `${ok} autorizado${ok === 1 ? '' : 's'}; con error: ${fail.join(' | ')}` : `${ok} cheque${ok === 1 ? '' : 's'} autorizado${ok === 1 ? '' : 's'}.`, fail.length ? 'err' : 'ok');
   refreshView();
 }
+/* ===================== NOTIFICACIONES ===================== */
+const VAPID_PUB = 'BO6HolKR66qpp41i1IHQURrejKfliuA6-Zc4sSpnSqB5fcguDjLpauIZwp6LlqNKKdU8hO5zgY8PO91d9uRaDSo';
+const esIOS = () => /iPhone|iPad|iPod/i.test(navigator.userAgent);
+const esInstalada = () => (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
+const pushSoportado = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window && location.protocol.indexOf('http') === 0;
+function b64aBytes(b) { const p = '='.repeat((4 - b.length % 4) % 4); const r = atob((b + p).replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from(r, c => c.charCodeAt(0)); }
+async function pushActual() { if (!pushSoportado()) return null; try { const reg = await navigator.serviceWorker.ready; return await reg.pushManager.getSubscription(); } catch (e) { return null; } }
+async function guardarSub(sub) { const j = sub.toJSON(); await rpc('guardar_push', { p: { endpoint: j.endpoint, p256dh: j.keys.p256dh, auth: j.keys.auth, agente: navigator.userAgent.slice(0, 200) } }); }
+async function activarPush() {
+  if (!pushSoportado()) {
+    if (esIOS() && !esInstalada()) throw new Error('En iPhone primero instala la app: en Safari toca Compartir → "Agregar a inicio", ábrela desde ese ícono y activa aquí.');
+    throw new Error('Este navegador no permite notificaciones. Usa Chrome en Android o la app instalada en iPhone.');
+  }
+  const perm = await Notification.requestPermission();
+  if (perm !== 'granted') throw new Error('No se dio permiso. Si lo bloqueaste, actívalo en la configuración del navegador para este sitio.');
+  const reg = await navigator.serviceWorker.ready;
+  let sub;
+  try { sub = (await reg.pushManager.getSubscription()) || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64aBytes(VAPID_PUB) }); }
+  catch (e) { throw new Error('El celular no dejó registrar las notificaciones. Revisa que Chrome tenga permiso de notificaciones (Ajustes del teléfono → Apps → Chrome → Notificaciones) y vuelve a intentar.'); }
+  await guardarSub(sub);
+  try { await rpc('probar_push', {}); } catch (e) { }
+}
+async function desactivarPush() { const sub = await pushActual(); if (!sub) return; try { await rpc('quitar_push', { p_endpoint: sub.endpoint }); } catch (e) { } await sub.unsubscribe(); }
+// Al entrar, si ya estaban activadas, se vuelve a registrar (el navegador a veces cambia la suscripción).
+async function resincronizarPush() { try { if (pushSoportado() && Notification.permission === 'granted') { const sub = await pushActual(); if (sub) await guardarSub(sub); } } catch (e) { } }
+async function htmlPush() {
+  if (!pushSoportado()) return `<div class="mut sm" style="margin-bottom:6px">${esIOS() && !esInstalada() ? 'En iPhone primero instala la app (Safari → Compartir → "Agregar a inicio") y ábrela desde ese ícono.' : 'Este navegador no permite notificaciones.'}</div>`;
+  const sub = await pushActual(); const on = !!sub && Notification.permission === 'granted';
+  const que = esAdmin() ? 'Te avisa cuando hay cheques por autorizar.' : 'Te avisa cuando te rechazan un cheque.';
+  return `<div class="mut sm" style="margin-bottom:6px">${on ? 'Activadas en este dispositivo. ' : ''}${que}</div>${on ? '<button class="btn ghost" data-act="pushtest">Mandar aviso de prueba</button> <button class="btn ghost" data-act="pushoff">Desactivar</button>' : '<button class="btn gold" data-act="pushon">Activar notificaciones</button>'}`;
+}
+if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', ev => { if (ev.data === 'refrescar' && S.perfil) { refreshPendCount(); refreshView(true); } });
+
 async function rpc(name, args) {
   const { data, error } = await sb.rpc(name, args);
   if (error) throw error;
@@ -525,7 +558,7 @@ async function boot() {
   try { const { data: fr } = await sb.from('firmas').select('imagen').maybeSingle(); S.firma = fr ? fr.imagen : null; } catch (e) { S.firma = null; }
   S.tab = 'pend'; // todos entran a Pendientes
   renderShell();
-  refreshPendCount(); cargarAlertas(true);
+  refreshPendCount(); cargarAlertas(true); resincronizarPush();
   if (!boot._iv) boot._iv = setInterval(() => { if (S.perfil) refreshPendCount(); }, 60000);
 }
 async function loadCatalogs() {
@@ -575,7 +608,10 @@ const SEL = '*, cheque_folios(id,cargo_id,folio_numero,proveedor,descripcion,obr
 
 /* ===================== VISTA: AUTORIZAR / PENDIENTES ===================== */
 async function viewPend() {
-  $('#view').innerHTML = `<div class="pagehead"><h2>${esAdmin() ? 'Por autorizar' : 'Pendientes'}</h2><span class="sub">${esAdmin() ? 'Cheques en espera de tu autorización' : 'Cheques en espera de autorización'}</span></div><div id="pendList"><div class="sk"></div><div class="sk"></div></div>`;
+  $('#view').innerHTML = `<div class="pagehead"><h2>${esAdmin() ? 'Por autorizar' : 'Pendientes'}</h2><span class="sub">${esAdmin() ? 'Cheques en espera de tu autorización' : 'Cheques en espera de autorización'}</span></div><div id="pushAviso"></div><div id="pendList"><div class="sk"></div><div class="sk"></div></div>`;
+  try { let oculto = false; try { oculto = localStorage.getItem('jocris_push_aviso') === 'no'; } catch (e) { }
+    if (esAdmin() && !oculto && (!pushSoportado() ? (esIOS() && !esInstalada()) : Notification.permission === 'default')) $('#pushAviso').innerHTML = `<div class="card" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><div class="grow"><b>Recibe un aviso en tu celular</b><div class="mut sm">Cuando haya cheques por autorizar, aunque tengas la app cerrada.</div></div><button class="btn gold sm" data-act="pushon">Activar</button><button class="btn ghost sm" data-act="pushno">Ahora no</button></div>`;
+  } catch (e) { }
   const { data, error } = await sb.from('cheques').select(SEL).eq('estatus', 'pendiente').eq('es_historial', false).order('creado_en', { ascending: true });
   if (S.tab !== 'pend' || !$('#pendList')) return;
   if (error) return $('#pendList').innerHTML = `<div class="warnbox">${esc(errMsg(error))}</div>`;
@@ -1888,11 +1924,13 @@ function menuCuenta() {
   openModal(`<h2 style="margin-top:0">Mi cuenta</h2><div class="card"><div class="b">${esc(S.perfil.nombre)}</div><div class="mut">${esc(S.perfil.correo)} · ${esc(rolTxt(S.perfil.rol))}</div></div>
   <h3>Cambiar contraseña</h3><label class="f">Nueva contraseña (mínimo 8 caracteres)</label>${pwField('np1', 'new-password')}<label class="f">Repítela</label>${pwField('np2', 'new-password')}
   <div class="row" style="margin-top:12px"><button class="btn" data-act="cambiarpass">Guardar contraseña</button><button class="btn ghost" data-act="salir">Cerrar sesión</button></div>
+  <h3>Notificaciones</h3><div id="pushBox"><div class="mut sm">Revisando…</div></div>
   <h3>Apariencia</h3><div class="tema">${[['auto', 'Automático'], ['light', 'Claro'], ['dark', 'Oscuro']].map(([v, t]) => `<button class="btn ghost sm ${temaPref() === v ? 'on' : ''}" data-act="tema" data-v="${v}">${t}</button>`).join('')}</div>
   <h3>Acumulado semanal</h3><a class="btn ghost" href="https://jocris-sistemas.github.io/Caja-Efectivo/" style="text-decoration:none">Ir a Acumulado semanal</a>
   <h3>Mi firma</h3><div class="mut sm" style="margin-bottom:6px">${S.firma ? 'Ya tienes una firma guardada.' : 'Aún no tienes firma guardada.'}</div><button class="btn ghost" data-act="firma">${S.firma ? 'Cambiar mi firma' : 'Agregar mi firma'}</button>
   <h3>Respaldo</h3><div class="mut sm" style="margin-bottom:6px">Descarga todos los cheques, folios, archivos y la bitácora en un Excel. Se recomienda hacerlo cada semana y guardarlo en tu computadora o en Drive.</div><button class="btn ghost" id="btnRespaldo" data-act="respaldo">Descargar respaldo en Excel</button>
   <h3>Instalar en el celular</h3><button class="btn ghost" data-act="instalar">Instalar app</button>`);
+  htmlPush().then(h => { const b = $('#pushBox'); if (b) b.innerHTML = h; });
 }
 
 /* ===================== EVENTOS ===================== */
@@ -1918,7 +1956,7 @@ document.addEventListener('click', async ev => {
   const tabBtn = ev.target.closest('nav.tabs button'); if (tabBtn) return go(tabBtn.dataset.tab);
   const el = ev.target.closest('[data-act]'); if (!el) return; const act = el.dataset.act, id = el.dataset.id;
   if (el.tagName === 'A') ev.preventDefault();
-  const guard = el.tagName === 'BUTTON' && /^(ok|subir$|cpdgo$|quitarsf$|descobrar$|comentar$|reexpedir$|copiardocs$)/.test(act);
+  const guard = el.tagName === 'BUTTON' && /^(ok|subir$|cpdgo$|quitarsf$|descobrar$|comentar$|reexpedir$|copiardocs$|push(on|off|test)$)/.test(act);
   if (guard) { if (el.dataset.busy) return; el.dataset.busy = '1'; el.disabled = true; }
   try {
     switch (act) {
@@ -1943,6 +1981,10 @@ document.addEventListener('click', async ev => {
       case 'prevdl': bajarBlob(S.prev.blob, S.prev.nombre); break;
       case 'prevopen': compartirPrev(); break;
       case 'detalle': openDetail(id); break;
+      case 'pushon': { await activarPush(); toast('Notificaciones activadas. Te llegará un aviso de prueba.', 'ok'); const a = $('#pushAviso'); if (a) a.innerHTML = ''; const b = $('#pushBox'); if (b) b.innerHTML = await htmlPush(); break; }
+      case 'pushoff': { await desactivarPush(); toast('Notificaciones desactivadas en este dispositivo.'); const b = $('#pushBox'); if (b) b.innerHTML = await htmlPush(); break; }
+      case 'pushtest': { const sub = await pushActual(); if (sub) await guardarSub(sub); await rpc('probar_push', {}); toast('Aviso de prueba enviado. Debe llegar en unos segundos.', 'ok'); break; }
+      case 'pushno': { try { localStorage.setItem('jocris_push_aviso', 'no'); } catch (e) { } const a = $('#pushAviso'); if (a) a.innerHTML = ''; toast('Puedes activarlas cuando quieras en Mi cuenta.'); break; }
       case 'copiardocs': {
         openModal('<div class="spin">Buscando cheques cancelados…</div>');
         const c = await loadCheque(id);
