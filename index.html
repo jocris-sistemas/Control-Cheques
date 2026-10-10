@@ -312,6 +312,30 @@ details.dd .ddm button svg{width:18px;height:18px;flex:none;stroke:currentColor;
 :root[data-theme="dark"] .empty svg{stroke:#5b6e88}
 :root[data-theme="dark"] img#firmaAct{background:#fff!important}
 .pdfpages{max-height:68vh;overflow:auto;background:#e4e8ee;border:1px solid var(--line);border-radius:8px;padding:6px}.pdfpg{display:block;width:100%;height:auto;background:#fff;margin:0 auto 8px;box-shadow:0 1px 4px rgba(0,0,0,.25)}
+
+/* ---- Ajustes visuales (oct 2026) ---- */
+.item .meta{font-size:14px;color:var(--mut);margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.item .fec{font-size:13px;color:var(--mut);margin-top:2px}
+.item .meta .num{color:var(--navy);font-size:15px}
+.item .ben{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+:root[data-theme="dark"] .item .meta .num{color:#d6e5fa}
+.sumbar{position:static;box-shadow:none;margin:12px 0 4px}
+.btn.ok:disabled{background:#cfd6df;color:#4b5868;opacity:1}
+:root[data-theme="dark"] .btn.ok:disabled{background:#2a3647;color:#8ea0b8}
+.cd-why{font-size:12.5px;color:var(--mut);margin-top:6px;line-height:1.3}
+@media(max-width:640px){header.top .brand .tl,header.top .brand small{display:none}header.top{padding-bottom:8px}}
+@media(min-width:1000px){
+  body{padding-bottom:28px}
+  nav.tabs{position:sticky;top:var(--hh,61px);bottom:auto;left:auto;right:auto;justify-content:center;gap:6px;padding:6px 16px;border-top:0;border-bottom:1px solid var(--line);box-shadow:0 6px 16px rgba(20,52,92,.06);z-index:19}
+  nav.tabs button{flex:0 0 auto;flex-direction:row;gap:8px;font-size:14px;padding:9px 18px;border-radius:10px;max-width:none}
+  nav.tabs button svg{width:20px;height:20px}
+  nav.tabs button.on{background:var(--infobg)}
+  nav.tabs button.on::before{top:auto;bottom:-7px;left:16px;right:16px;border-radius:4px 4px 0 0}
+  nav.tabs .badge{position:static;margin-left:2px;box-shadow:none}
+  :root[data-theme="dark"] nav.tabs{border-bottom-color:#25344a;box-shadow:0 6px 16px rgba(0,0,0,.35)}
+  :root[data-theme="dark"] nav.tabs button.on{background:#1b2a3f}
+  .selbar{bottom:24px!important}#undo{bottom:24px}
+}
 </style>
 </head>
 <body>
@@ -578,6 +602,8 @@ async function refreshPendCount() {
 }
 
 /* ===================== SHELL ===================== */
+function altoHeader() { const h = document.querySelector('header.top'); if (h) document.documentElement.style.setProperty('--hh', h.offsetHeight + 'px'); }
+window.addEventListener('resize', altoHeader);
 function renderShell() {
   const tabs = [['pend', esAdmin() ? 'Autorizar' : 'Pendientes'], ['cheques', 'Historial']];
   if (puedeCapturar()) tabs.push(['nuevo', 'Nuevo']);
@@ -585,12 +611,13 @@ function renderShell() {
   tabs.push(['bit', 'Bitácora']);
   $('#app').innerHTML = `
   <header class="top">
-    <div class="brand"><span class="mark">J</span><div>JOCRIS · Control de Cheques<small>${esc(S.perfil.nombre)} · ${esc(rolTxt(S.perfil.rol))}</small></div></div>
+    <div class="brand"><span class="mark">J</span><div>JOCRIS · <span class="tl">Control de </span>Cheques<small>${esc(S.perfil.nombre)} · ${esc(rolTxt(S.perfil.rol))}</small></div></div>
     <button class="acct" data-act="menu" title="Mi cuenta" aria-label="Mi cuenta">${esc(iniciales(S.perfil.nombre))}</button>
   </header>
+  <nav class="tabs">${tabs.map(([k, l]) => `<button data-tab="${k}" class="${S.tab === k ? 'on' : ''}">${ICON[k] || ''}<span>${l}</span>${k === 'pend' ? `<span class="badge hidden" id="bPend">0</span>` : ''}</button>`).join('')}</nav>
   <div id="alertaHuecos" class="hidden"></div>
-  <main id="view"></main>
-  <nav class="tabs">${tabs.map(([k, l]) => `<button data-tab="${k}" class="${S.tab === k ? 'on' : ''}">${ICON[k] || ''}<span>${l}</span>${k === 'pend' ? `<span class="badge hidden" id="bPend">0</span>` : ''}</button>`).join('')}</nav>`;
+  <main id="view"></main>`;
+  altoHeader();
   go(S.tab);
 }
 function go(tab) {
@@ -738,6 +765,7 @@ function cardPend(c, rechazado = false) {
     ${esAdmin() && !rechazado ? `<div class="cd-act">
       <button class="btn ok grow" data-act="autorizar" data-id="${c.id}" ${sinFac || !cuadra || !okFoto ? 'disabled' : ''}>Autorizar</button>
       <button class="btn outbad" data-act="rechazar" data-id="${c.id}">Rechazar</button></div>
+      ${!okFoto || !cuadra ? `<div class="cd-why">No se puede autorizar: ${[!okFoto ? 'falta la foto del cheque' : '', !cuadra ? 'los folios no cuadran con el monto' : ''].filter(Boolean).join(' y ')}.</div>` : ''}
 ` : ''}
     ${!esAdmin() && !rechazado ? '<div class="chip warn cd-wait">PDTE. DE AUTORIZAR</div>' : ''}
     ${rechazado && puedeTocar(c) ? `<div class="cd-act"><button class="btn gold grow" data-act="editar" data-id="${c.id}">Corregir y reenviar</button></div>` : ''}
@@ -928,8 +956,9 @@ function rowCheque(c) {
   const fol = foliosActivos(c);
   const st = c.es_historial ? 'hist' : (c.estatus === 'autorizado' && c.cobrado ? 'cobrado' : c.estatus);
   return `<div class="item st-${st}" data-act="detalle" data-id="${c.id}">
-    <div class="main"><div class="b ben">${esc(c.beneficiario)}</div>
-      <div class="sub">Cheque ${c.numero_cheque} · ${esc(chequeraNombre(c.chequera_id))} · ${fdate(c.fecha)}</div>
+    <div class="main"><div class="meta"><b class="num">Cheque ${c.numero_cheque}</b> · ${esc(chequeraNombre(c.chequera_id))}</div>
+      <div class="b ben" title="${esc(c.beneficiario)}">${esc(c.beneficiario)}</div>
+      <div class="fec">${fdate(c.fecha)}</div>
       ${c.concepto ? `<div class="sm" style="margin-top:2px">${esc(c.concepto)}</div>` : ''}
       ${!c.es_historial && fol.length ? `<div class="mut sm" style="margin-top:2px">Folios: ${fol.map(f => esc(cargoNombre(f.cargo_id)) + ' ' + esc(folioTxt(f))).join(' · ')}</div>` : ''}</div>
     <div class="side"><div class="money">${fmt(c.monto)}</div>${estadoChip(c)}</div>
@@ -1568,6 +1597,7 @@ async function viewNuevo(editCheque, copiaDe) {
   <h3>Folios que cubre este cheque</h3>
   <div id="lines"></div>
   <button class="btn ghost sm" data-act="addline">+ Agregar folio</button>
+  <div id="sumbar" class="sumbar"></div>
   <h3>Folio (archivo o foto)</h3>
   <div class="card">
     <div class="row"><button class="btn ghost sm" data-act="pickfolio">Adjuntar folio (un solo archivo para todos)</button><span id="folInfo" class="mut sm">${F.folioFiles.length ? F.folioFiles.length + ' archivo(s) listo(s) para subir' : 'Sin adjuntar'}</span></div>
@@ -1579,7 +1609,6 @@ async function viewNuevo(editCheque, copiaDe) {
     <label class="f">Nota sobre la factura (opcional)</label><input type="text" id="h_sin_factura_motivo" placeholder="Ej. el proveedor la entrega después, pago de nómina…" value="${esc(h.sin_factura_motivo)}">
     <div class="mut sm" style="margin-top:6px">No es necesaria para autorizar: la puedes subir después desde el detalle del cheque.</div>
   </div>
-  <div id="sumbar" class="sumbar"></div>
   <div class="row" style="margin-top:12px"><button class="btn gold grow" id="btnGuardar" data-act="guardar">${F.editId ? 'Guardar cambios y reenviar a autorización' : 'Generar póliza y enviar a autorización'}</button>${F.editId ? '<button class="btn ghost" data-act="cancelarEdit">Cancelar</button>' : ''}</div>`;
   ['chequera_id', 'numero_cheque', 'fecha', 'monto', 'beneficiario', 'concepto', 'solicito', 'sin_factura_motivo'].forEach(k => {
     const el = $('#h_' + k); el.oninput = el.onchange = async () => {
