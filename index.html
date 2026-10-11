@@ -9,9 +9,9 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Cheques">
+<meta name="apple-mobile-web-app-title" content="JOCRIS">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>Control de Cheques · Jocris</title>
+<title>JOCRIS · Cheques y Acumulado</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
@@ -399,8 +399,11 @@ const puedeCapturar = () => ['administrador', 'capturista', 'contador'].includes
 const puedeOperar = () => ['administrador', 'capturista'].includes(rol());
 /* El contador solo corrige / marca sin foto en los cheques que él mismo capturó */
 const puedeTocar = c => rol() === 'contador' ? (!!c && c.capturado_por === S.perfil?.id) : puedeCapturar();
-/* Solo Pedro y el Ing. (perfiles.puede_archivos) agregan, reemplazan o quitan documentos de un cheque ya capturado. */
+/* Solo Pedro (perfiles.puede_archivos) agrega, reemplaza o quita cualquier documento de un cheque ya capturado.
+   Los demás solo pueden cambiar o quitar lo que ellos mismos subieron, durante 24 horas. */
 const puedeArchivos = () => !!S.perfil?.puede_archivos && puedeCapturar();
+const H24 = 24 * 3600 * 1000;
+const puedeEditarArch = a => puedeArchivos() || (puedeCapturar() && !!a && a.subido_por === S.perfil?.id && Date.now() - new Date(a.creado_en).getTime() < H24);
 const esAdmin = () => rol() === 'administrador';
 const esSinCargo = c => c && c.nombre === 'SIN CARGO';
 const cargoNombre = id => S.cargos.find(c => c.id === id)?.nombre || '?';
@@ -502,7 +505,7 @@ function guiaInstalarIOS() {
     <div class="card">
       ${paso(1, chrome ? `Toca el botón <b>Compartir</b> ${SHARE_SVG} que está arriba, junto a la dirección.` : `Toca el botón <b>Compartir</b> ${SHARE_SVG} en la barra de abajo de Safari.`)}
       ${paso(2, 'Baja en la lista y toca <b>Agregar a inicio</b> (o "Agregar a la pantalla de inicio").')}
-      ${paso(3, 'Toca <b>Agregar</b>. Aparece el ícono de Cheques en tu pantalla de inicio.')}
+      ${paso(3, 'Toca <b>Agregar</b>. Aparece el ícono de JOCRIS en tu pantalla de inicio.')}
       ${paso(4, 'Abre la app <b>desde ese ícono</b>. Ahí ya puedes activar las notificaciones en Mi cuenta.')}
     </div>`);
 }
@@ -648,7 +651,7 @@ function renderShell() {
   $('#app').innerHTML = `
   <header class="top">
     <div class="brand"><span class="mark">J</span><div>${veCaja() ? 'JOCRIS' : 'JOCRIS · <span class="tl">Control de </span>Cheques'}<small>${esc(S.perfil.nombre)} · ${esc(rolTxt(S.perfil.rol))}</small></div></div>
-    ${veCaja() ? `<div class="modsw" role="tablist"><button data-act="modulo" data-mod="cheques" class="on">Cheques</button><button data-act="modulo" data-mod="caja">Caja</button></div>` : ''}
+    ${veCaja() ? `<div class="modsw" role="tablist"><button data-act="modulo" data-mod="cheques" class="on">Cheques</button><button data-act="modulo" data-mod="caja">Acumulado</button></div>` : ''}
     <button class="acct" data-act="menu" title="Mi cuenta" aria-label="Mi cuenta">${esc(iniciales(S.perfil.nombre))}</button>
   </header>
   <nav class="tabs">${tabs.map(([k, l]) => `<button data-tab="${k}" class="${S.tab === k ? 'on' : ''}">${ICON[k] || ''}<span>${l}</span>${k === 'pend' ? `<span class="badge hidden" id="bPend">0</span>` : ''}</button>`).join('')}</nav>
@@ -667,7 +670,7 @@ const CAJA_URL = () => location.protocol.indexOf('http') === 0 ? '../Caja-Efecti
 function cajaFrame() {
   const w = $('#cajaWrap'); if (!w) return null;
   let f = w.querySelector('iframe');
-  if (!f) { f = document.createElement('iframe'); f.title = 'Caja de efectivo'; f.allow = 'camera; clipboard-write'; f.src = CAJA_URL(); f._listo = new Promise(r => f.addEventListener('load', r, { once: true })); w.appendChild(f); }
+  if (!f) { f = document.createElement('iframe'); f.title = 'Acumulado'; f.allow = 'camera; clipboard-write'; f.src = CAJA_URL(); f._listo = new Promise(r => f.addEventListener('load', r, { once: true })); w.appendChild(f); }
   return f;
 }
 function abrirModulo(m) {
@@ -698,7 +701,7 @@ function go(tab) {
 }
 
 /* ===================== CONSULTAS ===================== */
-const SEL = '*, cheque_folios(id,cargo_id,folio_numero,proveedor,descripcion,obra,monto,activo,sin_folio,sin_folio_motivo,creado_en), archivos(id,tipo,activo,nombre,path)';
+const SEL = '*, cheque_folios(id,cargo_id,folio_numero,proveedor,descripcion,obra,monto,activo,sin_folio,sin_folio_motivo,creado_en), archivos(id,tipo,activo,nombre,path,subido_por,creado_en)';
 
 /* ===================== VISTA: AUTORIZAR / PENDIENTES ===================== */
 async function viewPend() {
@@ -1088,12 +1091,12 @@ async function openDetail(id) {
       </tbody></table></div>
       ${cuadra ? '' : `<div class="warnbox">No cuadra: folios ${fmt(sumFolios(c) / 100)} vs cheque ${fmt(c.monto)}.</div>`}`}
       <h3>Documentos</h3><div class="card files">
-        ${arch.length ? arch.map(a => `<div class="row" style="margin-bottom:6px"><span class="chip historial">${tipoTxt[a.tipo]}</span><button class="lnk grow" style="text-align:left" data-act="verpath" data-path="${esc(a.path)}">${esc(a.nombre || 'archivo')}</button>${puedeArchivos() && !hist ? `<details class="dd"><summary class="btn ghost sm">Editar</summary><div class="ddm" style="left:auto;right:0"><button data-act="reemplazar" data-id="${a.id}" data-cheque="${id}" data-tipo="${a.tipo}">Reemplazar archivo…</button>${/\.pdf$/i.test(a.nombre || a.path) ? `<button data-act="horizontal" data-id="${a.id}" data-cheque="${id}">Pasar a hoja horizontal</button><button data-act="girar" data-id="${a.id}" data-cheque="${id}">Girar 90°</button>` : ''}<div class="sep"></div><button class="bad" data-act="quitar" data-id="${a.id}" data-cheque="${id}">Quitar…</button></div></details>` : ''}</div>`).join('') : '<span class="mut">Aún no hay documentos.</span>'}
+        ${arch.length ? arch.map(a => `<div class="row" style="margin-bottom:6px"><span class="chip historial">${tipoTxt[a.tipo]}</span><button class="lnk grow" style="text-align:left" data-act="verpath" data-path="${esc(a.path)}">${esc(a.nombre || 'archivo')}</button>${puedeEditarArch(a) && !hist ? `<details class="dd"><summary class="btn ghost sm">Editar</summary><div class="ddm" style="left:auto;right:0"><button data-act="reemplazar" data-id="${a.id}" data-cheque="${id}" data-tipo="${a.tipo}">Reemplazar archivo…</button>${/\.pdf$/i.test(a.nombre || a.path) ? `<button data-act="horizontal" data-id="${a.id}" data-cheque="${id}">Pasar a hoja horizontal</button><button data-act="girar" data-id="${a.id}" data-cheque="${id}">Girar 90°</button>` : ''}<div class="sep"></div><button class="bad" data-act="quitar" data-id="${a.id}" data-cheque="${id}">Quitar…</button></div></details>` : ''}</div>`).join('') : '<span class="mut">Aún no hay documentos.</span>'}
         ${puedeSubir && puedeArchivos() ? `<div class="row" style="margin-top:10px">
           ${c.estatus !== 'cancelado' ? `<button class="btn ghost sm" data-act="subir" data-id="${id}" data-tipo="foto_cheque">+ Foto del cheque</button><button class="btn ghost sm" data-act="subir" data-id="${id}" data-tipo="factura">+ Factura</button><button class="btn ghost sm" data-act="subir" data-id="${id}" data-tipo="folio">+ Folio</button>` : ''}
           ${c.estatus !== 'cancelado' && !archActivos(c, 'comprobante_cobro').length ? `<button class="btn ghost sm" data-act="subir" data-id="${id}" data-tipo="comprobante_cobro">+ Ticket / ficha de depósito</button>` : ''}
           <button class="btn ghost sm" data-act="subir" data-id="${id}" data-tipo="otro">${c.estatus === 'cancelado' ? '+ Foto del cheque cancelado' : '+ Otro'}</button>${c.estatus !== 'cancelado' ? `<button class="btn ghost sm" data-act="copiardocs" data-id="${id}">Copiar documentos de un cheque cancelado</button>` : ''}</div>`
-          : (!hist && puedeCapturar() ? '<div class="mut sm" style="margin-top:8px">Para agregar, reemplazar o quitar documentos de un cheque ya capturado, avisa a Pedro o al Ing.</div>' : '')}
+          : (!hist && puedeCapturar() ? '<div class="mut sm" style="margin-top:8px">Para agregar, reemplazar o quitar documentos de un cheque ya capturado, avisa a Pedro. Lo que tú subiste lo puedes cambiar o quitar durante 24 horas.</div>' : '')}
         ${!hist && puedeTocar(c) && c.estatus === 'pendiente' && !archActivos(c, 'foto_cheque').length ? `<div class="row" style="margin-top:8px">${c.sin_foto_motivo ? `<button class="btn ghost sm" data-act="quitarsf" data-id="${id}">Quitar marca "sin foto"</button>` : `<button class="btn ghost sm" data-act="sinfoto" data-id="${id}">No hay foto</button>`}</div>` : ''}
       </div>
       ${acciones ? `<div class="row" style="margin:12px 0">${acciones}</div>` : ''}
@@ -2305,7 +2308,7 @@ function menuCuenta() {
   <div class="row" style="margin-top:12px"><button class="btn" data-act="cambiarpass">Guardar contraseña</button><button class="btn ghost" data-act="salir">Cerrar sesión</button></div>
   <h3>Notificaciones</h3><div id="pushBox"><div class="mut sm">Revisando…</div></div>
   <h3>Apariencia</h3><div class="tema">${[['auto', 'Automático'], ['light', 'Claro'], ['dark', 'Oscuro']].map(([v, t]) => `<button class="btn ghost sm ${temaPref() === v ? 'on' : ''}" data-act="tema" data-v="${v}">${t}</button>`).join('')}</div>
-  ${veCaja() ? `<h3>Caja de efectivo</h3><div class="row" style="gap:8px"><button class="btn ghost" data-act="modulo" data-mod="caja">Abrir Caja</button><button class="btn ghost" data-act="cajaresp">Respaldo de Caja en Excel</button></div>` : ''}
+  ${veCaja() ? `<h3>Acumulado</h3><div class="row" style="gap:8px"><button class="btn ghost" data-act="modulo" data-mod="caja">Abrir Acumulado</button><button class="btn ghost" data-act="cajaresp">Respaldo del Acumulado en Excel</button></div>` : ''}
   <h3>Mi firma</h3><div class="mut sm" style="margin-bottom:6px">${S.firma ? 'Ya tienes una firma guardada.' : 'Aún no tienes firma guardada.'}</div><button class="btn ghost" data-act="firma">${S.firma ? 'Cambiar mi firma' : 'Agregar mi firma'}</button>
   <h3>Respaldo</h3><div class="mut sm" style="margin-bottom:6px">Descarga todos los cheques, folios, archivos y la bitácora en un Excel. Se recomienda hacerlo cada semana y guardarlo en tu computadora o en Drive.</div><button class="btn ghost" id="btnRespaldo" data-act="respaldo">Descargar respaldo en Excel</button>
   <h3>Instalar en el celular</h3><button class="btn ghost" data-act="instalar">Instalar app</button>`);
@@ -2421,7 +2424,7 @@ document.addEventListener('click', async ev => {
       case 'okcancelar': { const m = $('#mot').value.trim(); if (!m) return toast('Escribe el motivo.', 'err'); await rpc('cancelar_cheque', { p_id: id, p_motivo: m }); closeModal(); toast('Cheque cancelado; sus folios quedaron libres.', 'ok'); refreshView(); break; }
       case 'cobrar': {
         const c = await loadCheque(id);
-        if (!archActivos(c, 'comprobante_cobro').length) { openModal(`<h2 style="margin-top:0">Falta el ticket o ficha de depósito</h2><div class="warnbox">Sube primero el ticket o la ficha de depósito del cheque cobrado.${puedeArchivos() ? '' : ' Pídeselo a Pedro o al Ing.'}</div><div class="row">${puedeArchivos() ? `<button class="btn gold" data-act="subir" data-id="${id}" data-tipo="comprobante_cobro">Subir ticket / ficha</button>` : ''}<button class="btn ghost" data-act="close">Cerrar</button></div>`); break; }
+        if (!archActivos(c, 'comprobante_cobro').length) { openModal(`<h2 style="margin-top:0">Falta el ticket o ficha de depósito</h2><div class="warnbox">Sube primero el ticket o la ficha de depósito del cheque cobrado.${puedeArchivos() ? '' : ' Pídeselo a Pedro.'}</div><div class="row">${puedeArchivos() ? `<button class="btn gold" data-act="subir" data-id="${id}" data-tipo="comprobante_cobro">Subir ticket / ficha</button>` : ''}<button class="btn ghost" data-act="close">Cerrar</button></div>`); break; }
         openModal(`<h2 style="margin-top:0">Marcar como cobrado</h2><label class="f">Fecha de cobro</label><input type="date" id="fc" value="${today()}"><div class="row" style="margin-top:14px"><button class="btn ok grow" data-act="okcobrar" data-id="${id}">Confirmar</button><button class="btn ghost" data-act="close">Volver</button></div>`); break; }
       case 'okcobrar': if (!$('#fc').value) return toast('Escribe la fecha de cobro.', 'err'); await rpc('marcar_cobrado', { p_id: id, p_fecha_cobro: $('#fc').value, p_cobrado: true }); closeModal(); toast('Cheque marcado como cobrado.', 'ok'); refreshView(); break;
       case 'descobrar': await rpc('marcar_cobrado', { p_id: id, p_fecha_cobro: null, p_cobrado: false }); toast('Cobro desmarcado.', 'ok'); openDetail(id); refreshView(true); break;

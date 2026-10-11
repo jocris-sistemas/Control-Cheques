@@ -1,7 +1,7 @@
 {
-  "name": "Control de Cheques · Jocris",
-  "short_name": "Cheques",
-  "description": "Control digital de cheques: captura, autorización, póliza y comprobantes.",
+  "name": "JOCRIS · Cheques y Acumulado",
+  "short_name": "JOCRIS",
+  "description": "Control de cheques y acumulado semanal de Jocris.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
