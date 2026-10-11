@@ -23,7 +23,7 @@ self.addEventListener('push', e => {
   let d = {};
   try { d = e.data ? e.data.json() : {}; } catch (x) { d = { body: e.data ? e.data.text() : '' }; }
   e.waitUntil(self.registration.showNotification(d.title || 'Control de Cheques', {
-    body: d.body || '', tag: d.tag || 'aviso', renotify: false,
+    body: d.body || '', tag: d.tag || 'aviso', renotify: true,
     icon: 'icon-192.png', badge: 'icon-192.png', data: { url: d.url || './' }
   }));
 });

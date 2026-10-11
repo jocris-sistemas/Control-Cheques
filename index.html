@@ -414,7 +414,7 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) flush
 /* Cierre de sesión por inactividad (45 min) */
 (function () {
   let t, MS = 45 * 60 * 1000;
-  const rearma = () => { clearTimeout(t); t = setTimeout(async () => { if (!S.perfil || S.dif) return rearma(); try { await sb.auth.signOut(); } catch (e) { } S.perfil = null; renderLogin(); setTimeout(() => toast('Se cerró la sesión por inactividad.'), 300); }, MS); };
+  const rearma = () => { clearTimeout(t); t = setTimeout(async () => { if (!S.perfil || S.dif) return rearma(); try { await soltarPush(); await sb.auth.signOut(); } catch (e) { } S.perfil = null; renderLogin(); setTimeout(() => toast('Se cerró la sesión por inactividad.'), 300); }, MS); };
   ['click', 'keydown', 'touchstart', 'scroll'].forEach(e => window.addEventListener(e, rearma, { passive: true }));
   rearma();
 })();
@@ -472,6 +472,21 @@ async function activarPush() {
   await guardarSub(sub);
   try { await rpc('probar_push', {}); } catch (e) { }
 }
+const SHARE_SVG = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-4px"><path d="M12 3v12"/><path d="M8 7l4-4 4 4"/><path d="M5 11v8a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-8"/></svg>';
+function guiaInstalarIOS() {
+  const ua = navigator.userAgent, chrome = /CriOS/i.test(ua), otraApp = /FBAN|FBAV|Instagram|Line\/|GSA\//i.test(ua);
+  const paso = (n, t) => `<div style="display:flex;gap:12px;align-items:flex-start;margin:10px 0"><div style="flex:none;width:28px;height:28px;border-radius:50%;background:var(--navy);color:#fff;display:grid;place-items:center;font-weight:700">${n}</div><div style="padding-top:3px">${t}</div></div>`;
+  openModal(`<h2 style="margin-top:0">Instalar en iPhone</h2>
+    <div class="mut sm" style="margin-bottom:6px">Apple no deja que una página se instale con un botón; se hace desde el menú Compartir. Solo la primera vez.</div>
+    ${otraApp ? '<div class="warnbox">Estás dentro de otra app. Primero toca los tres puntos o el ícono de brújula y elige <b>Abrir en Safari</b>.</div>' : ''}
+    <div class="card">
+      ${paso(1, chrome ? `Toca el botón <b>Compartir</b> ${SHARE_SVG} que está arriba, junto a la dirección.` : `Toca el botón <b>Compartir</b> ${SHARE_SVG} en la barra de abajo de Safari.`)}
+      ${paso(2, 'Baja en la lista y toca <b>Agregar a inicio</b> (o "Agregar a la pantalla de inicio").')}
+      ${paso(3, 'Toca <b>Agregar</b>. Aparece el ícono de Cheques en tu pantalla de inicio.')}
+      ${paso(4, 'Abre la app <b>desde ese ícono</b>. Ahí ya puedes activar las notificaciones en Mi cuenta.')}
+    </div>`);
+}
+async function soltarPush() { try { const s = await pushActual(); if (s) await rpc('quitar_push', { p_endpoint: s.endpoint }); } catch (e) { } }
 async function desactivarPush() { const sub = await pushActual(); if (!sub) return; try { await rpc('quitar_push', { p_endpoint: sub.endpoint }); } catch (e) { } await sub.unsubscribe(); }
 // Al entrar, si ya estaban activadas, se vuelve a registrar (el navegador a veces cambia la suscripción).
 async function resincronizarPush() { try { if (pushSoportado() && Notification.permission === 'granted') { const sub = await pushActual(); if (sub) await guardarSub(sub); } } catch (e) { } }
@@ -636,8 +651,11 @@ const SEL = '*, cheque_folios(id,cargo_id,folio_numero,proveedor,descripcion,obr
 /* ===================== VISTA: AUTORIZAR / PENDIENTES ===================== */
 async function viewPend() {
   $('#view').innerHTML = `<div class="pagehead"><h2>${esAdmin() ? 'Por autorizar' : 'Pendientes'}</h2><span class="sub">${esAdmin() ? 'Cheques en espera de tu autorización' : 'Cheques en espera de autorización'}</span></div><div id="pushAviso"></div><div id="pendList"><div class="sk"></div><div class="sk"></div></div>`;
+  try { let noIos = false; try { noIos = localStorage.getItem('jocris_ios_aviso') === 'no'; } catch (e) { }
+    if (esIOS() && !esInstalada() && !noIos) $('#pushAviso').innerHTML = `<div class="card" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><div class="grow"><b>Instala la app en tu iPhone</b><div class="mut sm">Se abre más rápido y puedes recibir avisos.</div></div><button class="btn gold sm" data-act="instalar">Cómo instalar</button><button class="btn ghost sm" data-act="iosno">Ahora no</button></div>`;
+  } catch (e) { }
   try { let oculto = false; try { oculto = localStorage.getItem('jocris_push_aviso') === 'no'; } catch (e) { }
-    if (esAdmin() && !oculto && (!pushSoportado() ? (esIOS() && !esInstalada()) : Notification.permission === 'default')) $('#pushAviso').innerHTML = `<div class="card" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><div class="grow"><b>Recibe un aviso en tu celular</b><div class="mut sm">Cuando haya cheques por autorizar, aunque tengas la app cerrada.</div></div><button class="btn gold sm" data-act="pushon">Activar</button><button class="btn ghost sm" data-act="pushno">Ahora no</button></div>`;
+    if (esAdmin() && !oculto && pushSoportado() && Notification.permission === 'default' && !$('#pushAviso').innerHTML) $('#pushAviso').innerHTML = `<div class="card" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><div class="grow"><b>Recibe un aviso en tu celular</b><div class="mut sm">Cuando haya cheques por autorizar, aunque tengas la app cerrada.</div></div><button class="btn gold sm" data-act="pushon">Activar</button><button class="btn ghost sm" data-act="pushno">Ahora no</button></div>`;
   } catch (e) { }
   const { data, error } = await sb.from('cheques').select(SEL).eq('estatus', 'pendiente').eq('es_historial', false).order('creado_en', { ascending: true });
   if (S.tab !== 'pend' || !$('#pendList')) return;
@@ -1191,15 +1209,17 @@ function pintaLectura() {
 }
 async function leerFotoCheque(file) {
   const F = S.F; if (!F || !file || !/^image\//.test(file.type || '')) return;
+  const tok = F.lecTok = (F.lecTok || 0) + 1;
   F.lecturaEstado = 'leyendo'; F.lectura = null; pintaLectura();
   try {
     const im = await loadImg(file, 1600); const b64 = String(im.data).split(',')[1];
     const { data, error } = await sb.functions.invoke('leer-cheque', { body: { imagen: b64, tipo: 'image/jpeg' } });
-    if (S.F !== F) return;
+    if (S.F !== F || F.lecTok !== tok) return;
     if (error) { let m = ''; try { const j = await error.context.json(); m = j.error || ''; if (j.sin_clave) { F.lecturaEstado = null; pintaLectura(); return; } } catch (e) { m = error.message; } throw new Error(m); }
     if (!data || !data.lectura) throw new Error(data && data.error || 'sin respuesta');
-    F.lectura = data.lectura; F.lecturaEstado = 'ok';
-  } catch (e) { if (S.F !== F) return; F.lecturaEstado = 'error'; F.lecturaError = String(e.message || e).slice(0, 120); }
+    const L = data.lectura; if (L.monto != null) { L.monto = typeof L.monto === 'number' ? L.monto : parseMoney(L.monto); if (!isFinite(L.monto)) L.monto = null; }
+    F.lectura = L; F.lecturaEstado = 'ok';
+  } catch (e) { if (S.F !== F || F.lecTok !== tok) return; F.lecturaEstado = 'error'; F.lecturaError = String(e.message || e).slice(0, 120); }
   pintaLectura();
 }
 async function pickFuenteT(tipo) { const fs = await pickFuente(); return tipo === 'foto_cheque' && fs.length ? await ajustarFotos(fs) : fs; }
@@ -1566,8 +1586,8 @@ async function viewNuevo(editCheque, copiaDe) {
     if (copiaDe) {
       const c = copiaDe, fl = foliosDeCancelado(c), u = await ultimoChequera(c.chequera_id);
       S.F.h = { chequera_id: c.chequera_id, numero_cheque: u.num != null ? String(u.num + 1) : '', fecha: today(), beneficiario: c.beneficiario, monto: (fl.reduce((a, f) => a + cents(f.monto), 0) / 100).toFixed(2), concepto: c.concepto || '', solicito: c.solicito || S.perfil.nombre, sin_factura_motivo: c.sin_factura_motivo || '' };
-      S.F.lines = fl.map(f => ({ cargo_id: f.cargo_id, folio_numero: f.sin_folio ? '' : f.folio_numero, touched: true, proveedor: f.proveedor || '', descripcion: f.descripcion || '', obra: f.obra || '', monto: f.monto, modo: f.sin_folio ? 'sinfolio' : 'archivo', venc: '', periodo: '', conceptos: '', motivo_sf: f.sin_folio_motivo || '' }));
-      S.F.copia = { id: c.id, numero: c.numero_cheque, arch: archActivos(c).filter(a => a.tipo !== 'foto_cheque').map(a => ({ tipo: a.tipo, path: a.path, nombre: a.nombre, on: true })) };
+      S.F.lines = fl.map(f => ({ cargo_id: f.cargo_id, folio_numero: f.sin_folio ? '' : f.folio_numero, touched: true, proveedor: f.proveedor || '', descripcion: f.descripcion || '', obra: f.obra || '', monto: f.monto, modo: f.sin_folio ? 'sinfolio' : (esCancun(f.cargo_id) ? 'sistema' : 'archivo'), venc: '', periodo: '', conceptos: '', motivo_sf: f.sin_folio_motivo || '' }));
+      S.F.copia = { id: c.id, numero: c.numero_cheque, arch: archActivos(c).filter(a => a.tipo !== 'foto_cheque').map(a => ({ tipo: a.tipo, path: a.path, nombre: a.nombre, on: !(a.tipo === 'folio' && /^Folio_CANCUN_/i.test(a.nombre || '')) })) };
     }
   }
   const F = S.F, h = F.h;
@@ -1801,7 +1821,7 @@ async function guardarCheque(confirmado = false) {
     F._salta = r.salta || null;
     btn.disabled = false; btn.textContent = txt0;
     if (r.bloqueos.length) { if (F.editId) return toast(r.bloqueos[0], 'err'); return dlgConfirmarCaptura(h, tot, r); }
-    if (!F.editId) return dlgConfirmarCaptura(h, tot, r);
+    if (!F.editId || r.avisos.some(t => t.indexOf('Foto: ') === 0)) return dlgConfirmarCaptura(h, tot, r);
   }
   const payload = {
     chequera_id: Number(h.chequera_id), numero_cheque: Number(h.numero_cheque), fecha: h.fecha, beneficiario: h.beneficiario.trim().toUpperCase(), monto: tot,
@@ -1944,7 +1964,7 @@ async function viewBit() {
   const { data, error } = await sb.from('bitacora').select('*, cheques(poliza_numero,numero_cheque,beneficiario)').order('creado_en', { ascending: false }).limit(150);
   if (error) return $('#bl').innerHTML = `<div class="warnbox">${esc(errMsg(error))}</div>`;
   $('#bl').outerHTML = `<div class="card">${data.map(b => `<div class="log"><b>${esc(b.accion.replace(/_/g, ' '))}</b> · ${esc(b.usuario_nombre || '')} · <span class="mut">${fdt(b.creado_en)}</span>
-    ${b.cheques ? `<br><a href="#" data-act="detalle" data-id="${b.cheque_id}">Cheque ${b.cheques.numero_cheque} · ${esc(b.cheques.beneficiario)}</a>` : (b.detalle && b.detalle.cargo ? `<br><span class="mut">${esc(b.detalle.cargo)}: ${b.detalle.antes} → ${b.detalle.despues}</span>` : '')}</div>`).join('') || '<span class="mut">Sin movimientos</span>'}</div>`;
+    ${b.cheques ? `<br><a href="#" data-act="detalle" data-id="${b.cheque_id}">Cheque ${b.cheques.numero_cheque} · ${esc(b.cheques.beneficiario)}</a>` : (b.detalle && b.detalle.cargo ? `<br><span class="mut">${esc(b.detalle.cargo)}: ${esc(b.detalle.antes)} → ${esc(b.detalle.despues)}</span>` : '')}</div>`).join('') || '<span class="mut">Sin movimientos</span>'}</div>`;
 }
 
 
@@ -2041,12 +2061,13 @@ document.addEventListener('click', async ev => {
       case 'verpass': { const inp = document.getElementById(el.dataset.for); const ver = inp.type === 'password'; inp.type = ver ? 'text' : 'password'; el.innerHTML = ver ? EYE_OFF : EYE; inp.focus(); break; }
       case 'instalar': {
         if (window.__pwaPrompt) { window.__pwaPrompt.prompt(); await window.__pwaPrompt.userChoice; window.__pwaPrompt = null; break; }
-        const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+        const ios = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+        if (ios) { if (esInstalada()) toast('La app ya está instalada en este iPhone.', 'ok'); else guiaInstalarIOS(); break; }
         openModal(`<h2 style="margin-top:0">Instalar la app</h2>` + (ios
           ? '<div class="card">En iPhone: abre esta página en <b>Safari</b>, toca el botón <b>Compartir</b> (cuadro con flecha hacia arriba) y elige <b>Agregar a pantalla de inicio</b>.</div>'
           : '<div class="card">En Android (Chrome): toca los <b>tres puntos</b> de arriba a la derecha y elige <b>Instalar app</b> o <b>Agregar a pantalla principal</b>.<br><br>En computadora (Chrome): ícono de instalar al final de la barra de direcciones.</div>')
           + '<div class="mut sm">Si ya está instalada, ábrela desde su ícono en la pantalla de inicio.</div>'); break; }
-      case 'salir': await sb.auth.signOut(); S.perfil = null; closeModal(); renderLogin(); break;
+      case 'salir': await soltarPush(); await sb.auth.signOut(); S.perfil = null; closeModal(); renderLogin(); break;
       case 'cambiarpass': {
         const a = $('#np1').value, b = $('#np2').value; if (a.length < 8) return toast('Mínimo 8 caracteres.', 'err'); if (a !== b) return toast('No coinciden.', 'err');
         const { error } = await sb.auth.updateUser({ password: a }); if (error) return toast(errMsg(error), 'err'); toast('Contraseña actualizada.', 'ok'); closeModal(); break; }
@@ -2066,6 +2087,7 @@ document.addEventListener('click', async ev => {
       case 'pushon': { await activarPush(); toast('Notificaciones activadas. Te llegará un aviso de prueba.', 'ok'); const a = $('#pushAviso'); if (a) a.innerHTML = ''; const b = $('#pushBox'); if (b) b.innerHTML = await htmlPush(); break; }
       case 'pushoff': { await desactivarPush(); toast('Notificaciones desactivadas en este dispositivo.'); const b = $('#pushBox'); if (b) b.innerHTML = await htmlPush(); break; }
       case 'pushtest': { const sub = await pushActual(); if (sub) await guardarSub(sub); await rpc('probar_push', {}); toast('Aviso de prueba enviado. Debe llegar en unos segundos.', 'ok'); break; }
+      case 'iosno': { try { localStorage.setItem('jocris_ios_aviso', 'no'); } catch (e) { } const a = $('#pushAviso'); if (a) a.innerHTML = ''; break; }
       case 'pushno': { try { localStorage.setItem('jocris_push_aviso', 'no'); } catch (e) { } const a = $('#pushAviso'); if (a) a.innerHTML = ''; toast('Puedes activarlas cuando quieras en Mi cuenta.'); break; }
       case 'copiardocs': {
         openModal('<div class="spin">Buscando cheques cancelados…</div>');
@@ -2161,7 +2183,12 @@ document.addEventListener('click', async ev => {
       }
       case 'cancelarEdit': S.F = null; go('cheques'); break;
       case 'otro': closeModal(); S.F = null; go('nuevo'); break;
-      case 'reexpedir': { const c = await loadCheque(id); closeModal(); S.F = null; S.tab = 'nuevo'; document.querySelectorAll('nav.tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === 'nuevo')); await viewNuevo(null, c); window.scrollTo(0, 0); break; }
+      case 'reexpedir': { const c = await loadCheque(id);
+        { const fl = foliosDeCancelado(c).filter(f => !f.sin_folio && f.folio_numero);
+          if (fl.length) { const { data: ya } = await sb.from('cheque_folios').select('cargo_id,folio_numero,cheques(numero_cheque)').eq('activo', true).in('folio_numero', fl.map(f => f.folio_numero));
+            const m = (ya || []).find(x => fl.some(f => Number(f.cargo_id) === Number(x.cargo_id) && String(f.folio_numero) === String(x.folio_numero)));
+            if (m) { toast(`Este cheque ya se volvió a hacer: sus folios están en el cheque ${m.cheques ? m.cheques.numero_cheque : ''}.`, 'err'); break; } } }
+        closeModal(); S.F = null; S.tab = 'nuevo'; document.querySelectorAll('nav.tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === 'nuevo')); await viewNuevo(null, c); window.scrollTo(0, 0); break; }
       case 'copiaarch': { if (S.F && S.F.copia) S.F.copia.arch[Number(el.dataset.i)].on = el.checked; return; }
       case 'modo': {
         const l = S.F.lines[Number(el.dataset.i)]; l.modo = el.dataset.m; const sc = S.cargos.find(esSinCargo);
