@@ -24,6 +24,15 @@ html,body{margin:0;padding:0}
 body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--ink);font-size:15px;line-height:1.4;padding-bottom:84px}
 button,input,select,textarea{font:inherit;color:inherit}
 .hidden{display:none!important}
+/* Selector de módulo (Cheques | Caja) y Caja de efectivo dentro de la misma app */
+header.top .modsw{display:flex;gap:2px;padding:3px;border-radius:11px;background:rgba(255,255,255,.14);flex:none}
+header.top .modsw button{background:transparent;color:rgba(255,255,255,.82);padding:7px 12px;border-radius:8px;font-weight:700;font-size:13.5px}
+header.top .modsw button.on{background:#fff;color:var(--navy)}
+#cajaWrap{position:fixed;left:0;right:0;top:var(--hh,60px);bottom:0;z-index:15;background:#fff;padding-bottom:env(safe-area-inset-bottom);box-sizing:border-box}
+#cajaWrap iframe{display:block;width:100%;height:100%;border:0;background:#f3f5f9}
+body.modo-caja nav.tabs,body.modo-caja main#view,body.modo-caja #alertaHuecos,body.modo-caja #selbar,body.modo-caja #undo{display:none!important}
+body.modo-caja{overflow:hidden}
+@media(max-width:420px){header.top .modsw button{padding:7px 9px;font-size:13px}}
 header.top{background:var(--navy);color:#fff;padding:calc(10px + env(safe-area-inset-top)) 16px 10px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:20;border-bottom:3px solid var(--gold)}
 header.top .brand{font-weight:700;letter-spacing:.3px;flex:1}
 header.top .brand small{display:block;font-weight:400;opacity:.75;font-size:11.5px;letter-spacing:0}
@@ -426,6 +435,7 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) flush
   let t, MS = 45 * 60 * 1000;
   const rearma = () => { clearTimeout(t); t = setTimeout(async () => { if (!S.perfil || S.dif) return rearma(); try { await soltarPush(); await sb.auth.signOut(); } catch (e) { } S.perfil = null; renderLogin(); setTimeout(() => toast('Se cerró la sesión por inactividad.'), 300); }, MS); };
   ['click', 'keydown', 'touchstart', 'scroll'].forEach(e => window.addEventListener(e, rearma, { passive: true }));
+  window.__rearma = rearma;
   rearma();
 })();
 /* Selección para autorizar en lote */
@@ -566,6 +576,7 @@ const EYE = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke=
 const EYE_OFF = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
 const pwField = (id, ac) => `<div class="pw"><input type="password" id="${id}" autocomplete="${ac}" autocapitalize="off" autocorrect="off" spellcheck="false" data-nocaps required><button type="button" class="eye" data-act="verpass" data-for="${id}" aria-label="Mostrar u ocultar contraseña" title="Mostrar / ocultar">${EYE}</button></div>`;
 function renderLogin(msg = '') {
+  document.body.classList.remove('modo-caja');
   try { closeModal(); } catch (e) { } ['#selbar', '#undo'].forEach(x => { const e = $(x); if (e) e.classList.add('hidden'); });
   $('#app').innerHTML = `
   <div class="login">
@@ -636,15 +647,46 @@ function renderShell() {
   tabs.push(['bit', 'Bitácora']);
   $('#app').innerHTML = `
   <header class="top">
-    <div class="brand"><span class="mark">J</span><div>JOCRIS · <span class="tl">Control de </span>Cheques<small>${esc(S.perfil.nombre)} · ${esc(rolTxt(S.perfil.rol))}</small></div></div>
+    <div class="brand"><span class="mark">J</span><div>${veCaja() ? 'JOCRIS' : 'JOCRIS · <span class="tl">Control de </span>Cheques'}<small>${esc(S.perfil.nombre)} · ${esc(rolTxt(S.perfil.rol))}</small></div></div>
+    ${veCaja() ? `<div class="modsw" role="tablist"><button data-act="modulo" data-mod="cheques" class="on">Cheques</button><button data-act="modulo" data-mod="caja">Caja</button></div>` : ''}
     <button class="acct" data-act="menu" title="Mi cuenta" aria-label="Mi cuenta">${esc(iniciales(S.perfil.nombre))}</button>
   </header>
   <nav class="tabs">${tabs.map(([k, l]) => `<button data-tab="${k}" class="${S.tab === k ? 'on' : ''}">${ICON[k] || ''}<span>${l}</span>${k === 'pend' ? `<span class="badge hidden" id="bPend">0</span>` : ''}</button>`).join('')}</nav>
   <div id="alertaHuecos" class="hidden"></div>
-  <main id="view"></main>`;
+  <main id="view"></main>
+  <div id="cajaWrap" class="hidden"></div>`;
+  document.body.classList.remove('modo-caja');
   altoHeader();
   go(S.tab);
+  if (veCaja() && location.hash === '#caja') abrirModulo('caja');
 }
+/* ===================== CAJA DE EFECTIVO (mismo link, mismo usuario) ===================== */
+// Caja vive en su propio archivo y se abre aquí adentro; la sesión es la misma porque están en el mismo sitio.
+const veCaja = () => !!S.perfil?.puede_caja;
+const CAJA_URL = () => location.protocol.indexOf('http') === 0 ? '../Caja-Efectivo/?embed=1' : '../caja-publicar/index.html' + (location.search ? location.search + '&embed=1' : '?embed=1');
+function cajaFrame() {
+  const w = $('#cajaWrap'); if (!w) return null;
+  let f = w.querySelector('iframe');
+  if (!f) { f = document.createElement('iframe'); f.title = 'Caja de efectivo'; f.allow = 'camera; clipboard-write'; f.src = CAJA_URL(); f._listo = new Promise(r => f.addEventListener('load', r, { once: true })); w.appendChild(f); }
+  return f;
+}
+function abrirModulo(m) {
+  const caja = m === 'caja' && veCaja();
+  document.querySelectorAll('header.top .modsw button').forEach(b => b.classList.toggle('on', b.dataset.mod === (caja ? 'caja' : 'cheques')));
+  document.body.classList.toggle('modo-caja', caja);
+  const w = $('#cajaWrap'); if (w) w.classList.toggle('hidden', !caja);
+  if (caja) cajaFrame();
+  try { history.replaceState(null, '', caja ? '#caja' : location.pathname + location.search); } catch (e) { }
+  altoHeader();
+  if (!caja) { refreshPendCount(); refreshView(true); }
+}
+window.addEventListener('hashchange', () => { if (S.perfil && $('#cajaWrap')) abrirModulo(location.hash === '#caja' ? 'caja' : 'cheques'); });
+window.addEventListener('message', ev => {
+  if (ev.origin !== location.origin && location.protocol.indexOf('http') === 0) return;
+  const d = ev.data || {};
+  if (d.caja === 'actividad' && window.__rearma) window.__rearma();
+  if (d.caja === 'sesion') sb.auth.getSession().then(({ data }) => { if (!data.session && S.perfil) { S.perfil = null; renderLogin(); } });
+});
 function go(tab) {
   S.tab = tab;
   document.querySelectorAll('nav.tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
@@ -2263,7 +2305,7 @@ function menuCuenta() {
   <div class="row" style="margin-top:12px"><button class="btn" data-act="cambiarpass">Guardar contraseña</button><button class="btn ghost" data-act="salir">Cerrar sesión</button></div>
   <h3>Notificaciones</h3><div id="pushBox"><div class="mut sm">Revisando…</div></div>
   <h3>Apariencia</h3><div class="tema">${[['auto', 'Automático'], ['light', 'Claro'], ['dark', 'Oscuro']].map(([v, t]) => `<button class="btn ghost sm ${temaPref() === v ? 'on' : ''}" data-act="tema" data-v="${v}">${t}</button>`).join('')}</div>
-  <h3>Acumulado semanal</h3><a class="btn ghost" href="https://jocris-sistemas.github.io/Caja-Efectivo/" style="text-decoration:none">Ir a Acumulado semanal</a>
+  ${veCaja() ? `<h3>Caja de efectivo</h3><div class="row" style="gap:8px"><button class="btn ghost" data-act="modulo" data-mod="caja">Abrir Caja</button><button class="btn ghost" data-act="cajaresp">Respaldo de Caja en Excel</button></div>` : ''}
   <h3>Mi firma</h3><div class="mut sm" style="margin-bottom:6px">${S.firma ? 'Ya tienes una firma guardada.' : 'Aún no tienes firma guardada.'}</div><button class="btn ghost" data-act="firma">${S.firma ? 'Cambiar mi firma' : 'Agregar mi firma'}</button>
   <h3>Respaldo</h3><div class="mut sm" style="margin-bottom:6px">Descarga todos los cheques, folios, archivos y la bitácora en un Excel. Se recomienda hacerlo cada semana y guardarlo en tu computadora o en Drive.</div><button class="btn ghost" id="btnRespaldo" data-act="respaldo">Descargar respaldo en Excel</button>
   <h3>Instalar en el celular</h3><button class="btn ghost" data-act="instalar">Instalar app</button>`);
@@ -2311,6 +2353,9 @@ document.addEventListener('click', async ev => {
           ? '<div class="card">En iPhone: abre esta página en <b>Safari</b>, toca el botón <b>Compartir</b> (cuadro con flecha hacia arriba) y elige <b>Agregar a pantalla de inicio</b>.</div>'
           : '<div class="card">En Android (Chrome): toca los <b>tres puntos</b> de arriba a la derecha y elige <b>Instalar app</b> o <b>Agregar a pantalla principal</b>.<br><br>En computadora (Chrome): ícono de instalar al final de la barra de direcciones.</div>')
           + '<div class="mut sm">Si ya está instalada, ábrela desde su ícono en la pantalla de inicio.</div>'); break; }
+      case 'modulo': closeModal(); abrirModulo(el.dataset.mod); break;
+      case 'cajaresp': { closeModal(); abrirModulo('caja'); const f = cajaFrame(); await f._listo; for (let i = 0; i < 50 && !f.contentDocument.querySelector('nav.tabs'); i++) await new Promise(r => setTimeout(r, 200));
+        if (f.contentWindow.respaldoExcel) await f.contentWindow.respaldoExcel(); break; }
       case 'salir': await soltarPush(); await sb.auth.signOut(); S.perfil = null; closeModal(); renderLogin(); break;
       case 'cambiarpass': {
         const a = $('#np1').value, b = $('#np2').value; if (a.length < 8) return toast('Mínimo 8 caracteres.', 'err'); if (a !== b) return toast('No coinciden.', 'err');
