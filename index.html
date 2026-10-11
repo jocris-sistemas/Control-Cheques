@@ -265,7 +265,7 @@ details.dd .ddm button svg{width:18px;height:18px;flex:none;stroke:currentColor;
 .cd-sel{display:flex;gap:9px;align-items:center;font-size:13px;color:var(--mut);margin-top:10px;cursor:pointer;user-select:none}
 .cd-sel input{width:19px;height:19px;accent-color:var(--navy)}
 .selrow{display:flex;gap:8px;margin:0 0 12px}
-.selbar{position:fixed;left:50%;transform:translateX(-50%);bottom:74px;width:min(560px,94%);z-index:40;background:var(--navy);color:#fff;border-radius:14px;padding:10px 12px 10px 16px;display:flex;gap:10px;align-items:center;box-shadow:0 10px 30px rgba(0,0,0,.3)}
+.selbar{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(74px + env(safe-area-inset-bottom));width:min(560px,94%);z-index:40;background:var(--navy);color:#fff;border-radius:14px;padding:10px 12px 10px 16px;display:flex;gap:10px;align-items:center;box-shadow:0 10px 30px rgba(0,0,0,.3)}
 .selbar .grow{line-height:1.25;font-size:14px}.selbar b{font-size:16px}
 .selbar .btn{padding:9px 14px}
 .selbar .btn.ghost{background:transparent;color:#fff;border-color:rgba(255,255,255,.4)}
@@ -686,7 +686,7 @@ function cajaFrame() {
 let guardia = false;   // entrada extra en el historial mientras se navega dentro de Acumulado
 function abrirModulo(m, desdeHist) {
   const caja = m === 'caja' && veCaja();
-  if (!desdeHist) { try { if (caja) history.pushState({ m: 'caja' }, '', '#caja'); else if (document.body.classList.contains('modo-caja')) history.pushState({ m: 'cheques' }, '', location.pathname + location.search); } catch (e) { } guardia = false; }
+  if (!desdeHist) { try { if (caja && !document.body.classList.contains('modo-caja')) history.pushState({ m: 'caja' }, '', '#caja'); else if (document.body.classList.contains('modo-caja')) history.pushState({ m: 'cheques' }, '', location.pathname + location.search); } catch (e) { } if (!caja) guardia = false; }
   document.querySelectorAll('header.top .modsw button').forEach(b => b.classList.toggle('on', b.dataset.mod === (caja ? 'caja' : 'cheques')));
   document.body.classList.toggle('modo-caja', caja);
   const w = $('#cajaWrap'); if (w) w.classList.toggle('hidden', !caja);
@@ -927,7 +927,7 @@ function barrasHtml(items, nota) {
   return `<div class="bars">${items.map(i => `<div class="brow" title="${esc(i.l)}: ${fmt(i.v / 100)}${i.n ? ' · ' + i.n : ''}"><div class="bhead"><span class="bl">${esc(i.l)}${i.n ? ` <span class="bn">· ${esc(i.n)}</span>` : ''}</span><span class="bv money">${fmt(i.v / 100)}</span></div><div class="bt"><i style="width:${Math.max(1.5, i.v / mx * 100).toFixed(1)}%"></i></div></div>`).join('')}</div>${nota ? `<div class="mut sm" style="margin-top:8px">${nota}</div>` : ''}`;
 }
 async function viewRep() {
-  const per = S.repPer || 'mes';
+  const per = S.repPer || 'mes', tok = S.repTok = (S.repTok || 0) + 1;
   $('#view').innerHTML = `<div class="pagehead"><h2>Reportes</h2><span class="sub">Cheques autorizados, por cobrar y pendientes por completar</span></div>
     <div class="card" style="padding:11px"><div class="filters"><select id="repPer" aria-label="Periodo">${[['mes', 'Mes en curso'], ['mes_ant', 'Mes anterior'], ['90', 'Últimos 90 días'], ['anio', 'Este año']].map(([v, t]) => `<option value="${v}" ${per === v ? 'selected' : ''}>${t}</option>`).join('')}</select></div></div>
     <div id="repBody"><div class="sk"></div><div class="sk"></div><div class="sk"></div></div>`;
@@ -974,7 +974,7 @@ async function viewRep() {
       return { c, f, dias: edad(c) };
     }).filter(x => x.f.length);
     const nFoto = incompletos.filter(x => x.f.includes('Falta foto')).length, nFac = incompletos.filter(x => x.f.includes('Falta factura')).length;
-    if (S.tab !== 'rep' || !$('#repBody')) return;
+    if (S.tab !== 'rep' || !$('#repBody') || tok !== S.repTok) return;
     $('#repBody').innerHTML = `
       <div class="kpis">
         <div class="kpi"><div class="mut sm">Autorizado · ${nomPer}</div><div class="money big">${fmt(tot / 100)}</div></div>
@@ -990,7 +990,7 @@ async function viewRep() {
           ${incompletos.slice(0, 15).map(x => `<div class="rrow"><button class="lnk" data-act="detalle" data-id="${x.c.id}">Cheque ${x.c.numero_cheque} · ${esc(x.c.beneficiario)}</button><span class="rtags">${x.f.map(t => `<span class="chip warn">${t}</span>`).join('')}<span class="mut sm">${x.dias} día${x.dias === 1 ? '' : 's'}</span></span></div>`).join('')}
           ${incompletos.length > 15 ? `<div class="mut sm" style="margin-top:6px">Y ${incompletos.length - 15} más.</div>` : ''}</div>
       </div>`;
-  } catch (e) { $('#repBody').innerHTML = `<div class="warnbox">${esc(errMsg(e))}</div>`; }
+  } catch (e) { if (tok === S.repTok && $('#repBody')) $('#repBody').innerHTML = `<div class="warnbox">${esc(errMsg(e))}</div>`; }
 }
 
 /* ===================== VISTA: LISTA DE CHEQUES ===================== */
@@ -1126,7 +1126,7 @@ async function openDetail(id) {
           ${c.estatus !== 'cancelado' && !archActivos(c, 'comprobante_cobro').length ? `<button class="btn ghost sm" data-act="subir" data-id="${id}" data-tipo="comprobante_cobro">+ Ticket / ficha de depósito</button>` : ''}
           <button class="btn ghost sm" data-act="subir" data-id="${id}" data-tipo="otro">${c.estatus === 'cancelado' ? '+ Foto del cheque cancelado' : '+ Otro'}</button>${c.estatus !== 'cancelado' ? `<button class="btn ghost sm" data-act="copiardocs" data-id="${id}">Copiar documentos de un cheque cancelado</button>` : ''}</div>`
           : (!hist && puedeCapturar() ? '<div class="mut sm" style="margin-top:8px">Para agregar, reemplazar o quitar documentos de un cheque ya capturado, avisa a Pedro. Lo que tú subiste lo puedes cambiar o quitar durante 24 horas.</div>' : '')}
-        ${!hist && puedeTocar(c) && c.estatus === 'pendiente' && !archActivos(c, 'foto_cheque').length ? `<div class="row" style="margin-top:8px">${c.sin_foto_motivo ? `<button class="btn ghost sm" data-act="quitarsf" data-id="${id}">Quitar marca "sin foto"</button>` : `<button class="btn ghost sm" data-act="sinfoto" data-id="${id}">No hay foto</button>`}</div>` : ''}
+        ${!hist && puedeTocar(c) && c.estatus === 'pendiente' && !archActivos(c, 'foto_cheque').length && (puedeOperar() || !c.sin_foto_motivo) ? `<div class="row" style="margin-top:8px">${c.sin_foto_motivo ? `<button class="btn ghost sm" data-act="quitarsf" data-id="${id}">Quitar marca "sin foto"</button>` : `<button class="btn ghost sm" data-act="sinfoto" data-id="${id}">No hay foto</button>`}</div>` : ''}
       </div>
       ${acciones ? `<div class="row" style="margin:12px 0">${acciones}</div>` : ''}
       <h3>Comentarios</h3><div class="card" id="cmtBox"><div id="cmtList">${comsHtml(coms)}</div>
@@ -1140,14 +1140,14 @@ async function openDetail(id) {
 function pickFiles(multiple = true) {
   return new Promise(res => {
     const i = document.createElement('input'); i.type = 'file'; i.accept = 'image/*,application/pdf'; i.multiple = multiple;
-    i.onchange = () => res([...i.files]); i.click();
+    i.onchange = () => res([...i.files]); i.addEventListener('cancel', () => res([])); i.click();
   });
 }
 /* Elegir origen: en el celular ofrece "Tomar foto" (cámara) y permite varias fotos seguidas; en computadora abre el selector normal. */
 function pickCamara() {
   return new Promise(res => {
     const i = document.createElement('input'); i.type = 'file'; i.accept = 'image/*'; i.setAttribute('capture', 'environment');
-    i.onchange = () => res([...i.files]); i.click();
+    i.onchange = () => res([...i.files]); i.addEventListener('cancel', () => res([])); i.click();
   });
 }
 function pickFuente() {
@@ -1910,7 +1910,7 @@ async function viewNuevo(editCheque, copiaDe) {
   const { data: bens } = await sb.from('cheques').select('beneficiario').order('creado_en', { ascending: false }).limit(1000);
   if (S.tab !== 'nuevo') return;
   const uniq = [...new Set((bens || []).map(x => x.beneficiario))].slice(0, 400);
-  $('#view').innerHTML = `<div class="pagehead"><h2>${F.editId ? 'Editar cheque' : 'Nuevo cheque'}</h2></div>${F.copia ? `<div class="okbox" style="margin-bottom:10px"><b>Nuevo cheque con los datos del ${F.copia.numero} (cancelado).</b> Ya van copiados chequera, beneficiario, monto, concepto, folios y todos sus documentos (menos la foto del cheque). Pon el <b>número del cheque nuevo</b> y toma su foto.${F.copia.arch.length ? `<div style="margin-top:6px">Archivos que se copian al cheque nuevo:</div>${F.copia.arch.map((a, i) => `<label class="row" style="gap:8px;margin-top:4px"><input type="checkbox" data-act="copiaarch" data-i="${i}" ${a.on ? 'checked' : ''} style="width:auto"> <span>${({ factura: 'Factura', folio: 'Folio', comprobante_cobro: 'Comprobante', otro: 'Documento' })[a.tipo] || 'Archivo'}: ${esc(a.nombre)}</span></label>`).join('')}` : '<div class="mut sm" style="margin-top:6px">El cheque cancelado no tenía documentos subidos.</div>'}</div>` : ''}${F.editId ? '' : '<div class="mut sm" style="margin:-6px 0 10px">¿El cheque ya salió cancelado de origen? <a href="#" data-act="cancelado">Regístralo aquí</a></div>'}
+  $('#view').innerHTML = `<div class="pagehead"><h2>${F.editId ? 'Editar cheque' : 'Nuevo cheque'}</h2></div>${F.copia ? `<div class="okbox" style="margin-bottom:10px"><b>Nuevo cheque con los datos del ${F.copia.numero} (cancelado).</b> Ya van copiados chequera, beneficiario, monto, concepto, folios y todos sus documentos (menos la foto del cheque). Pon el <b>número del cheque nuevo</b> y toma su foto.${F.copia.arch.length ? `<div style="margin-top:6px">Archivos que se copian al cheque nuevo:</div>${F.copia.arch.map((a, i) => `<label class="row" style="gap:8px;margin-top:4px"><input type="checkbox" data-act="copiaarch" data-i="${i}" ${a.on ? 'checked' : ''} style="width:auto"> <span>${({ factura: 'Factura', folio: 'Folio', comprobante_cobro: 'Comprobante', otro: 'Documento' })[a.tipo] || 'Archivo'}: ${esc(a.nombre)}</span></label>`).join('')}` : '<div class="mut sm" style="margin-top:6px">El cheque cancelado no tenía documentos subidos.</div>'}</div>` : ''}${F.editId || !puedeOperar() ? '' : '<div class="mut sm" style="margin:-6px 0 10px">¿El cheque ya salió cancelado de origen? <a href="#" data-act="cancelado">Regístralo aquí</a></div>'}
   <div class="card">
     <div class="grid2">
       <div><label class="f">Chequera</label><select id="h_chequera_id"><option value="">Elige…</option>${S.chequeras.map(c => `<option value="${c.id}" ${String(h.chequera_id) === String(c.id) ? 'selected' : ''}>${esc(c.nombre)}</option>`).join('')}</select></div>
@@ -2118,6 +2118,9 @@ async function guardarCheque(confirmado = false) {
   if (!h.fecha) err.push('Captura la fecha.');
   if (!h.beneficiario.trim()) err.push('Captura el beneficiario.');
   if (!(tot > 0)) err.push('Captura el monto del cheque.');
+  const dosDec = v => /^\s*\$?\s*[\d,]*(\.\d{0,2})?\s*$/.test(String(v ?? ''));
+  if (tot > 0 && !dosDec(h.monto)) err.push('El monto del cheque solo puede llevar 2 decimales.');
+  if (F.lines.some(l => parseMoney(l.monto) > 0 && !dosDec(l.monto))) err.push('Los montos de los folios solo pueden llevar 2 decimales.');
   if (!F.editId && !F.chequeFiles.length) err.push('Toma o adjunta la foto del cheque (sin firmar).');
   F.lines.forEach((l, i) => {
     if (!l.cargo_id) err.push('Hay un folio sin cargo: elígelo.');
@@ -2154,7 +2157,7 @@ async function guardarCheque(confirmado = false) {
     let subidaErr = '';
     if (!F.editId && F._salta && F.saltaMotivo) { try { await rpc('registrar_detenidos', { p_chequera: F._salta.chequera, p_numeros: F._salta.nums, p_motivo: F.saltaMotivo }); } catch (e) { subidaErr = 'no se pudo guardar la alerta del cheque saltado: ' + errMsg(e); } }
     S.ult = {}; cargarAlertas(true);
-    if (F.chequeFiles.length) { try { await subirArchivo(c.id, 'foto_cheque', F.chequeFiles, `Foto_cheque_${c.numero_cheque}.pdf`); } catch (e) { subidaErr = 'foto del cheque: ' + errMsg(e) + ' (súbela desde el detalle: el Ing. no podrá autorizar sin ella)'; } }
+    if (F.chequeFiles.length) { try { await subirArchivo(c.id, 'foto_cheque', F.chequeFiles, `Foto_cheque_${c.numero_cheque}.pdf`); } catch (e) { subidaErr = 'foto del cheque: ' + errMsg(e) + (puedeArchivos() ? ' (súbela desde el detalle: el Ing. no podrá autorizar sin ella)' : ' (pídele a Pedro que la suba: el Ing. no podrá autorizar sin ella)'); } }
     if (F.files.length) { try { await subirArchivo(c.id, 'factura', F.files); } catch (e) { subidaErr = (subidaErr ? subidaErr + ' · ' : '') + errMsg(e); } }
     if (F.folioFiles.length) {
       const par = emparejarFolios(F.lines, c.folios || []);
@@ -2166,7 +2169,7 @@ async function guardarCheque(confirmado = false) {
       for (const a of F.copia.arch.filter(x => x.on)) {
         try { const { data, error } = await sb.storage.from(BUCKET).download(a.path); if (error) throw error; await subirBlob(c.id, a.tipo, data, a.nombre); } catch (e) { fallos.push(a.nombre); }
       }
-      if (fallos.length) subidaErr = (subidaErr ? subidaErr + ' · ' : '') + 'no se pudo copiar: ' + fallos.join(', ') + ' (súbelos desde el detalle)';
+      if (fallos.length) subidaErr = (subidaErr ? subidaErr + ' · ' : '') + 'no se pudo copiar: ' + fallos.join(', ') + (puedeArchivos() ? ' (súbelos desde el detalle)' : ' (pídele a Pedro que los suba)');
     }
     S.hojas = []; let hojasErr = '';
     try { S.hojas = armarHojas(F.lines, c.folios || [], h); } catch (e) { hojasErr = errMsg(e); }
@@ -2176,7 +2179,7 @@ async function guardarCheque(confirmado = false) {
       <div class="card"><div class="kv"><div>Póliza = No. de cheque</div><div class="b big">${c.numero_cheque}</div><div>Beneficiario</div><div>${esc(c.beneficiario)}</div><div>Monto</div><div class="money">${fmt(c.monto)}</div>
         <div>Folios</div><div>${(c.folios || []).map(f => esc(cargoNombre(f.cargo_id)) + ' ' + esc(folioTxt(f))).join('<br>')}</div></div></div>
       <div class="okbox">Quedó pendiente de autorización del Ing. Cristóbal.</div>
-      ${subidaErr ? `<div class="warnbox">El cheque se guardó, pero un archivo no se pudo subir: ${esc(subidaErr)}. Súbelo desde el detalle.</div>` : ''}
+      ${subidaErr ? `<div class="warnbox">El cheque se guardó, pero un archivo no se pudo subir: ${esc(subidaErr)}. ${puedeArchivos() ? 'Súbelo desde el detalle.' : 'Avísale a Pedro para que lo suba.'}</div>` : ''}
       ${hojasErr ? `<div class="warnbox">El cheque se guardó, pero no se pudo generar o guardar un folio: ${esc(hojasErr)}.</div>` : ''}
       ${S.hojas.length ? `<div class="okbox">Folios generados y guardados en el cheque:</div><div class="row" style="flex-wrap:wrap;gap:6px;margin:8px 0">${S.hojas.map((hj, k) => `<button class="btn ghost sm" data-act="dlfolio" data-i="${k}">Descargar folio ${esc(hj.nums)}</button>`).join('')}</div>` : ''}
       <div class="row" style="margin-top:12px"><button class="btn gold" data-act="poliza" data-id="${c.id}">Ver y imprimir póliza</button><button class="btn ghost" data-act="detalle" data-id="${c.id}">Ver cheque</button><button class="btn ghost" data-act="otro">Capturar otro</button></div>`);
@@ -2320,7 +2323,7 @@ async function respaldoExcel() {
       XLSX.utils.book_append_sheet(wb, ws, nombre);
     };
     add('CHEQUES', cheques, [9, 22, 11, 12, 40, 14, 12, 14, 28, 24, 24, 24, 14, 9, 12, 28, 28, 28, 28], [5]);
-    add('FOLIOS', folios, [9, 22, 11, 36, 18, 12, 30, 34, 22, 14, 9], [9]);
+    add('FOLIOS', folios, [9, 22, 11, 36, 18, 12, 30, 34, 22, 22, 14, 9], [10]);
     add('ARCHIVOS', arch, [9, 22, 11, 36, 14, 44, 9], []);
     add('BITACORA', bita, [18, 30, 22, 22, 11, 40], []);
     const d = new Date(); const f = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -2394,7 +2397,7 @@ document.addEventListener('click', async ev => {
         if (f.contentWindow.go) f.contentWindow.go('bit'); break; }
       case 'cajaresp': { closeModal(); abrirModulo('caja'); const f = cajaFrame(); await f._listo; for (let i = 0; i < 50 && !f.contentDocument.querySelector('nav.tabs'); i++) await new Promise(r => setTimeout(r, 200));
         if (f.contentWindow.respaldoExcel) await f.contentWindow.respaldoExcel(); break; }
-      case 'salir': await soltarPush(); await sb.auth.signOut(); S.perfil = null; closeModal(); renderLogin(); break;
+      case 'salir': if (S.dif) await flushDiferido(); await soltarPush(); await sb.auth.signOut(); S.perfil = null; closeModal(); renderLogin(); break;
       case 'cambiarpass': {
         const a = $('#np1').value, b = $('#np2').value; if (a.length < 8) return toast('Mínimo 8 caracteres.', 'err'); if (a !== b) return toast('No coinciden.', 'err');
         const { error } = await sb.auth.updateUser({ password: a }); if (error) return toast(errMsg(error), 'err'); toast('Contraseña actualizada.', 'ok'); closeModal(); break; }
@@ -2491,7 +2494,7 @@ document.addEventListener('click', async ev => {
       case 'okhoriztodos': { const m = ($('#mot').value || '').trim(); if (m.length < 5) return toast('Escribe el motivo (mín. 5 letras).', 'err'); await horizTodos(m); break; }
       case 'quitar': dlgMotivo('Quitar documento', 'okquitar', id, 'bad', 'Quitar'); break;
       case 'okquitar': { const m = $('#mot').value.trim(); if (m.length < 5) return toast('Escribe el motivo (mín. 5 letras).', 'err'); await rpc('quitar_archivo', { p_archivo: id, p_motivo: m }); toast('Documento quitado.', 'ok'); closeModal(); refreshView(true); break; }
-      case 'editar': { const c = await loadCheque(id); closeModal(); S.F = null; S.tab = 'nuevo'; document.querySelectorAll('nav.tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === 'nuevo')); await viewNuevo(c); window.scrollTo(0, 0); break; }
+      case 'editar': { const c = await loadCheque(id); closeModal(); S.F = null; S.tab = 'nuevo'; { const sb_ = $('#selbar'); if (sb_) sb_.classList.add('hidden'); } document.querySelectorAll('nav.tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === 'nuevo')); await viewNuevo(c); window.scrollTo(0, 0); break; }
       case 'cancelado': dlgCancelado(); break;
       case 'okcancelado': {
         const ch = Number($('#cc_ch').value), num = Number($('#cc_num').value), fe = $('#cc_fecha').value, mo = $('#cc_mot').value.trim();
@@ -2515,7 +2518,7 @@ document.addEventListener('click', async ev => {
           if (fl.length) { const { data: ya } = await sb.from('cheque_folios').select('cargo_id,folio_numero,cheques(numero_cheque)').eq('activo', true).in('folio_numero', fl.map(f => f.folio_numero));
             const m = (ya || []).find(x => fl.some(f => Number(f.cargo_id) === Number(x.cargo_id) && String(f.folio_numero) === String(x.folio_numero)));
             if (m) { toast(`Este cheque ya se volvió a hacer: sus folios están en el cheque ${m.cheques ? m.cheques.numero_cheque : ''}.`, 'err'); break; } } }
-        closeModal(); S.F = null; S.tab = 'nuevo'; document.querySelectorAll('nav.tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === 'nuevo')); await viewNuevo(null, c); window.scrollTo(0, 0); break; }
+        closeModal(); S.F = null; S.tab = 'nuevo'; { const sb_ = $('#selbar'); if (sb_) sb_.classList.add('hidden'); } document.querySelectorAll('nav.tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === 'nuevo')); await viewNuevo(null, c); window.scrollTo(0, 0); break; }
       case 'copiaarch': { if (S.F && S.F.copia) S.F.copia.arch[Number(el.dataset.i)].on = el.checked; return; }
       case 'modo': {
         const l = S.F.lines[Number(el.dataset.i)]; l.modo = el.dataset.m; const sc = S.cargos.find(esSinCargo);
