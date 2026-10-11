@@ -661,7 +661,10 @@ function renderShell() {
   document.body.classList.remove('modo-caja');
   altoHeader();
   go(S.tab);
-  if (veCaja() && location.hash === '#caja') abrirModulo('caja');
+  // Historial del navegador: una entrada para Cheques y otra para Acumulado, así el botón "atrás" no saca de la app.
+  const aCaja = veCaja() && location.hash === '#caja';
+  try { history.replaceState({ m: 'cheques' }, '', location.pathname + location.search); } catch (e) { }
+  if (aCaja) abrirModulo('caja');
 }
 /* ===================== CAJA DE EFECTIVO (mismo link, mismo usuario) ===================== */
 // Caja vive en su propio archivo y se abre aquí adentro; la sesión es la misma porque están en el mismo sitio.
@@ -673,21 +676,40 @@ function cajaFrame() {
   if (!f) { f = document.createElement('iframe'); f.title = 'Acumulado'; f.allow = 'camera; clipboard-write'; f.src = CAJA_URL(); f._listo = new Promise(r => f.addEventListener('load', r, { once: true })); w.appendChild(f); }
   return f;
 }
-function abrirModulo(m) {
+let guardia = false;   // entrada extra en el historial mientras se navega dentro de Acumulado
+function abrirModulo(m, desdeHist) {
   const caja = m === 'caja' && veCaja();
+  if (!desdeHist) { try { if (caja) history.pushState({ m: 'caja' }, '', '#caja'); else if (document.body.classList.contains('modo-caja')) history.pushState({ m: 'cheques' }, '', location.pathname + location.search); } catch (e) { } guardia = false; }
   document.querySelectorAll('header.top .modsw button').forEach(b => b.classList.toggle('on', b.dataset.mod === (caja ? 'caja' : 'cheques')));
   document.body.classList.toggle('modo-caja', caja);
   const w = $('#cajaWrap'); if (w) w.classList.toggle('hidden', !caja);
   if (caja) cajaFrame();
-  try { history.replaceState(null, '', caja ? '#caja' : location.pathname + location.search); } catch (e) { }
   altoHeader();
   if (!caja) { refreshPendCount(); refreshView(true); }
 }
-window.addEventListener('hashchange', () => { if (S.perfil && $('#cajaWrap')) abrirModulo(location.hash === '#caja' ? 'caja' : 'cheques'); });
+// Mientras Acumulado no está en su Inicio, se deja una entrada "guardia": el botón atrás la consume y Acumulado regresa una pantalla.
+function revisaGuardia() {
+  const f = $('#cajaWrap iframe'); if (!f || !document.body.classList.contains('modo-caja') || guardia) return;
+  let raiz = true; try { raiz = f.contentWindow.enRaiz ? f.contentWindow.enRaiz() : true; } catch (e) { }
+  if (!raiz) { try { history.pushState({ m: 'caja', g: 1 }, '', '#caja'); guardia = true; } catch (e) { } }
+}
+window.addEventListener('popstate', ev => {
+  if (!S.perfil || !$('#cajaWrap')) return;
+  const st = ev.state || {}, enCaja = document.body.classList.contains('modo-caja');
+  if (st.m === 'caja') {
+    if (!enCaja) { abrirModulo('caja', true); guardia = !!st.g; return; }
+    if (guardia && !st.g) {   // se consumió la guardia: Acumulado regresa una pantalla
+      guardia = false; const f = $('#cajaWrap iframe'); let hizo = false;
+      try { hizo = f && f.contentWindow.atras ? f.contentWindow.atras() : false; } catch (e) { }
+      if (!hizo) { try { history.back(); } catch (e) { } } else setTimeout(revisaGuardia, 50);
+    }
+  } else if (enCaja) abrirModulo('cheques', true);
+});
 window.addEventListener('message', ev => {
   if (ev.origin !== location.origin && location.protocol.indexOf('http') === 0) return;
   const d = ev.data || {};
   if (d.caja === 'actividad' && window.__rearma) window.__rearma();
+  if (d.caja === 'nav') revisaGuardia();
   if (d.caja === 'sesion') sb.auth.getSession().then(({ data }) => { if (!data.session && S.perfil) { S.perfil = null; renderLogin(); } });
 });
 function go(tab) {
