@@ -1586,8 +1586,8 @@ async function viewNuevo(editCheque, copiaDe) {
     if (copiaDe) {
       const c = copiaDe, fl = foliosDeCancelado(c), u = await ultimoChequera(c.chequera_id);
       S.F.h = { chequera_id: c.chequera_id, numero_cheque: u.num != null ? String(u.num + 1) : '', fecha: today(), beneficiario: c.beneficiario, monto: (fl.reduce((a, f) => a + cents(f.monto), 0) / 100).toFixed(2), concepto: c.concepto || '', solicito: c.solicito || S.perfil.nombre, sin_factura_motivo: c.sin_factura_motivo || '' };
-      S.F.lines = fl.map(f => ({ cargo_id: f.cargo_id, folio_numero: f.sin_folio ? '' : f.folio_numero, touched: true, proveedor: f.proveedor || '', descripcion: f.descripcion || '', obra: f.obra || '', monto: f.monto, modo: f.sin_folio ? 'sinfolio' : (esCancun(f.cargo_id) ? 'sistema' : 'archivo'), venc: '', periodo: '', conceptos: '', motivo_sf: f.sin_folio_motivo || '' }));
-      S.F.copia = { id: c.id, numero: c.numero_cheque, arch: archActivos(c).filter(a => a.tipo !== 'foto_cheque').map(a => ({ tipo: a.tipo, path: a.path, nombre: a.nombre, on: !(a.tipo === 'folio' && /^Folio_CANCUN_/i.test(a.nombre || '')) })) };
+      S.F.lines = fl.map(f => ({ cargo_id: f.cargo_id, folio_numero: f.sin_folio ? '' : f.folio_numero, touched: true, proveedor: f.proveedor || '', descripcion: f.descripcion || '', obra: f.obra || '', monto: f.monto, modo: f.sin_folio ? 'sinfolio' : 'archivo', venc: '', periodo: '', conceptos: '', motivo_sf: f.sin_folio_motivo || '' }));
+      S.F.copia = { id: c.id, numero: c.numero_cheque, arch: archActivos(c).filter(a => a.tipo !== 'foto_cheque').map(a => ({ tipo: a.tipo, path: a.path, nombre: a.nombre, on: true })) };
     }
   }
   const F = S.F, h = F.h;
