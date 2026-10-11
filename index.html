@@ -336,6 +336,15 @@ details.dd .ddm button svg{width:18px;height:18px;flex:none;stroke:currentColor;
   :root[data-theme="dark"] nav.tabs button.on{background:#1b2a3f}
   .selbar{bottom:24px!important}#undo{bottom:24px}
 }
+
+/* ---- Escáner de documentos ---- */
+.eswrap{position:relative;margin:10px auto;touch-action:none;user-select:none;-webkit-user-select:none}
+.eswrap canvas{display:block;border-radius:8px}
+.eswrap svg{position:absolute;left:0;top:0;pointer-events:none}
+.esh{position:absolute;width:30px;height:30px;margin:-15px 0 0 -15px;border-radius:50%;background:rgba(224,180,74,.35);border:3px solid #e0b44a;box-shadow:0 1px 6px rgba(0,0,0,.45);cursor:grab;touch-action:none}
+.esh::after{content:"";position:absolute;left:50%;top:50%;width:6px;height:6px;margin:-3px 0 0 -3px;border-radius:50%;background:#fff}
+.esres{background:#e4e8ee;border-radius:10px;padding:8px;text-align:center;max-height:58vh;overflow:auto}
+.esres img{max-width:100%;max-height:54vh;box-shadow:0 1px 6px rgba(0,0,0,.25);background:#fff}
 </style>
 </head>
 <body>
@@ -1036,7 +1045,7 @@ async function openDetail(id) {
       </tbody></table></div>
       ${cuadra ? '' : `<div class="warnbox">No cuadra: folios ${fmt(sumFolios(c) / 100)} vs cheque ${fmt(c.monto)}.</div>`}`}
       <h3>Documentos</h3><div class="card files">
-        ${arch.length ? arch.map(a => `<div class="row" style="margin-bottom:6px"><span class="chip historial">${tipoTxt[a.tipo]}</span><button class="lnk grow" style="text-align:left" data-act="verpath" data-path="${esc(a.path)}">${esc(a.nombre || 'archivo')}</button>${puedeArchivos() && !hist ? `<details class="dd"><summary class="btn ghost sm">Editar</summary><div class="ddm" style="left:auto;right:0"><button data-act="reemplazar" data-id="${a.id}" data-cheque="${id}">Reemplazar archivo…</button>${/\.pdf$/i.test(a.nombre || a.path) ? `<button data-act="horizontal" data-id="${a.id}" data-cheque="${id}">Pasar a hoja horizontal</button><button data-act="girar" data-id="${a.id}" data-cheque="${id}">Girar 90°</button>` : ''}<div class="sep"></div><button class="bad" data-act="quitar" data-id="${a.id}" data-cheque="${id}">Quitar…</button></div></details>` : ''}</div>`).join('') : '<span class="mut">Aún no hay documentos.</span>'}
+        ${arch.length ? arch.map(a => `<div class="row" style="margin-bottom:6px"><span class="chip historial">${tipoTxt[a.tipo]}</span><button class="lnk grow" style="text-align:left" data-act="verpath" data-path="${esc(a.path)}">${esc(a.nombre || 'archivo')}</button>${puedeArchivos() && !hist ? `<details class="dd"><summary class="btn ghost sm">Editar</summary><div class="ddm" style="left:auto;right:0"><button data-act="reemplazar" data-id="${a.id}" data-cheque="${id}" data-tipo="${a.tipo}">Reemplazar archivo…</button>${/\.pdf$/i.test(a.nombre || a.path) ? `<button data-act="horizontal" data-id="${a.id}" data-cheque="${id}">Pasar a hoja horizontal</button><button data-act="girar" data-id="${a.id}" data-cheque="${id}">Girar 90°</button>` : ''}<div class="sep"></div><button class="bad" data-act="quitar" data-id="${a.id}" data-cheque="${id}">Quitar…</button></div></details>` : ''}</div>`).join('') : '<span class="mut">Aún no hay documentos.</span>'}
         ${puedeSubir && puedeArchivos() ? `<div class="row" style="margin-top:10px">
           ${c.estatus !== 'cancelado' ? `<button class="btn ghost sm" data-act="subir" data-id="${id}" data-tipo="foto_cheque">+ Foto del cheque</button><button class="btn ghost sm" data-act="subir" data-id="${id}" data-tipo="factura">+ Factura</button><button class="btn ghost sm" data-act="subir" data-id="${id}" data-tipo="folio">+ Folio</button>` : ''}
           ${c.estatus !== 'cancelado' && !archActivos(c, 'comprobante_cobro').length ? `<button class="btn ghost sm" data-act="subir" data-id="${id}" data-tipo="comprobante_cobro">+ Ticket / ficha de depósito</button>` : ''}
@@ -1175,6 +1184,223 @@ function ajustarFoto(file) {
     };
   });
 }
+/* ---- Escáner de documentos: detecta las 4 esquinas, endereza, quita sombras ----
+   Todo se hace en el celular (sin servidor). modo 'cheque' (color suave) o 'doc' (hoja: fondo blanco, tinta marcada). */
+function cajaBlur(a, w, h, r) {   // desenfoque de caja separable con suma acumulada
+  const t = new Float32Array(w * h), o = new Float32Array(w * h);
+  for (let y = 0; y < h; y++) { let s = 0; const row = y * w; for (let x = -r; x < w + r; x++) { const xi = Math.min(w - 1, Math.max(0, x)); s += a[row + xi]; if (x - 2 * r - 1 >= -r) { const xo = Math.min(w - 1, Math.max(0, x - 2 * r - 1)); s -= a[row + xo]; } if (x - r >= 0 && x - r < w) t[row + x - r] = s / (2 * r + 1); } }
+  for (let x = 0; x < w; x++) { let s = 0; for (let y = -r; y < h + r; y++) { const yi = Math.min(h - 1, Math.max(0, y)); s += t[yi * w + x]; if (y - 2 * r - 1 >= -r) { const yo = Math.min(h - 1, Math.max(0, y - 2 * r - 1)); s -= t[yo * w + x]; } if (y - r >= 0 && y - r < h) o[(y - r) * w + x] = s / (2 * r + 1); } }
+  return o;
+}
+function areaQuad(q) { let a = 0; for (let i = 0; i < 4; i++) { const p = q[i], r = q[(i + 1) % 4]; a += p[0] * r[1] - r[0] * p[1]; } return Math.abs(a) / 2; }
+function convexo(q) { let s = 0; for (let i = 0; i < 4; i++) { const a = q[i], b = q[(i + 1) % 4], c = q[(i + 2) % 4]; const z = (b[0] - a[0]) * (c[1] - b[1]) - (b[1] - a[1]) * (c[0] - b[0]); if (z === 0) return false; if (!s) s = Math.sign(z); else if (Math.sign(z) !== s) return false; } return true; }
+function ordenaEsquinas(p) {   // [tl,tr,br,bl]
+  const c = p.reduce((a, q) => [a[0] + q[0] / 4, a[1] + q[1] / 4], [0, 0]);
+  const s = [...p].sort((a, b) => Math.atan2(a[1] - c[1], a[0] - c[0]) - Math.atan2(b[1] - c[1], b[0] - c[0]));   // sentido horario empezando a la izquierda
+  let k = 0, m = 1e18; s.forEach((q, i) => { const v = q[0] + q[1]; if (v < m) { m = v; k = i; } });
+  return [0, 1, 2, 3].map(i => s[(k + i) % 4]);
+}
+// Carga OpenCV (detector de orillas) solo la primera vez que se usa; queda en caché del navegador.
+let _cvP = null;
+function cargarOpenCV() {
+  if (window.__cvMod) return Promise.resolve(window.__cvMod);
+  if (_cvP) return _cvP;
+  _cvP = new Promise((ok, no) => {
+    const sc = document.createElement('script'); sc.async = true;
+    sc.src = 'https://cdn.jsdelivr.net/npm/@techstark/opencv-js@4.12.0-release.1/dist/opencv.js';
+    sc.onload = () => { const t0 = Date.now(); const iv = setInterval(() => { const c = window.cv; if (c && c.Mat) { clearInterval(iv); try { delete c.then; } catch (e) { } window.__cvMod = c; ok(c); } else if (Date.now() - t0 > 60000) { clearInterval(iv); _cvP = null; no(new Error('OpenCV no inicializó')); } }, 80); };
+    sc.onerror = () => { _cvP = null; no(new Error('No se pudo cargar el detector de orillas.')); };
+    document.head.appendChild(sc);
+  });
+  return _cvP;
+}
+// Regresa [tl,tr,br,bl] en fracciones (0..1) o null si no encuentra un documento claro.
+function calidadQuad(p, w, h) {
+  // Qué tan "hoja de papel" parece: ángulos cerca de 90°, lados opuestos parecidos y sin esquinas pegadas a la esquina de la foto.
+  const q = ordenaEsquinas(p), L = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+  let f = 1;
+  for (let i = 0; i < 4; i++) {
+    const A = q[(i + 3) % 4], B = q[i], C = q[(i + 1) % 4];
+    const v1 = [A[0] - B[0], A[1] - B[1]], v2 = [C[0] - B[0], C[1] - B[1]];
+    const ang = Math.acos(Math.max(-1, Math.min(1, (v1[0] * v2[0] + v1[1] * v2[1]) / (Math.hypot(...v1) * Math.hypot(...v2) || 1)))) * 180 / Math.PI;
+    if (ang < 55 || ang > 125) return 0;
+    f *= 1 - Math.abs(ang - 90) / 120;
+    const mx = Math.min(B[0], w - B[0]), my = Math.min(B[1], h - B[1]);
+    if (mx < w * 0.015 && my < h * 0.015) f *= 0.55;
+  }
+  const r1 = Math.min(L(q[0], q[1]), L(q[3], q[2])) / Math.max(L(q[0], q[1]), L(q[3], q[2]), 1);
+  const r2 = Math.min(L(q[0], q[3]), L(q[1], q[2])) / Math.max(L(q[0], q[3]), L(q[1], q[2]), 1);
+  if (r1 < 0.6 || r2 < 0.6) return 0;
+  return f * Math.pow(r1 * r2, 0.7);
+}
+function detectarEsquinas(cv, cvm) {
+  if (!cvm) return null;
+  const k = Math.min(1, 900 / Math.max(cv.width, cv.height)), w = Math.round(cv.width * k), h = Math.round(cv.height * k);
+  const sm = document.createElement('canvas'); sm.width = w; sm.height = h; sm.getContext('2d').drawImage(cv, 0, 0, w, h);
+  const libera = []; const M = x => { libera.push(x); return x; };
+  try {
+    const src = M(cvm.imread(sm)), g = M(new cvm.Mat()), b = M(new cvm.Mat());
+    cvm.cvtColor(src, g, cvm.COLOR_RGBA2GRAY); cvm.GaussianBlur(g, b, new cvm.Size(5, 5), 0);
+    const minA = w * h * 0.10, maxA = w * h * 0.985; let mejor = null, mejorS = 0;
+    const revisa = (bin, eps, peso, envolver) => {
+      const cs = M(new cvm.MatVector()), hi = M(new cvm.Mat());
+      cvm.findContours(bin, cs, hi, cvm.RETR_LIST, cvm.CHAIN_APPROX_SIMPLE);
+      for (let i = 0; i < cs.size(); i++) {
+        let c = cs.get(i);
+        if (envolver) { const hu = new cvm.Mat(); cvm.convexHull(c, hu, false, true); c.delete(); c = hu; }
+        const a = cvm.contourArea(c);
+        if (a > minA && a < maxA && a / (w * h) * peso > mejorS) {
+          const ap = new cvm.Mat(), per = cvm.arcLength(c, true);
+          for (let j = 0; j < eps.length; j++) {
+            cvm.approxPolyDP(c, ap, eps[j] * per, true);
+            if (ap.rows === 4 && cvm.isContourConvex(ap)) {
+              const p = []; for (let t = 0; t < 4; t++) p.push([ap.data32S[t * 2], ap.data32S[t * 2 + 1]]);
+              const aq = areaQuad(p);
+              if (aq > minA && aq < maxA) { const s = aq / (w * h) * calidadQuad(p, w, h) * peso * (1 - j * 0.06) * Math.min(1, a / aq); if (s > mejorS) { mejor = p; mejorS = s; } }
+              break;
+            }
+          }
+          ap.delete();
+        }
+        c.delete();
+      }
+    };
+    const ker = M(cvm.getStructuringElement(cvm.MORPH_RECT, new cvm.Size(5, 5)));
+    // 1) orillas (Canny) unidas con una dilatación, con varias sensibilidades
+    for (const [t1, t2] of [[40, 120], [20, 60], [75, 200]]) { const ed = M(new cvm.Mat()); cvm.Canny(b, ed, t1, t2); cvm.dilate(ed, ed, ker); revisa(ed, [0.02, 0.03, 0.045], 1); }
+    // 2) papel claro contra fondo oscuro (y al revés)
+    for (const inv of [false, true]) {
+      const th = M(new cvm.Mat()); cvm.threshold(b, th, 0, 255, (inv ? cvm.THRESH_BINARY_INV : cvm.THRESH_BINARY) + cvm.THRESH_OTSU);
+      cvm.morphologyEx(th, th, cvm.MORPH_OPEN, ker); cvm.morphologyEx(th, th, cvm.MORPH_CLOSE, ker); revisa(th, [0.02, 0.035, 0.05, 0.07], 0.9);
+    }
+    // 3) orillas débiles o cortadas (papel sobre papel): se cierra la figura con su envolvente
+    for (const [t1, t2] of [[20, 60], [10, 30]]) { const ed = M(new cvm.Mat()); cvm.Canny(b, ed, t1, t2); cvm.dilate(ed, ed, ker); revisa(ed, [0.02, 0.03, 0.045], 0.85, true); }
+    if (!mejor || mejorS < 0.06) return null;
+    return ordenaEsquinas(mejor).map(p => [p[0] / w, p[1] / h]);
+  } catch (e) { return null; } finally { libera.forEach(x => { try { x.delete(); } catch (e) { } }); }
+}
+// Homografía: lleva el rectángulo de salida (0..W, 0..H) a la figura de 4 esquinas en la foto.
+function homografia(src, W, H) {
+  const dst = [[0, 0], [W, 0], [W, H], [0, H]], A = [], b = [];
+  for (let i = 0; i < 4; i++) { const [u, v] = dst[i], [x, y] = src[i]; A.push([u, v, 1, 0, 0, 0, -u * x, -v * x]); b.push(x); A.push([0, 0, 0, u, v, 1, -u * y, -v * y]); b.push(y); }
+  for (let c = 0; c < 8; c++) { let p = c; for (let r = c + 1; r < 8; r++) if (Math.abs(A[r][c]) > Math.abs(A[p][c])) p = r; [A[c], A[p]] = [A[p], A[c]]; [b[c], b[p]] = [b[p], b[c]];
+    for (let r = 0; r < 8; r++) if (r !== c) { const f = A[r][c] / A[c][c]; for (let k = c; k < 8; k++) A[r][k] -= f * A[c][k]; b[r] -= f * b[c]; } }
+  const s = b.map((v, i) => v / A[i][i]); return [s[0], s[1], s[2], s[3], s[4], s[5], s[6], s[7], 1];
+}
+function enderezar(cv, qf, maxLado = 2400) {
+  const q = qf.map(p => [p[0] * cv.width, p[1] * cv.height]), d = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+  let W = Math.max(d(q[0], q[1]), d(q[3], q[2])), H = Math.max(d(q[0], q[3]), d(q[1], q[2])); const k = Math.min(1, maxLado / Math.max(W, H)); W = Math.max(20, Math.round(W * k)); H = Math.max(20, Math.round(H * k));
+  const M = homografia(q, W, H), sw = cv.width, sh = cv.height, sp = cv.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, sw, sh).data;
+  const o = document.createElement('canvas'); o.width = W; o.height = H; const ox = o.getContext('2d'), out = ox.createImageData(W, H), od = out.data;
+  for (let v = 0; v < H; v++) for (let u = 0; u < W; u++) {
+    const z = M[6] * u + M[7] * v + 1, x = (M[0] * u + M[1] * v + M[2]) / z, y = (M[3] * u + M[4] * v + M[5]) / z;
+    const x0 = Math.max(0, Math.min(sw - 2, x | 0)), y0 = Math.max(0, Math.min(sh - 2, y | 0)), fx = Math.min(1, Math.max(0, x - x0)), fy = Math.min(1, Math.max(0, y - y0));
+    const i00 = (y0 * sw + x0) * 4, i10 = i00 + 4, i01 = i00 + sw * 4, i11 = i01 + 4, j = (v * W + u) * 4;
+    for (let c = 0; c < 3; c++) od[j + c] = (sp[i00 + c] * (1 - fx) + sp[i10 + c] * fx) * (1 - fy) + (sp[i01 + c] * (1 - fx) + sp[i11 + c] * fx) * fy;
+    od[j + 3] = 255;
+  }
+  ox.putImageData(out, 0, 0); return o;
+}
+// Quita sombras (divide entre la luz estimada del fondo), ajusta contraste y da nitidez.
+function mejorarImagen(cv, modo) {
+  const W = cv.width, H = cv.height, cx = cv.getContext('2d', { willReadFrequently: true }), im = cx.getImageData(0, 0, W, H), d = im.data;
+  const B = Math.max(8, Math.round(Math.max(W, H) / 48)), bw = Math.ceil(W / B), bh = Math.ceil(H / B), mx = new Float32Array(bw * bh);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const i = (y * W + x) * 4, L = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2], b = ((y / B) | 0) * bw + ((x / B) | 0); if (L > mx[b]) mx[b] = L; }
+  let bg = cajaBlur(cajaBlur(mx, bw, bh, 2), bw, bh, 2);
+  const srt = Array.from(bg).sort((a, b) => a - b), ref = srt[Math.floor(srt.length * 0.85)] || 230;
+  const fondo = (x, y) => { const fx = Math.min(bw - 1.001, Math.max(0, x / B - 0.5)), fy = Math.min(bh - 1.001, Math.max(0, y / B - 0.5)), x0 = fx | 0, y0 = fy | 0, ax = fx - x0, ay = fy - y0;
+    return (bg[y0 * bw + x0] * (1 - ax) + bg[y0 * bw + x0 + 1] * ax) * (1 - ay) + (bg[(y0 + 1) * bw + x0] * (1 - ax) + bg[(y0 + 1) * bw + x0 + 1] * ax) * ay; };
+  const doc = modo === 'doc', lo = doc ? 70 : 18, hi = doc ? 228 : 240;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const i = (y * W + x) * 4, f = Math.max(25, fondo(x, y));
+    const gan = doc ? 255 / f : 1 + (Math.min(1.9, Math.max(0.9, ref / f)) - 1) * 0.85;
+    for (let c = 0; c < 3; c++) { let v = d[i + c] * gan; v = (v - lo) / (hi - lo) * 255; d[i + c] = v < 0 ? 0 : v > 255 ? 255 : v; }
+    if (doc) { const r = d[i], g = d[i + 1], b = d[i + 2], cr = Math.max(r, g, b) - Math.min(r, g, b), m = (r + g + b) / 3, T = m > 185 ? 96 : 48; if (cr < T) { const t = cr < T / 2 ? 1 : (T - cr) / (T / 2); d[i] = r + (m - r) * t; d[i + 1] = g + (m - g) * t; d[i + 2] = b + (m - b) * t; } }   // quita tintes en papel y tinta negra
+  }
+  // nitidez (máscara de enfoque)
+  const L = new Float32Array(W * H); for (let i = 0; i < W * H; i++) L[i] = 0.299 * d[i * 4] + 0.587 * d[i * 4 + 1] + 0.114 * d[i * 4 + 2];
+  const bl = cajaBlur(L, W, H, 1), amt = doc ? 0.6 : 0.45;
+  for (let i = 0; i < W * H; i++) { const dl = (L[i] - bl[i]) * amt; for (let c = 0; c < 3; c++) { const v = d[i * 4 + c] + dl; d[i * 4 + c] = v < 0 ? 0 : v > 255 ? 255 : v; } }
+  cx.putImageData(im, 0, 0); return cv;
+}
+function copiaCanvas(cv) { const o = document.createElement('canvas'); o.width = cv.width; o.height = cv.height; o.getContext('2d').drawImage(cv, 0, 0); return o; }
+function escanearFoto(file, modo, titulo, nota) {
+  return new Promise(async res => {
+    let cv; try { cv = await cargaCanvas(file, 2600); } catch (e) { return res(file); }
+    let Q = null, dw = 0, dh = 0, paso = 1, salidaCv = null, mejora = true;
+    const ov = document.createElement('div'); ov.className = 'overlay'; ov.style.zIndex = 75; document.body.appendChild(ov);
+    ov.innerHTML = '<div class="sheet"><div class="spin">Preparando el recorte…</div><div class="mut sm" style="text-align:center">La primera vez tarda unos segundos en descargar el detector de orillas.</div></div>';
+    const nom = file.name.replace(/\.[a-z0-9]+$/i, '');
+    const cierra = f => { ov.remove(); res(f); };
+    const aFile = c => new Promise(r2 => c.toBlob(b => r2(new File([b], nom + '-escaneo.jpg', { type: 'image/jpeg' })), 'image/jpeg', 0.88));
+    let cvm = null; try { cvm = await Promise.race([cargarOpenCV(), new Promise((_, no) => setTimeout(() => no(new Error('tiempo')), 30000))]); } catch (e) { cvm = null; }
+    const detecta = () => { Q = detectarEsquinas(cv, cvm); if (!Q) { const s = modo === 'cheque' ? sugiereCaja(cv) : null; const r = s || { x0: 0.02, y0: 0.02, x1: 0.98, y1: 0.98 }; Q = [[r.x0, r.y0], [r.x1, r.y0], [r.x1, r.y1], [r.x0, r.y1]]; return false; } return true; };
+    const auto = detecta();
+    const pasoEsquinas = (msg) => {
+      paso = 1;
+      ov.innerHTML = `<div class="sheet"><h2 style="margin-top:0">${esc(titulo)}</h2>${nota ? `<div class="mut sm" style="margin-bottom:4px">${esc(nota)}</div>` : ''}
+        <div class="mut sm">${msg}</div>
+        <div id="esWrap" class="eswrap"><canvas id="esCv"></canvas><svg id="esSvg"></svg>${[0, 1, 2, 3].map(i => `<i class="esh" data-i="${i}"></i>`).join('')}</div>
+        <div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn ghost sm" id="esL">↺ Girar</button><button class="btn ghost sm" id="esR">↻ Girar</button><button class="btn ghost sm" id="esAuto">Buscar orillas</button></div>
+        <div class="row" style="margin-top:14px"><button class="btn ok grow" id="esOk">Recortar y mejorar</button><button class="btn ghost" id="esOrig">Usar foto original</button></div></div>`;
+      const wrap = ov.querySelector('#esWrap'), cnv = ov.querySelector('#esCv'), svg = ov.querySelector('#esSvg'), hs = [...ov.querySelectorAll('.esh')];
+      const layout = () => {
+        const maxW = Math.min(ov.querySelector('.sheet').clientWidth - 32, 760), maxH = Math.max(220, window.innerHeight * 0.55), k = Math.min(maxW / cv.width, maxH / cv.height);
+        dw = Math.round(cv.width * k); dh = Math.round(cv.height * k); cnv.width = dw; cnv.height = dh; cnv.getContext('2d').drawImage(cv, 0, 0, dw, dh);
+        wrap.style.width = dw + 'px'; wrap.style.height = dh + 'px'; svg.setAttribute('width', dw); svg.setAttribute('height', dh); pinta();
+      };
+      const pinta = () => {
+        const P = Q.map(p => [p[0] * dw, p[1] * dh]);
+        svg.innerHTML = `<path d="M0 0H${dw}V${dh}H0Z M${P.map(p => p.join(' ')).join(' L')}Z" fill="rgba(10,20,35,.45)" fill-rule="evenodd"/><polygon points="${P.map(p => p.join(',')).join(' ')}" fill="none" stroke="#e0b44a" stroke-width="2.5"/>`;
+        hs.forEach((h, i) => { h.style.left = P[i][0] + 'px'; h.style.top = P[i][1] + 'px'; });
+      };
+      layout();
+      let drag = -1;
+      wrap.addEventListener('pointerdown', ev => { const t = ev.target; if (!t.classList.contains('esh')) { // tocar cerca de una esquina también la toma
+          const r = wrap.getBoundingClientRect(), x = ev.clientX - r.left, y = ev.clientY - r.top; let mejor = -1, md = 46; Q.forEach((p, i) => { const dd = Math.hypot(p[0] * dw - x, p[1] * dh - y); if (dd < md) { md = dd; mejor = i; } }); if (mejor < 0) return; drag = mejor; }
+        else drag = Number(t.dataset.i);
+        wrap.setPointerCapture(ev.pointerId); ev.preventDefault(); });
+      wrap.addEventListener('pointermove', ev => { if (drag < 0) return; const r = wrap.getBoundingClientRect(); Q[drag] = [Math.min(1, Math.max(0, (ev.clientX - r.left) / dw)), Math.min(1, Math.max(0, (ev.clientY - r.top) / dh))]; pinta(); });
+      const fin = () => { drag = -1; }; wrap.addEventListener('pointerup', fin); wrap.addEventListener('pointercancel', fin);
+      const gira = cw => { cv = giraCanvas(cv, cw); Q = Q.map(([x, y]) => cw ? [1 - y, x] : [y, 1 - x]); Q = cw ? [Q[3], Q[0], Q[1], Q[2]] : [Q[1], Q[2], Q[3], Q[0]]; layout(); };
+      ov.querySelector('#esL').onclick = () => gira(false);
+      ov.querySelector('#esR').onclick = () => gira(true);
+      ov.querySelector('#esAuto').onclick = () => { if (!detecta()) toast('No encontré las orillas: acomoda las esquinas con el dedo.', 'err'); pinta(); };
+      ov.querySelector('#esOrig').onclick = async () => cierra(file);
+      ov.querySelector('#esOk').onclick = () => {
+        if (!convexo(Q.map(p => [p[0] * dw, p[1] * dh]))) return toast('Las esquinas se cruzaron: acomódalas en orden.', 'err');
+        const b = ov.querySelector('#esOk'); b.disabled = true; b.textContent = 'Procesando…';
+        setTimeout(() => { try { let o = enderezar(cv, Q); if (modo === 'cheque' && o.height > o.width * 1.05) o = giraCanvas(o, false); salidaCv = o; pasoResultado(); } catch (e) { toast('No se pudo procesar la foto.', 'err'); b.disabled = false; b.textContent = 'Recortar y mejorar'; } }, 30);
+      };
+    };
+    const pasoResultado = () => {
+      paso = 2;
+      const final = () => mejora ? mejorarImagen(copiaCanvas(salidaCv), modo) : salidaCv;
+      let vista = final();
+      ov.innerHTML = `<div class="sheet"><h2 style="margin-top:0">¿Así queda bien?</h2>
+        <div class="esres"><img id="esImg" alt="Resultado"></div>
+        <label class="row" style="gap:8px;margin-top:8px;align-items:center"><input type="checkbox" id="esMej" ${mejora ? 'checked' : ''} style="width:auto"> <span>Quitar sombras y mejorar nitidez</span></label>
+        <div class="row" style="gap:8px;flex-wrap:wrap;margin-top:6px"><button class="btn ghost sm" id="esL2">↺ Girar</button><button class="btn ghost sm" id="esR2">↻ Girar</button><button class="btn ghost sm" id="esVolver">Ajustar esquinas</button></div>
+        <div class="row" style="margin-top:14px"><button class="btn ok grow" id="esUsar">Usar esta</button><button class="btn ghost" id="esOrig2">Usar foto original</button></div></div>`;
+      const img = ov.querySelector('#esImg'); const muestra = () => { img.src = vista.toDataURL('image/jpeg', 0.8); };
+      muestra();
+      ov.querySelector('#esMej').onchange = e => { mejora = e.target.checked; vista = final(); muestra(); };
+      ov.querySelector('#esL2').onclick = () => { salidaCv = giraCanvas(salidaCv, false); vista = final(); muestra(); };
+      ov.querySelector('#esR2').onclick = () => { salidaCv = giraCanvas(salidaCv, true); vista = final(); muestra(); };
+      ov.querySelector('#esVolver').onclick = () => pasoEsquinas('Acomoda las 4 esquinas sobre las orillas del documento.');
+      ov.querySelector('#esOrig2').onclick = () => cierra(file);
+      ov.querySelector('#esUsar').onclick = async () => cierra(await aFile(vista));
+    };
+    pasoEsquinas(auto ? 'Revisa que las 4 esquinas estén sobre las orillas; si no, arrástralas con el dedo.' : 'No encontré las orillas solo: arrastra las 4 esquinas sobre las orillas del documento.');
+  });
+}
+async function escanearFotos(files, tipo) {
+  const modo = tipo === 'foto_cheque' ? 'cheque' : 'doc';
+  const tit = { foto_cheque: 'Recorta el cheque', folio: 'Recorta el folio', factura: 'Recorta la factura', comprobante_cobro: 'Recorta el ticket o ficha', otro: 'Recorta el documento' }[tipo] || 'Recorta el documento';
+  const imgs = files.filter(f => f.type && f.type.startsWith('image/')).length; let n = 0; const out = [];
+  for (const f of files) { if (f.type && f.type.startsWith('image/')) { n++; out.push(await escanearFoto(f, modo, tit, imgs > 1 ? `Foto ${n} de ${imgs}` : '')); } else out.push(f); }
+  return out;
+}
 async function ajustarFotos(files) {
   const out = []; for (const f of files) out.push(f.type && f.type.startsWith('image/') ? await ajustarFoto(f) : f); return out;
 }
@@ -1222,7 +1448,7 @@ async function leerFotoCheque(file) {
   } catch (e) { if (S.F !== F || F.lecTok !== tok) return; F.lecturaEstado = 'error'; F.lecturaError = String(e.message || e).slice(0, 120); }
   pintaLectura();
 }
-async function pickFuenteT(tipo) { const fs = await pickFuente(); return tipo === 'foto_cheque' && fs.length ? await ajustarFotos(fs) : fs; }
+async function pickFuenteT(tipo) { const fs = await pickFuente(); return fs.length ? await escanearFotos(fs, tipo || 'otro') : fs; }
 async function filesToPdf(files) {
   if (files.length === 1 && files[0].type === 'application/pdf') return files[0];
   if (files.some(f => f.type === 'application/pdf')) throw new Error('No mezcles PDFs con fotos: sube el PDF solo.');
@@ -2145,10 +2371,10 @@ document.addEventListener('click', async ev => {
         const m = ($('#mot').value || '').trim(); if (m.length < 5) return toast('Escribe el motivo (mín. 5 letras).', 'err');
         const files = await pickFuenteT(el.dataset.tipo); if (!files.length) break; toast('Subiendo…');
         await subirArchivo(id, el.dataset.tipo, files, null, { agregar: true, motivo: m }); toast('Documento guardado.', 'ok'); openDetail(id); refreshView(true); break; }
-      case 'reemplazar': dlgMotivoArch('Reemplazar documento', 'okreemplazar', el.dataset.id, { cheque: el.dataset.cheque }, 'Elegir el archivo nuevo…'); break;
+      case 'reemplazar': dlgMotivoArch('Reemplazar documento', 'okreemplazar', el.dataset.id, { cheque: el.dataset.cheque, tipo: el.dataset.tipo || 'otro' }, 'Elegir el archivo nuevo…'); break;
       case 'okreemplazar': {
         const m = ($('#mot').value || '').trim(); if (m.length < 5) return toast('Escribe el motivo (mín. 5 letras).', 'err');
-        const files = await pickFuente(); if (!files.length) break; toast('Subiendo…');
+        const files = await pickFuenteT(el.dataset.tipo || 'otro'); if (!files.length) break; toast('Subiendo…');
         const ch = el.dataset.cheque; const blob = await filesToPdf(files);
         await reemplazarConBlob(el.dataset.id, ch, blob, files.length === 1 ? files[0].name.replace(/\.(jpe?g|png|webp|heic)$/i, '.pdf') : null, m);
         toast('Documento reemplazado.', 'ok'); openDetail(ch); refreshView(true); break; }
@@ -2172,7 +2398,7 @@ document.addEventListener('click', async ev => {
         el.disabled = true; const c = await rpc('registrar_cheque_cancelado', { p_chequera: ch, p_numero: num, p_fecha: fe, p_motivo: mo });
         let warn = ''; if (ccFiles.length) { try { await subirArchivo(c.id, 'otro', ccFiles); } catch (e) { warn = errMsg(e); } }
         ccFiles = []; closeModal(); toast(`Cheque ${num} registrado como cancelado.` + (warn ? ' La foto no se pudo subir.' : ''), warn ? 'err' : 'ok'); cargarAlertas(true); refreshView(); break; }
-      case 'ccfoto': { ccFiles = await pickFuente(); $('#ccInfo').textContent = ccFiles.length ? ccFiles.length + ' archivo(s)' : 'Sin foto'; break; }
+      case 'ccfoto': { ccFiles = await pickFuenteT('foto_cheque'); $('#ccInfo').textContent = ccFiles.length ? ccFiles.length + ' archivo(s)' : 'Sin foto'; break; }
       case 'huecos': { openModal('<div class="spin">Revisando…</div>'); await cargarAlertas(true); dlgHuecos(); break; }
       case 'motivohuecos': {
         const q = Number(el.dataset.q), inp = $('#mh_' + q), m = inp ? inp.value.trim() : '';
@@ -2196,7 +2422,7 @@ document.addEventListener('click', async ev => {
         renderLines(); break;
       }
       case 'pickcheque': { const fs = await pickFuenteT('foto_cheque'); if (fs.length) { S.F.chequeFiles = S.F.chequeFiles.concat(fs); leerFotoCheque(fs[0]); } $('#chqInfo').textContent = S.F.chequeFiles.length ? S.F.chequeFiles.length + ' foto(s) lista(s) para subir' : 'Sin foto'; break; }
-      case 'pickfolio': { const fs = await pickFuente(); S.F.folioFiles = fs; $('#folInfo').textContent = fs.length ? fs.length + ' archivo(s) listo(s) para subir' : 'Sin adjuntar'; break; }
+      case 'pickfolio': { const fs = await pickFuenteT('folio'); S.F.folioFiles = fs; $('#folInfo').textContent = fs.length ? fs.length + ' archivo(s) listo(s) para subir' : 'Sin adjuntar'; break; }
       case 'dlfolio': { const hj = (S.hojas || [])[Number(el.dataset.i)]; if (hj) bajarBlob(hj.blob || hj.doc.output('blob'), hj.nombre); break; }
       case 'firma': dlgFirma(); break;
       case 'firmalimpiar': { const cv = $('#firmaPad'); cv.getContext('2d').clearRect(0, 0, cv.width, cv.height); break; }
@@ -2208,7 +2434,7 @@ document.addEventListener('click', async ev => {
         const F = S.F, i = Number(el.dataset.i); const tot = cents(parseMoney(F.h.monto) || 0);
         const otros = F.lines.reduce((a, l, j) => j === i ? a : a + cents(parseMoney(l.monto) || 0), 0); const falta = tot - otros;
         if (falta > 0) { F.lines[i].monto = (falta / 100).toFixed(2); renderLines(); } else toast('No falta nada por repartir.', 'err'); break; }
-      case 'pickfac': { const files = await pickFuente(); S.F.files = files; $('#facInfo').textContent = files.length ? files.length + ' archivo(s) listo(s) para subir' : 'Sin adjuntar'; break; }
+      case 'pickfac': { const files = await pickFuenteT('factura'); S.F.files = files; $('#facInfo').textContent = files.length ? files.length + ' archivo(s) listo(s) para subir' : 'Sin adjuntar'; break; }
       case 'guardar': guardarCheque(); break;
       case 'confirmguardar': { const ms = $('#motSalta'); if (ms) { if (ms.value.trim().length < 3) return toast('Escribe por qué se salta el cheque (queda como alerta).', 'err'); if (S.F) S.F.saltaMotivo = ms.value.trim(); } closeModal(); guardarCheque(true); break; }
       case 'saveserie': {
