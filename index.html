@@ -647,7 +647,6 @@ function renderShell() {
   const tabs = [['pend', esAdmin() ? 'Autorizar' : 'Pendientes'], ['cheques', 'Historial']];
   if (puedeCapturar()) tabs.push(['nuevo', 'Nuevo']);
   tabs.push(['rep', 'Reportes']);
-  tabs.push(['bit', 'Bitácora']);
   $('#app').innerHTML = `
   <header class="top">
     <div class="brand"><span class="mark">J</span><div>${veCaja() ? 'JOCRIS' : 'JOCRIS · <span class="tl">Control de </span>Cheques'}<small>${esc(S.perfil.nombre)} · ${esc(rolTxt(S.perfil.rol))}</small></div></div>
@@ -669,6 +668,8 @@ function renderShell() {
 /* ===================== CAJA DE EFECTIVO (mismo link, mismo usuario) ===================== */
 // Caja vive en su propio archivo y se abre aquí adentro; la sesión es la misma porque están en el mismo sitio.
 const veCaja = () => !!S.perfil?.puede_caja;
+// La bitácora ya no ocupa pestaña: se abre desde Mi cuenta y solo la ven Pedro y el Ing.
+const veBitacora = () => !!S.perfil?.puede_archivos || esAdmin();
 const CAJA_URL = () => location.protocol.indexOf('http') === 0 ? '../Caja-Efectivo/?embed=1' : '../caja-publicar/index.html' + (location.search ? location.search + '&embed=1' : '?embed=1');
 function cajaFrame() {
   const w = $('#cajaWrap'); if (!w) return null;
@@ -2332,6 +2333,7 @@ function menuCuenta() {
   <h3>Apariencia</h3><div class="tema">${[['auto', 'Automático'], ['light', 'Claro'], ['dark', 'Oscuro']].map(([v, t]) => `<button class="btn ghost sm ${temaPref() === v ? 'on' : ''}" data-act="tema" data-v="${v}">${t}</button>`).join('')}</div>
   ${veCaja() ? `<h3>Acumulado</h3><div class="row" style="gap:8px"><button class="btn ghost" data-act="modulo" data-mod="caja">Abrir Acumulado</button><button class="btn ghost" data-act="cajaresp">Respaldo del Acumulado en Excel</button></div>` : ''}
   <h3>Mi firma</h3><div class="mut sm" style="margin-bottom:6px">${S.firma ? 'Ya tienes una firma guardada.' : 'Aún no tienes firma guardada.'}</div><button class="btn ghost" data-act="firma">${S.firma ? 'Cambiar mi firma' : 'Agregar mi firma'}</button>
+  ${veBitacora() ? `<h3>Bitácora</h3><div class="row" style="gap:8px"><button class="btn ghost" data-act="verbit">Bitácora de Cheques</button>${veCaja() ? '<button class="btn ghost" data-act="verbitcaja">Bitácora de Acumulado</button>' : ''}</div>` : ''}
   <h3>Respaldo</h3><div class="mut sm" style="margin-bottom:6px">Descarga todos los cheques, folios, archivos y la bitácora en un Excel. Se recomienda hacerlo cada semana y guardarlo en tu computadora o en Drive.</div><button class="btn ghost" id="btnRespaldo" data-act="respaldo">Descargar respaldo en Excel</button>
   <h3>Instalar en el celular</h3><button class="btn ghost" data-act="instalar">Instalar app</button>`);
   htmlPush().then(h => { const b = $('#pushBox'); if (b) b.innerHTML = h; });
@@ -2379,6 +2381,9 @@ document.addEventListener('click', async ev => {
           : '<div class="card">En Android (Chrome): toca los <b>tres puntos</b> de arriba a la derecha y elige <b>Instalar app</b> o <b>Agregar a pantalla principal</b>.<br><br>En computadora (Chrome): ícono de instalar al final de la barra de direcciones.</div>')
           + '<div class="mut sm">Si ya está instalada, ábrela desde su ícono en la pantalla de inicio.</div>'); break; }
       case 'modulo': closeModal(); abrirModulo(el.dataset.mod); break;
+      case 'verbit': closeModal(); if (document.body.classList.contains('modo-caja')) abrirModulo('cheques'); go('bit'); break;
+      case 'verbitcaja': { closeModal(); abrirModulo('caja'); const f = cajaFrame(); await f._listo; for (let i = 0; i < 50 && !f.contentDocument.querySelector('nav.tabs'); i++) await new Promise(r => setTimeout(r, 200));
+        if (f.contentWindow.go) f.contentWindow.go('bit'); break; }
       case 'cajaresp': { closeModal(); abrirModulo('caja'); const f = cajaFrame(); await f._listo; for (let i = 0; i < 50 && !f.contentDocument.querySelector('nav.tabs'); i++) await new Promise(r => setTimeout(r, 200));
         if (f.contentWindow.respaldoExcel) await f.contentWindow.respaldoExcel(); break; }
       case 'salir': await soltarPush(); await sb.auth.signOut(); S.perfil = null; closeModal(); renderLogin(); break;
