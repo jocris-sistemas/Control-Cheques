@@ -345,6 +345,7 @@ details.dd .ddm button svg{width:18px;height:18px;flex:none;stroke:currentColor;
 .esh::after{content:"";position:absolute;left:50%;top:50%;width:6px;height:6px;margin:-3px 0 0 -3px;border-radius:50%;background:#fff}
 .esres{background:#e4e8ee;border-radius:10px;padding:8px;text-align:center;max-height:58vh;overflow:auto}
 .esres img{max-width:100%;max-height:54vh;box-shadow:0 1px 6px rgba(0,0,0,.25);background:#fff}
+input.autollenado{background:rgba(224,180,74,.16)!important;border-color:#e0b44a!important}
 </style>
 </head>
 <body>
@@ -1430,8 +1431,23 @@ function pintaLectura() {
   if (st === 'error') { box.innerHTML = `<div class="mut sm" style="margin-top:8px">No se pudo leer la foto automáticamente${F.lecturaError ? ' (' + esc(F.lecturaError) + ')' : ''}. Revisa los datos a mano.</div>`; return; }
   const L = F.lectura, dif = difLectura(L, F.h);
   const dice = [L.numero_cheque ? 'Cheque ' + esc(L.numero_cheque) : '', L.monto != null ? fmt(L.monto) : '', L.beneficiario ? esc(L.beneficiario) : '', L.fecha ? fdate(L.fecha) : ''].filter(Boolean).join(' · ');
-  box.innerHTML = `<div class="${dif.length ? 'warnbox' : 'okbox'}" style="margin-top:8px"><b>La foto dice:</b> ${dice || 'no se alcanzó a leer'}${dif.length ? '<ul style="margin:6px 0 0 18px;padding:0">' + dif.map(t => `<li>${esc(t)}</li>`).join('') + '</ul>' : '<div>Coincide con lo capturado.</div>'}
-    ${dice ? '<button class="btn ghost sm" style="margin-top:8px" data-act="usarlectura">Llenar los datos con lo de la foto</button>' : ''}</div>`;
+  const nomC = { numero_cheque: 'número', fecha: 'fecha', monto: 'monto', beneficiario: 'beneficiario' }, au = [...(F.autoCampos || [])].map(k => nomC[k]).filter(Boolean);
+  const auTxt = au.length ? `<div style="margin-top:4px">Llené con la foto: <b>${au.join(', ')}</b> (marcados en amarillo). Revísalos; si algo se leyó mal, corrígelo en su casilla.</div>` : '';
+  box.innerHTML = `<div class="${dif.length ? 'warnbox' : 'okbox'}" style="margin-top:8px"><b>La foto dice:</b> ${dice || 'no se alcanzó a leer'}${dif.length ? '<ul style="margin:6px 0 0 18px;padding:0">' + dif.map(t => `<li>${esc(t)}</li>`).join('') + '</ul>' : '<div>Coincide con lo capturado.</div>'}${auTxt}
+    ${dice && dif.length ? '<button class="btn ghost sm" style="margin-top:8px" data-act="usarlectura">Cambiar a lo que dice la foto</button>' : ''}</div>`;
+}
+// Al leer la foto se llenan solos los datos que la persona no ha escrito a mano; siempre se pueden corregir.
+function autoLlenarLectura(F) {
+  const L = F.lectura; if (!L || F.editId) return;
+  const toc = F.tocados || new Set(), auto = F.autoCampos || (F.autoCampos = new Set());
+  const campos = F.copia ? ['numero_cheque', 'fecha'] : ['numero_cheque', 'fecha', 'monto', 'beneficiario'];
+  const val = { numero_cheque: L.numero_cheque ? String(Number(L.numero_cheque)) : '', fecha: L.fecha && /^\d{4}-\d{2}-\d{2}$/.test(L.fecha) ? L.fecha : '', monto: L.monto != null && L.monto > 0 ? Number(L.monto).toFixed(2) : '', beneficiario: L.beneficiario ? String(L.beneficiario).toUpperCase().trim() : '' };
+  campos.forEach(k => {
+    if (!val[k] || val[k] === 'NaN' || toc.has(k)) return;
+    F.h[k] = val[k]; auto.add(k);
+    const e = $('#h_' + k); if (e) { e.value = val[k]; e.classList.add('autollenado'); }
+  });
+  if (auto.size) { updateSum(); programarNumInfo(); }
 }
 async function leerFotoCheque(file) {
   const F = S.F; if (!F || !file || !/^image\//.test(file.type || '')) return;
@@ -1444,7 +1460,7 @@ async function leerFotoCheque(file) {
     if (error) { let m = ''; try { const j = await error.context.json(); m = j.error || ''; if (j.sin_clave) { F.lecturaEstado = null; pintaLectura(); return; } } catch (e) { m = error.message; } throw new Error(m); }
     if (!data || !data.lectura) throw new Error(data && data.error || 'sin respuesta');
     const L = data.lectura; if (L.monto != null) { L.monto = typeof L.monto === 'number' ? L.monto : parseMoney(L.monto); if (!isFinite(L.monto)) L.monto = null; }
-    F.lectura = L; F.lecturaEstado = 'ok';
+    F.lectura = L; F.lecturaEstado = 'ok'; autoLlenarLectura(F);
   } catch (e) { if (S.F !== F || F.lecTok !== tok) return; F.lecturaEstado = 'error'; F.lecturaError = String(e.message || e).slice(0, 120); }
   pintaLectura();
 }
@@ -1857,9 +1873,11 @@ async function viewNuevo(editCheque, copiaDe) {
   </div>
   <div class="row" style="margin-top:12px"><button class="btn gold grow" id="btnGuardar" data-act="guardar">${F.editId ? 'Guardar cambios y reenviar a autorización' : 'Generar póliza y enviar a autorización'}</button>${F.editId ? '<button class="btn ghost" data-act="cancelarEdit">Cancelar</button>' : ''}</div>`;
   ['chequera_id', 'numero_cheque', 'fecha', 'monto', 'beneficiario', 'concepto', 'solicito', 'sin_factura_motivo'].forEach(k => {
-    const el = $('#h_' + k); el.oninput = el.onchange = async () => {
+    const el = $('#h_' + k); if (F.autoCampos && F.autoCampos.has(k)) el.classList.add('autollenado');
+    el.oninput = el.onchange = async ev => {
+      if (ev && ev.isTrusted && ev.type === 'input') { (F.tocados || (F.tocados = new Set())).add(k); if (F.autoCampos) F.autoCampos.delete(k); el.classList.remove('autollenado'); }
       h[k] = el.value; updateSum(); if (F.lectura) pintaLectura();
-      if (k === 'chequera_id' && !F.editId && h.chequera_id) {
+      if (k === 'chequera_id' && !F.editId && h.chequera_id && !(F.autoCampos && F.autoCampos.has('numero_cheque'))) {
         // Al elegir la chequera se propone el siguiente número consecutivo (se puede cambiar).
         const u = await ultimoChequera(Number(h.chequera_id));
         if (u.num != null && String(h.chequera_id) === el.value) { h.numero_cheque = String(u.num + 1); $('#h_numero_cheque').value = h.numero_cheque; }
@@ -2303,7 +2321,7 @@ document.addEventListener('click', async ev => {
       case 'detalle': openDetail(id); break;
       case 'usarlectura': {
         const F = S.F, L = F && F.lectura; if (!L) break;
-        const set = (k, v) => { if (v == null || v === '') return; F.h[k] = String(v); const e = $('#h_' + k); if (e) e.value = F.h[k]; };
+        const set = (k, v) => { if (v == null || v === '') return; F.h[k] = String(v); (F.autoCampos || (F.autoCampos = new Set())).add(k); if (F.tocados) F.tocados.delete(k); const e = $('#h_' + k); if (e) { e.value = F.h[k]; e.classList.add('autollenado'); } };
         if (L.numero_cheque) set('numero_cheque', String(Number(L.numero_cheque)));
         if (L.monto != null) set('monto', Number(L.monto).toFixed(2));
         if (L.beneficiario) set('beneficiario', String(L.beneficiario).toUpperCase());
