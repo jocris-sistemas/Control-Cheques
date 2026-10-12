@@ -536,7 +536,7 @@ function openModal(html) { $('#modal').innerHTML = `<div class="overlay" data-ac
 function closeModal() { $('#modal').innerHTML = ''; }
 
 function estadoChip(c) {
-  if (c.es_historial) return '<span class="chip historial">Historial</span>';
+  if (c.es_historial) return c.cobrado ? '<span class="chip cobrado">Historial · Cobrado</span>' : '<span class="chip historial">Historial</span>';
   if (c.estatus === 'autorizado') return c.cobrado ? '<span class="chip cobrado">Cobrado</span>' : '<span class="chip autorizado">Autorizado · por cobrar</span>';
   return `<span class="chip ${c.estatus}">${{ pendiente: 'Pendiente de autorizar', rechazado: 'Rechazado', cancelado: 'Cancelado' }[c.estatus]}</span>`;
 }
@@ -1056,7 +1056,7 @@ async function loadList(reset) {
 }
 function rowCheque(c) {
   const fol = foliosActivos(c);
-  const st = c.es_historial ? 'hist' : (c.estatus === 'autorizado' && c.cobrado ? 'cobrado' : c.estatus);
+  const st = (c.estatus === 'autorizado' && c.cobrado) ? 'cobrado' : (c.es_historial ? 'hist' : c.estatus);
   return `<div class="item st-${st}" data-act="detalle" data-id="${c.id}">
     <div class="main"><div class="meta"><b class="num">Cheque ${c.numero_cheque}</b> · ${esc(chequeraNombre(c.chequera_id))}</div>
       <div class="b ben" title="${esc(c.beneficiario)}">${esc(c.beneficiario)}</div>
