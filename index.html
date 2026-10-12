@@ -2314,15 +2314,17 @@ function leerEstadoBanco(txt) {
   const hi = filas.findIndex(r => r.map(normCol).includes('concepto') && r.map(normCol).includes('cargo'));
   if (hi < 0) throw new Error('No reconozco el archivo: debe ser el CSV de movimientos que baja de Afirme (columnas Concepto, Fecha, Cargo, Cuenta…).');
   const h = filas[hi].map(normCol), col = p => h.findIndex(x => x.startsWith(p));
-  const iC = col('concepto'), iF = col('fecha'), iR = col('referencia'), iG = col('cargo'), iQ = col('cuenta'), iK = col('codigo');
+  const iC = col('concepto'), iF = col('fecha'), iR = col('referencia'), iG = col('cargo'), iA = col('abono'), iQ = col('cuenta'), iK = col('codigo') >= 0 ? col('codigo') : col('cdigo');
   if (iF < 0 || iG < 0) throw new Error('Al archivo le faltan las columnas de Fecha o Cargo.');
   const fecha = s => { const m = String(s || '').trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/); if (!m) return null; const y = m[3].length === 2 ? '20' + m[3] : m[3]; return `${y}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`; };
-  const cuentas = new Set(), movs = []; let desde = null, hasta = null, nTot = 0;
+  const cuentas = new Set(), movs = [], devs = new Set(); let desde = null, hasta = null, nTot = 0;
   for (const r of filas.slice(hi + 1)) {
     const f = fecha(r[iF]); if (!f) continue; nTot++;
     if (!desde || f < desde) desde = f; if (!hasta || f > hasta) hasta = f;
     const cta = iQ >= 0 ? String(r[iQ] || '').replace(/\D/g, '') : ''; if (cta) cuentas.add(cta);
     const con = String(r[iC] || ''), cod = iK >= 0 ? String(r[iK] || '').trim().toUpperCase() : '';
+    const dv = con.match(/CHEQUE\s+(?:No\.?\s*)?0*(\d+)\s+DEV/i);
+    if (dv) { if (iA >= 0 && parseMoney(r[iA]) > 0) devs.add(Number(dv[1])); continue; }
     const m = con.match(/CHEQUE\s*No\.?\s*0*(\d+)/i);
     if (!m && cod !== 'CK') continue;
     const n = Number(m ? m[1] : String(r[iR] || '').replace(/\D/g, ''));
@@ -2330,6 +2332,7 @@ function leerEstadoBanco(txt) {
     movs.push({ n, fecha: f, cargo, concepto: con.trim() });
   }
   if (!nTot) throw new Error('El archivo no trae movimientos.');
+  movs.forEach(m => { if (devs.has(m.n)) m.dev = true; });
   return { cuentas: [...cuentas], movs, desde, hasta, nTot };
 }
 function dlgConciliar() {
@@ -2370,11 +2373,12 @@ async function concRevisar() {
     fetchAll(() => sb.from('cheques').select(campos).eq('chequera_id', C.chequeraId).eq('estatus', 'autorizado').eq('cobrado', false).lte('fecha', C.hasta))
   ]);
   const porNum = new Map(enRango.map(c => [c.numero_cheque, c])), vistos = new Set();
-  const A = { marcar: [], ya: [], pend: [], alerta: [], noexiste: [], dup: [], sincobrar: [] };
+  const A = { marcar: [], ya: [], pend: [], alerta: [], noexiste: [], dup: [], dev: [], sincobrar: [] };
   for (const m of C.movs) {
     if (vistos.has(m.n)) { A.dup.push({ m }); continue; } vistos.add(m.n);
     const c = porNum.get(m.n);
-    if (!c) A.noexiste.push({ m });
+    if (m.dev) A.dev.push({ m, c });
+    else if (!c) A.noexiste.push({ m });
     else if (c.estatus === 'cancelado' || c.estatus === 'rechazado') A.alerta.push({ m, c });
     else if (c.estatus === 'pendiente') A.pend.push({ m, c });
     else if (c.cobrado) A.ya.push({ m, c });
@@ -2407,6 +2411,7 @@ function renderConc() {
     ${sec('Se marcarán como cobrados', A.marcar, [cM, cFB, cB, cCa], false, 'cobrado')}
     ${sec('Ya estaban marcados como cobrados', A.ya, [cM, cFB, cB, ['Cobro en app', x => fdate(x.c.fecha_cobro)]], false)}
     ${sec('Autorizados que aún no cobra el banco', A.sincobrar, [['Cheque', c => c.numero_cheque], ['Fecha', c => fdate(c.fecha)], ['Beneficiario', c => corto(c.beneficiario)], ['Monto', c => fmt(c.monto)]], false)}
+    ${sec('Cobrados y luego devueltos por el banco (no se marcan)', A.dev, [cM, cFB, cB, cCa, ['Estatus app', x => esc(x.c ? x.c.estatus : 'no existe')]], false, 'warn')}
     ${sec('Movimientos repetidos en el archivo (se ignoran)', A.dup, [cM, cFB, cCa], false)}
     <div class="row" style="margin-top:14px">
       ${A.marcar.length ? `<button class="btn ok grow" data-act="okconc">Marcar ${A.marcar.length} como cobrado${A.marcar.length === 1 ? '' : 's'}</button>` : '<div class="okbox grow">No hay cheques nuevos por marcar.</div>'}
@@ -2431,7 +2436,7 @@ async function concExcel() {
   add('RESUMEN', [
     { 'CONCEPTO': 'Chequera', 'VALOR': nom }, { 'CONCEPTO': 'Cuenta', 'VALOR': C.cuenta }, { 'CONCEPTO': 'Periodo', 'VALOR': `${fdate(C.desde)} al ${fdate(C.hasta)}` },
     { 'CONCEPTO': 'Cheques cobrados en el banco', 'VALOR': C.movs.length }, { 'CONCEPTO': 'Por marcar como cobrados', 'VALOR': A.marcar.length }, { 'CONCEPTO': 'Ya estaban cobrados', 'VALOR': A.ya.length },
-    { 'CONCEPTO': 'Pendientes de autorizar en la app', 'VALOR': A.pend.length }, { 'CONCEPTO': 'Cancelados/rechazados en la app', 'VALOR': A.alerta.length }, { 'CONCEPTO': 'No existen en la app', 'VALOR': A.noexiste.length },
+    { 'CONCEPTO': 'Pendientes de autorizar en la app', 'VALOR': A.pend.length }, { 'CONCEPTO': 'Devueltos por el banco', 'VALOR': A.dev.length }, { 'CONCEPTO': 'Cancelados/rechazados en la app', 'VALOR': A.alerta.length }, { 'CONCEPTO': 'No existen en la app', 'VALOR': A.noexiste.length },
     { 'CONCEPTO': 'Autorizados sin cobrar al corte', 'VALOR': A.sincobrar.length }]);
   add('CONCILIADOS', A.marcar.concat(A.ya).map(fila).sort((a, b) => a.CHEQUE - b.CHEQUE));
   add('DIFERENCIAS', A.marcar.concat(A.ya).map(fila).filter(r => Math.abs(r.DIFERENCIA) >= 0.01));
