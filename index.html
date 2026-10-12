@@ -1017,7 +1017,7 @@ function viewCheques() {
     <select id="fmes" aria-label="Mes"><option value="">Todos los meses</option></select>
     <select id="fcob" aria-label="Estatus">${[['', 'Todos los estatus'], ['cobrado', 'Cobrados'], ['porcobrar', 'Autorizados sin cobrar'], ['pendiente', 'Pendientes de autorizar'], ['cancelado', 'Cancelados']].map(([v, t]) => `<option value="${v}" ${(f.cob || '') === v ? 'selected' : ''}>${t}</option>`).join('')}</select>
   </div></div>
-  <div class="row" style="margin-bottom:12px"><button class="btn ghost sm" data-act="huecos">Huecos de numeración</button>${puedeOperar() ? '<button class="btn ghost sm" data-act="cancelado">Registrar cancelado</button>' : ''}</div><div id="resumen"></div><div id="lst" class="spin">Cargando…</div><div id="more" class="r"></div>`;
+  <div class="row" style="margin-bottom:12px"><button class="btn ghost sm" data-act="huecos">Huecos de numeración</button>${puedeCapturar() ? '<button class="btn ghost sm" data-act="conciliar">Conciliar banco</button>' : ''}${puedeOperar() ? '<button class="btn ghost sm" data-act="cancelado">Registrar cancelado</button>' : ''}</div><div id="resumen"></div><div id="lst" class="spin">Cargando…</div><div id="more" class="r"></div>`;
   let t; $('#fq').oninput = e => { clearTimeout(t); t = setTimeout(() => { f.q = e.target.value.trim(); loadList(true); }, 350); };
   $('#fch').onchange = async e => { f.chequera = e.target.value; await cargarMeses(); loadList(true); };
   $('#fmes').onchange = e => { f.mes = e.target.value; loadList(true); };
@@ -2294,6 +2294,154 @@ async function viewBit() {
 }
 
 
+/* ===================== CONCILIACIÓN BANCARIA (CSV del banco) ===================== */
+function csvFilas(txt) {
+  const out = []; let row = [], cell = '', q = false;
+  for (let i = 0; i < txt.length; i++) {
+    const ch = txt[i];
+    if (q) { if (ch === '"') { if (txt[i + 1] === '"') { cell += '"'; i++; } else q = false; } else cell += ch; continue; }
+    if (ch === '"') q = true;
+    else if (ch === ',') { row.push(cell); cell = ''; }
+    else if (ch === '\n' || ch === '\r') { if (ch === '\r' && txt[i + 1] === '\n') i++; row.push(cell); cell = ''; if (row.some(x => x.trim() !== '')) out.push(row); row = []; }
+    else cell += ch;
+  }
+  row.push(cell); if (row.some(x => x.trim() !== '')) out.push(row);
+  return out;
+}
+const normCol = s => String(s || '').normalize('NFD').replace(/[^\x00-\x7F]/g, '').toLowerCase().replace(/[^a-z]/g, '');
+function leerEstadoBanco(txt) {
+  const filas = csvFilas(txt);
+  const hi = filas.findIndex(r => r.map(normCol).includes('concepto') && r.map(normCol).includes('cargo'));
+  if (hi < 0) throw new Error('No reconozco el archivo: debe ser el CSV de movimientos que baja de Afirme (columnas Concepto, Fecha, Cargo, Cuenta…).');
+  const h = filas[hi].map(normCol), col = p => h.findIndex(x => x.startsWith(p));
+  const iC = col('concepto'), iF = col('fecha'), iR = col('referencia'), iG = col('cargo'), iQ = col('cuenta'), iK = col('codigo');
+  if (iF < 0 || iG < 0) throw new Error('Al archivo le faltan las columnas de Fecha o Cargo.');
+  const fecha = s => { const m = String(s || '').trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/); if (!m) return null; const y = m[3].length === 2 ? '20' + m[3] : m[3]; return `${y}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`; };
+  const cuentas = new Set(), movs = []; let desde = null, hasta = null, nTot = 0;
+  for (const r of filas.slice(hi + 1)) {
+    const f = fecha(r[iF]); if (!f) continue; nTot++;
+    if (!desde || f < desde) desde = f; if (!hasta || f > hasta) hasta = f;
+    const cta = iQ >= 0 ? String(r[iQ] || '').replace(/\D/g, '') : ''; if (cta) cuentas.add(cta);
+    const con = String(r[iC] || ''), cod = iK >= 0 ? String(r[iK] || '').trim().toUpperCase() : '';
+    const m = con.match(/CHEQUE\s*No\.?\s*0*(\d+)/i);
+    if (!m && cod !== 'CK') continue;
+    const n = Number(m ? m[1] : String(r[iR] || '').replace(/\D/g, ''));
+    const cargo = parseMoney(r[iG]); if (!n || !(cargo > 0)) continue;
+    movs.push({ n, fecha: f, cargo, concepto: con.trim() });
+  }
+  if (!nTot) throw new Error('El archivo no trae movimientos.');
+  return { cuentas: [...cuentas], movs, desde, hasta, nTot };
+}
+function dlgConciliar() {
+  S.conc = null;
+  openModal(`<h2 style="margin-top:0">Conciliar con el banco</h2>
+    <div class="mut sm">Sube el archivo CSV de movimientos que bajas de Afirme. La app busca cada cheque por su número, te enseña qué va a marcar como cobrado y no cambia nada hasta que confirmes.</div>
+    <label class="f">Estado de cuenta (CSV)</label><input type="file" id="concFile" accept=".csv,text/csv">
+    <div id="concPaso"></div>`);
+  $('#concFile').onchange = async e => {
+    const file = e.target.files && e.target.files[0]; if (!file) return;
+    const box = $('#concPaso'); box.innerHTML = '<div class="spin">Leyendo archivo…</div>';
+    try {
+      const buf = await file.arrayBuffer(); let txt;
+      try { txt = new TextDecoder('utf-8', { fatal: true }).decode(buf); } catch (er) { txt = new TextDecoder('windows-1252').decode(buf); }
+      const ed = leerEstadoBanco(txt);
+      if (ed.cuentas.length > 1) throw new Error(`El archivo trae movimientos de varias cuentas (${ed.cuentas.join(', ')}). Baja un archivo por cuenta.`);
+      if (!ed.cuentas.length) throw new Error('El archivo no trae el número de cuenta (columna Cuenta).');
+      const cuenta = ed.cuentas[0], ligada = S.chequeras.find(c => String(c.cuenta_banco || '') === cuenta);
+      S.conc = { ...ed, cuenta, nombre: file.name, chequeraId: ligada ? ligada.id : null };
+      const libres = S.chequeras.filter(c => !c.cuenta_banco);
+      box.innerHTML = `<div class="card" style="margin-top:12px">
+        <div><b>Cuenta ${esc(cuenta)}</b> · del ${fdate(ed.desde)} al ${fdate(ed.hasta)}</div>
+        <div class="mut sm">${ed.nTot} movimientos, de ellos ${ed.movs.length} cheques cobrados.</div>
+        ${ligada ? `<div class="okbox">Esta cuenta es de la chequera <b>${esc(ligada.nombre)}</b>.</div>`
+          : `<div class="warnbox">Esta cuenta todavía no está ligada a ninguna chequera. Elige de cuál es; la app lo recordará para la próxima vez.</div>
+             <label class="f">Chequera</label><select id="concCh"><option value="">Elige…</option>${libres.map(c => `<option value="${c.id}">${esc(c.nombre)}</option>`).join('')}</select>`}
+        <div class="row" style="margin-top:12px"><button class="btn gold grow" data-act="concrevisar">Revisar contra la app</button></div></div><div id="concRes"></div>`;
+    } catch (er) { box.innerHTML = `<div class="warnbox">${esc(errMsg(er))}</div>`; }
+  };
+}
+async function concRevisar() {
+  const C = S.conc; if (!C) return;
+  if (!C.chequeraId || !S.chequeras.find(c => c.id === C.chequeraId && c.cuenta_banco)) { const v = $('#concCh') && $('#concCh').value; if (!v) return toast('Elige la chequera de esta cuenta.', 'err'); C.chequeraId = Number(v); }
+  const res = $('#concRes'); res.innerHTML = '<div class="spin">Comparando con la app…</div>';
+  const nums = C.movs.map(m => m.n), mn = Math.min(...nums), mx = Math.max(...nums), campos = 'id,numero_cheque,fecha,beneficiario,monto,estatus,cobrado,fecha_cobro';
+  const [enRango, sinCob] = await Promise.all([
+    nums.length ? fetchAll(() => sb.from('cheques').select(campos).eq('chequera_id', C.chequeraId).gte('numero_cheque', mn).lte('numero_cheque', mx)) : Promise.resolve([]),
+    fetchAll(() => sb.from('cheques').select(campos).eq('chequera_id', C.chequeraId).eq('estatus', 'autorizado').eq('cobrado', false).lte('fecha', C.hasta))
+  ]);
+  const porNum = new Map(enRango.map(c => [c.numero_cheque, c])), vistos = new Set();
+  const A = { marcar: [], ya: [], pend: [], alerta: [], noexiste: [], dup: [], sincobrar: [] };
+  for (const m of C.movs) {
+    if (vistos.has(m.n)) { A.dup.push({ m }); continue; } vistos.add(m.n);
+    const c = porNum.get(m.n);
+    if (!c) A.noexiste.push({ m });
+    else if (c.estatus === 'cancelado' || c.estatus === 'rechazado') A.alerta.push({ m, c });
+    else if (c.estatus === 'pendiente') A.pend.push({ m, c });
+    else if (c.cobrado) A.ya.push({ m, c });
+    else A.marcar.push({ m, c, dif: (cents(m.cargo) - cents(c.monto)) / 100 });
+  }
+  A.sincobrar = sinCob.filter(c => !vistos.has(c.numero_cheque)).sort((a, b) => a.numero_cheque - b.numero_cheque);
+  C.A = A; renderConc();
+}
+function renderConc() {
+  const C = S.conc, A = C.A, nom = chequeraNombre(C.chequeraId);
+  const sum = (xs, f) => xs.reduce((s, x) => s + cents(f(x)), 0) / 100;
+  const difs = A.marcar.filter(x => Math.abs(x.dif) >= 1);
+  const tab = (rows, cols) => `<div style="overflow:auto"><table style="font-size:13px"><tr>${cols.map(c => `<th style="text-align:left;white-space:nowrap">${c[0]}</th>`).join('')}</tr>${rows.map(r => `<tr>${cols.map(c => `<td style="white-space:nowrap">${c[1](r)}</td>`).join('')}</tr>`).join('')}</table></div>`;
+  const corto = t => `<span style="display:inline-block;max-width:150px;overflow:hidden;text-overflow:ellipsis;vertical-align:bottom" title="${esc(t)}">${esc(t)}</span>`;
+  const sec = (titulo, xs, cols, abierto, cls) => xs.length ? `<details class="fol" ${abierto ? 'open' : ''}><summary><b>${titulo}</b> <span class="chip ${cls || ''}">${xs.length}</span></summary>${tab(xs, cols)}</details>` : '';
+  const cM = ['Cheque', x => x.m.n], cFB = ['Cobro banco', x => fdate(x.m.fecha)], cB = ['Beneficiario', x => corto(x.c ? x.c.beneficiario : '')], cCa = ['Cargo banco', x => fmt(x.m.cargo)], cMo = ['Monto app', x => fmt(x.c.monto)];
+  $('#concRes').innerHTML = `<div class="card" style="margin-top:12px">
+    <div class="b">${esc(nom)} · ${fdate(C.desde)} al ${fdate(C.hasta)}</div>
+    <div class="kpis" style="margin-top:10px">
+      <div class="kpi"><div class="mut sm">Se marcarán cobrados</div><div class="big">${A.marcar.length}</div><div class="mut sm">${fmt(sum(A.marcar, x => x.m.cargo))}</div></div>
+      <div class="kpi"><div class="mut sm">Ya estaban cobrados</div><div class="big">${A.ya.length}</div></div>
+      <div class="kpi"><div class="mut sm">Por revisar</div><div class="big">${A.pend.length + A.alerta.length + A.noexiste.length + difs.length}</div></div>
+      <div class="kpi"><div class="mut sm">Sin cobrar al corte</div><div class="big">${A.sincobrar.length}</div><div class="mut sm">${fmt(sum(A.sincobrar, c => c.monto))}</div></div>
+    </div>
+    ${A.alerta.length ? `<div class="warnbox"><b>Atención:</b> el banco cobró ${A.alerta.length} cheque(s) que en la app están cancelados o rechazados.</div>` : ''}
+    ${sec('Cancelados o rechazados en la app, pero cobrados en el banco', A.alerta, [cM, cFB, cB, cCa, ['Estatus app', x => esc(x.c.estatus)]], true, 'cancelado')}
+    ${sec('Diferencia de importe (se marcan igual, revisa el monto)', difs, [cM, cFB, cB, cMo, cCa, ['Diferencia', x => fmt(x.dif)]], true, 'warn')}
+    ${sec('Cobrados en el banco pero Pendientes de autorizar en la app (no se marcan)', A.pend, [cM, cFB, cB, cCa], true, 'warn')}
+    ${sec('Cobrados en el banco que no existen en la app', A.noexiste, [cM, cFB, cCa, ['Concepto', x => corto(x.m.concepto)]], true, 'warn')}
+    ${sec('Se marcarán como cobrados', A.marcar, [cM, cFB, cB, cCa], false, 'cobrado')}
+    ${sec('Ya estaban marcados como cobrados', A.ya, [cM, cFB, cB, ['Cobro en app', x => fdate(x.c.fecha_cobro)]], false)}
+    ${sec('Autorizados que aún no cobra el banco', A.sincobrar, [['Cheque', c => c.numero_cheque], ['Fecha', c => fdate(c.fecha)], ['Beneficiario', c => corto(c.beneficiario)], ['Monto', c => fmt(c.monto)]], false)}
+    ${sec('Movimientos repetidos en el archivo (se ignoran)', A.dup, [cM, cFB, cCa], false)}
+    <div class="row" style="margin-top:14px">
+      ${A.marcar.length ? `<button class="btn ok grow" data-act="okconc">Marcar ${A.marcar.length} como cobrado${A.marcar.length === 1 ? '' : 's'}</button>` : '<div class="okbox grow">No hay cheques nuevos por marcar.</div>'}
+      <button class="btn ghost" data-act="concxls">Descargar Excel</button>
+    </div></div>`;
+}
+async function concAplicar() {
+  const C = S.conc; if (!C || !C.A) return;
+  const A = C.A, items = A.marcar.map(x => ({ n: x.m.n, fecha: x.m.fecha, cargo: x.m.cargo }));
+  const resumen = { marcar: items.length, ya: A.ya.length, pendientes_app: A.pend.map(x => x.m.n), cancelados_app: A.alerta.map(x => x.m.n), no_existen: A.noexiste.map(x => ({ n: x.m.n, fecha: x.m.fecha, cargo: x.m.cargo })), diferencias: A.marcar.filter(x => Math.abs(x.dif) >= 1).map(x => ({ n: x.m.n, dif: x.dif })), sin_cobrar: A.sincobrar.map(c => c.numero_cheque), cheques_banco: C.movs.map(m => [m.n, m.fecha, m.cargo]) };
+  const r = await rpc('conciliar_cobros', { p_chequera: C.chequeraId, p_cuenta: C.cuenta, p_items: items, p_desde: C.desde, p_hasta: C.hasta, p_archivo_path: null, p_archivo_nombre: C.nombre, p_resumen: resumen });
+  const q = S.chequeras.find(c => c.id === C.chequeraId); if (q && !q.cuenta_banco) q.cuenta_banco = C.cuenta;
+  toast(`Listo: ${r.marcados} cheque(s) marcados como cobrados.`, 'ok');
+  A.ya = A.ya.concat(A.marcar); A.marcar = []; renderConc(); refreshView(true);
+}
+async function concExcel() {
+  const C = S.conc; if (!C || !C.A) return; const A = C.A;
+  await cargarSheetJS();
+  const wb = XLSX.utils.book_new(), nom = chequeraNombre(C.chequeraId);
+  const add = (n, rows) => { const ws = XLSX.utils.json_to_sheet(rows.length ? rows : [{ 'SIN DATOS': '' }]); ws['!cols'] = Object.keys(rows[0] || { a: 1 }).map(k => ({ wch: Math.max(12, Math.min(45, k.length + 4)) })); XLSX.utils.book_append_sheet(wb, ws, n); };
+  const fila = x => ({ 'CHEQUE': x.m.n, 'COBRO BANCO': x.m.fecha, 'BENEFICIARIO': x.c ? x.c.beneficiario : '', 'MONTO APP': x.c ? Number(x.c.monto) : '', 'CARGO BANCO': x.m.cargo, 'DIFERENCIA': x.c ? (cents(x.m.cargo) - cents(x.c.monto)) / 100 : '' });
+  add('RESUMEN', [
+    { 'CONCEPTO': 'Chequera', 'VALOR': nom }, { 'CONCEPTO': 'Cuenta', 'VALOR': C.cuenta }, { 'CONCEPTO': 'Periodo', 'VALOR': `${fdate(C.desde)} al ${fdate(C.hasta)}` },
+    { 'CONCEPTO': 'Cheques cobrados en el banco', 'VALOR': C.movs.length }, { 'CONCEPTO': 'Por marcar como cobrados', 'VALOR': A.marcar.length }, { 'CONCEPTO': 'Ya estaban cobrados', 'VALOR': A.ya.length },
+    { 'CONCEPTO': 'Pendientes de autorizar en la app', 'VALOR': A.pend.length }, { 'CONCEPTO': 'Cancelados/rechazados en la app', 'VALOR': A.alerta.length }, { 'CONCEPTO': 'No existen en la app', 'VALOR': A.noexiste.length },
+    { 'CONCEPTO': 'Autorizados sin cobrar al corte', 'VALOR': A.sincobrar.length }]);
+  add('CONCILIADOS', A.marcar.concat(A.ya).map(fila).sort((a, b) => a.CHEQUE - b.CHEQUE));
+  add('DIFERENCIAS', A.marcar.concat(A.ya).map(fila).filter(r => Math.abs(r.DIFERENCIA) >= 0.01));
+  add('PENDIENTES EN APP', A.pend.map(fila));
+  add('CANCELADOS EN APP', A.alerta.map(fila));
+  add('NO EXISTEN EN APP', A.noexiste.map(x => ({ 'CHEQUE': x.m.n, 'COBRO BANCO': x.m.fecha, 'CARGO BANCO': x.m.cargo, 'CONCEPTO': x.m.concepto })));
+  add('SIN COBRAR', A.sincobrar.map(c => ({ 'CHEQUE': c.numero_cheque, 'FECHA': c.fecha, 'BENEFICIARIO': c.beneficiario, 'MONTO': Number(c.monto), 'DIAS AL CORTE': Math.round((new Date(C.hasta) - new Date(c.fecha)) / 86400000) })));
+  XLSX.writeFile(wb, `CONCILIACION_${nom.replace(/\s+/g, '_')}_${C.hasta}.xlsx`);
+}
+
 /* ===================== RESPALDO EN EXCEL ===================== */
 function cargarSheetJS() {
   if (window.XLSX) return Promise.resolve();
@@ -2508,6 +2656,10 @@ document.addEventListener('click', async ev => {
         let warn = ''; if (ccFiles.length) { try { await subirArchivo(c.id, 'otro', ccFiles); } catch (e) { warn = errMsg(e); } }
         ccFiles = []; closeModal(); toast(`Cheque ${num} registrado como cancelado.` + (warn ? ' La foto no se pudo subir.' : ''), warn ? 'err' : 'ok'); cargarAlertas(true); refreshView(); break; }
       case 'ccfoto': { ccFiles = await pickFuenteT('foto_cheque'); $('#ccInfo').textContent = ccFiles.length ? ccFiles.length + ' archivo(s)' : 'Sin foto'; break; }
+      case 'conciliar': dlgConciliar(); break;
+      case 'concrevisar': await concRevisar(); break;
+      case 'okconc': await concAplicar(); break;
+      case 'concxls': await concExcel(); break;
       case 'huecos': { openModal('<div class="spin">Revisando…</div>'); await cargarAlertas(true); dlgHuecos(); break; }
       case 'motivohuecos': {
         const q = Number(el.dataset.q), inp = $('#mh_' + q), m = inp ? inp.value.trim() : '';
