@@ -536,7 +536,7 @@ function openModal(html) { $('#modal').innerHTML = `<div class="overlay" data-ac
 function closeModal() { $('#modal').innerHTML = ''; }
 
 function estadoChip(c) {
-  if (c.es_historial) return c.cobrado ? '<span class="chip cobrado">Historial · Cobrado</span>' : '<span class="chip historial">Historial</span>';
+  if (c.es_historial) return c.cobrado ? '<span class="chip cobrado">Historial · Cobrado</span>' : (c.estatus === 'cancelado' ? '<span class="chip cancelado">Historial · Cancelado</span>' : '<span class="chip historial">Historial</span>');
   if (c.estatus === 'autorizado') return c.cobrado ? '<span class="chip cobrado">Cobrado</span>' : '<span class="chip autorizado">Autorizado · por cobrar</span>';
   return `<span class="chip ${c.estatus}">${{ pendiente: 'Pendiente de autorizar', rechazado: 'Rechazado', cancelado: 'Cancelado' }[c.estatus]}</span>`;
 }
@@ -1015,11 +1015,13 @@ function viewCheques() {
     <input type="text" id="fq" placeholder="Buscar beneficiario, cheque o folio" value="${esc(f.q)}">
     <select id="fch" aria-label="Chequera"><option value="">Todas las chequeras</option>${S.chequeras.map(c => `<option value="${c.id}" ${String(f.chequera) === String(c.id) ? 'selected' : ''}>${esc(c.nombre)}</option>`).join('')}</select>
     <select id="fmes" aria-label="Mes"><option value="">Todos los meses</option></select>
+    <select id="fcob" aria-label="Estatus">${[['', 'Todos los estatus'], ['cobrado', 'Cobrados'], ['porcobrar', 'Autorizados sin cobrar'], ['pendiente', 'Pendientes de autorizar'], ['cancelado', 'Cancelados']].map(([v, t]) => `<option value="${v}" ${(f.cob || '') === v ? 'selected' : ''}>${t}</option>`).join('')}</select>
   </div></div>
   <div class="row" style="margin-bottom:12px"><button class="btn ghost sm" data-act="huecos">Huecos de numeración</button>${puedeOperar() ? '<button class="btn ghost sm" data-act="cancelado">Registrar cancelado</button>' : ''}</div><div id="resumen"></div><div id="lst" class="spin">Cargando…</div><div id="more" class="r"></div>`;
   let t; $('#fq').oninput = e => { clearTimeout(t); t = setTimeout(() => { f.q = e.target.value.trim(); loadList(true); }, 350); };
   $('#fch').onchange = async e => { f.chequera = e.target.value; await cargarMeses(); loadList(true); };
   $('#fmes').onchange = e => { f.mes = e.target.value; loadList(true); };
+  $('#fcob').onchange = e => { f.cob = e.target.value; loadList(true); };
   const mes0 = f.mes; cargarMeses().then(() => { if (f.mes !== mes0) loadList(true); });
   loadList(true);
 }
@@ -1028,6 +1030,9 @@ async function loadList(reset) {
   const f = S.filt; if (reset) { S.page = 0; S.list = []; $('#lst').innerHTML = '<div class="sk s"></div><div class="sk s"></div><div class="sk s"></div>'; }
   let q = sb.from('cheques').select(SEL, { count: 'exact' });
   if (f.chequera) q = q.eq('chequera_id', Number(f.chequera));
+  if (f.cob === 'cobrado') q = q.eq('estatus', 'autorizado').eq('cobrado', true);
+  else if (f.cob === 'porcobrar') q = q.eq('estatus', 'autorizado').eq('cobrado', false);
+  else if (f.cob === 'pendiente' || f.cob === 'cancelado') q = q.eq('estatus', f.cob);
   if (f.mes) { const [yy, mm] = f.mes.split('-').map(Number); const sig = mm === 12 ? `${yy + 1}-01-01` : `${yy}-${String(mm + 1).padStart(2, '0')}-01`; q = q.gte('fecha', f.mes + '-01').lt('fecha', sig); }
   if (f.q) {
     const term = f.q.replace(/[,()%*]/g, ' ').trim(); const conds = [`beneficiario.ilike.%${term}%`, `concepto.ilike.%${term}%`];
@@ -1056,7 +1061,7 @@ async function loadList(reset) {
 }
 function rowCheque(c) {
   const fol = foliosActivos(c);
-  const st = (c.estatus === 'autorizado' && c.cobrado) ? 'cobrado' : (c.es_historial ? 'hist' : c.estatus);
+  const st = (c.estatus === 'autorizado' && c.cobrado) ? 'cobrado' : (c.es_historial && c.estatus !== 'cancelado' ? 'hist' : c.estatus);
   return `<div class="item st-${st}" data-act="detalle" data-id="${c.id}">
     <div class="main"><div class="meta"><b class="num">Cheque ${c.numero_cheque}</b> · ${esc(chequeraNombre(c.chequera_id))}</div>
       <div class="b ben" title="${esc(c.beneficiario)}">${esc(c.beneficiario)}</div>
