@@ -2294,14 +2294,16 @@ async function viewBit() {
 }
 
 
-/* ===================== CONCILIACIÓN BANCARIA (CSV del banco) ===================== */
+/* ===================== CONCILIACIÓN BANCARIA (CSV / Excel del banco) ===================== */
 function csvFilas(txt) {
+  const linea = (txt.split(/\r?\n/).find(l => l.trim()) || '');
+  const sep = (linea.match(/;/g) || []).length > (linea.match(/,/g) || []).length ? ';' : ((linea.match(/\t/g) || []).length > (linea.match(/,/g) || []).length ? '\t' : ',');
   const out = []; let row = [], cell = '', q = false;
   for (let i = 0; i < txt.length; i++) {
     const ch = txt[i];
     if (q) { if (ch === '"') { if (txt[i + 1] === '"') { cell += '"'; i++; } else q = false; } else cell += ch; continue; }
     if (ch === '"') q = true;
-    else if (ch === ',') { row.push(cell); cell = ''; }
+    else if (ch === sep) { row.push(cell); cell = ''; }
     else if (ch === '\n' || ch === '\r') { if (ch === '\r' && txt[i + 1] === '\n') i++; row.push(cell); cell = ''; if (row.some(x => x.trim() !== '')) out.push(row); row = []; }
     else cell += ch;
   }
@@ -2309,56 +2311,92 @@ function csvFilas(txt) {
   return out;
 }
 const normCol = s => String(s || '').normalize('NFD').replace(/[^\x00-\x7F]/g, '').toLowerCase().replace(/[^a-z]/g, '');
-function leerEstadoBanco(txt) {
-  const filas = csvFilas(txt);
-  const hi = filas.findIndex(r => r.map(normCol).includes('concepto') && r.map(normCol).includes('cargo'));
-  if (hi < 0) throw new Error('No reconozco el archivo: debe ser el CSV de movimientos que baja de Afirme (columnas Concepto, Fecha, Cargo, Cuenta…).');
-  const h = filas[hi].map(normCol), col = p => h.findIndex(x => x.startsWith(p));
-  const iC = col('concepto'), iF = col('fecha'), iR = col('referencia'), iG = col('cargo'), iA = col('abono'), iQ = col('cuenta'), iK = col('codigo') >= 0 ? col('codigo') : col('cdigo');
-  if (iF < 0 || iG < 0) throw new Error('Al archivo le faltan las columnas de Fecha o Cargo.');
-  const fecha = s => { const m = String(s || '').trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/); if (!m) return null; const y = m[3].length === 2 ? '20' + m[3] : m[3]; return `${y}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`; };
-  const cuentas = new Set(), movs = [], devs = new Set(); let desde = null, hasta = null, nTot = 0;
+const numBanco = s => { let t = String(s ?? '').trim(); if (!t) return NaN; const neg = /^\(.*\)$/.test(t) || /-\s*$/.test(t) || /^-/.test(t.replace(/^\$\s*/, '')); t = t.replace(/[()$,\s-]/g, ''); const n = Number(t); return isFinite(n) && t !== '' ? (neg ? -n : n) : NaN; };
+const MESES_B = { ene: 1, feb: 2, mar: 3, abr: 4, may: 5, jun: 6, jul: 7, ago: 8, sep: 9, set: 9, oct: 10, nov: 11, dic: 12, jan: 1, apr: 4, aug: 8, dec: 12 };
+function fechaBanco(s) {
+  const t = String(s || '').trim(); let m;
+  if ((m = t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/))) return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
+  if ((m = t.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})\b/))) { const y = m[3].length === 2 ? '20' + m[3] : m[3]; return `${y}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`; }
+  if ((m = t.match(/^(\d{1,2})[\/\-. ]([A-Za-z]{3})[A-Za-z]*[\/\-. ](\d{2,4})\b/))) { const mm = MESES_B[m[2].toLowerCase()]; if (!mm) return null; const y = m[3].length === 2 ? '20' + m[3] : m[3]; return `${y}-${String(mm).padStart(2, '0')}-${m[1].padStart(2, '0')}`; }
+  return null;
+}
+/* Lee el estado de cuenta (Afirme, Santander, Scotiabank u otro con columnas parecidas). filas = arreglo de renglones. */
+function leerEstadoBanco(filas) {
+  if (typeof filas === 'string') filas = csvFilas(filas);
+  const esFecha = h => h.startsWith('fecha') || h === 'dia';
+  const esDesc = h => ['concepto', 'descripcion', 'descripcionmovimiento', 'movimiento', 'detalle', 'leyenda', 'conceptodelmovimiento'].some(k => h === k || h.startsWith(k));
+  const hi = filas.slice(0, 40).findIndex(r => { const h = r.map(normCol); return h.some(esFecha) && h.some(esDesc) && h.some(x => /^(cargos?|retiros?|debitos?|importe|monto|cargoabono)$/.test(x)); });
+  if (hi < 0) throw new Error('No reconozco el archivo: necesito el estado de cuenta en CSV o Excel con columnas de Fecha, Concepto/Descripción y Cargo (o Importe).');
+  const h = filas[hi].map(normCol), idx = f => h.findIndex(f);
+  const iF = idx(x => x === 'fecha' || x === 'fechaoperacion' || x === 'fechadeoperacion') >= 0 ? idx(x => x === 'fecha' || x === 'fechaoperacion' || x === 'fechadeoperacion') : idx(esFecha);
+  const iCs = h.map((x, i) => esDesc(x) ? i : -1).filter(i => i >= 0), iR = idx(x => x.startsWith('referencia') || x === 'ref'), iK = idx(x => x === 'codigo' || x === 'cdigo');
+  const iG = idx(x => /^(cargos?|retiros?|debitos?)$/.test(x)), iA = idx(x => /^(abonos?|depositos?|creditos?)$/.test(x));
+  const iI = idx(x => x === 'importe' || x === 'monto'), iS = idx(x => x === 'cargoabono' || x === 'tipo' || x === 'signo' || x === 'naturaleza' || x === 'tipomovimiento');
+  const iN = idx(x => ['cheque', 'nocheque', 'numcheque', 'numerocheque', 'numerodecheque', 'chequeno'].includes(x));
+  const iQ = idx(x => x === 'cuenta' || x === 'nocuenta' || x === 'numerodecuenta' || x === 'numerocuenta' || x === 'cuentacontrato');
+  if (iF < 0 || (iG < 0 && iI < 0)) throw new Error('Al archivo le faltan las columnas de Fecha o de Cargo/Importe.');
+  const cuentas = new Set();
+  if (iQ < 0) filas.slice(0, hi).forEach(r => { const m = r.join(' ').match(/cuenta[^0-9]{0,25}([0-9][0-9\- ]{5,})/i); if (m) cuentas.add(m[1].replace(/\D/g, '')); });
+  const movs = [], devs = new Set(); let desde = null, hasta = null, nTot = 0;
   for (const r of filas.slice(hi + 1)) {
-    const f = fecha(r[iF]); if (!f) continue; nTot++;
+    const f = fechaBanco(r[iF]); if (!f) continue; nTot++;
     if (!desde || f < desde) desde = f; if (!hasta || f > hasta) hasta = f;
     const cta = iQ >= 0 ? String(r[iQ] || '').replace(/\D/g, '') : ''; if (cta) cuentas.add(cta);
-    const con = String(r[iC] || ''), cod = iK >= 0 ? String(r[iK] || '').trim().toUpperCase() : '';
-    const dv = con.match(/CHEQUE\s+(?:No\.?\s*)?0*(\d+)\s+DEV/i);
-    if (dv) { if (iA >= 0 && parseMoney(r[iA]) > 0) devs.add(Number(dv[1])); continue; }
-    const m = con.match(/CHEQUE\s*No\.?\s*0*(\d+)/i);
-    if (!m && cod !== 'CK') continue;
-    const n = Number(m ? m[1] : String(r[iR] || '').replace(/\D/g, ''));
-    const cargo = parseMoney(r[iG]); if (!n || !(cargo > 0)) continue;
-    movs.push({ n, fecha: f, cargo, concepto: con.trim() });
+    const con = iCs.map(i => String(r[i] || '').trim()).filter(Boolean).join(' · '), cod = iK >= 0 ? String(r[iK] || '').trim().toUpperCase() : '';
+    let cargo = 0, abono = 0;
+    if (iG >= 0) { cargo = Math.abs(numBanco(r[iG])) || 0; abono = iA >= 0 ? Math.abs(numBanco(r[iA])) || 0 : 0; }
+    else { const v = numBanco(r[iI]), sg = iS >= 0 ? String(r[iS] || '').trim().toUpperCase() : ''; const esCargo = sg ? /^(-|C|CARGO|D|DEBITO|RETIRO)/.test(sg) && !/^(CR|CREDITO)/.test(sg) : v < 0; if (isFinite(v)) { if (esCargo) cargo = Math.abs(v); else abono = Math.abs(v); } }
+    const dv = con.match(/(?:CHEQUE|CHQ)\.?\s+(?:No\.?\s*)?0*(\d+)\s+DEV/i);
+    if (dv) { if (abono > 0) devs.add(Number(dv[1])); continue; }
+    const m = con.match(/\b(?:CHEQUE|CHQ|CHEQ)\b\.?\s*(?:PAGADO\s*|COBRADO\s*)?(?:No\.?|NUM\.?|NUMERO|N°|#)?\s*0*(\d{1,9})\b/i);
+    const nCol = iN >= 0 ? String(r[iN] || '').replace(/\D/g, '') : '', ref = iR >= 0 ? String(r[iR] || '').replace(/\D/g, '').replace(/^0+/, '') : '';
+    const mencion = /\b(CHEQUE|CHQ|CHEQ)\b/i.test(con) && !/DEP[OÓ]SITO|\bDEP\b|ABONO/i.test(con);
+    if (!m && cod !== 'CK' && !nCol && !(mencion && ref && ref.length <= 9)) continue;
+    const n = Number(m ? m[1] : (nCol || ref));
+    if (!n || !(cargo > 0)) continue;
+    movs.push({ n, fecha: f, cargo: Math.round(cargo * 100) / 100, concepto: con.trim() });
   }
-  if (!nTot) throw new Error('El archivo no trae movimientos.');
+  if (!nTot) throw new Error('El archivo no trae movimientos con fecha que pueda leer.');
   movs.forEach(m => { if (devs.has(m.n)) m.dev = true; });
   return { cuentas: [...cuentas], movs, desde, hasta, nTot };
+}
+async function leerArchivoBanco(file) {
+  const buf = await file.arrayBuffer();
+  if (/\.xlsx?$/i.test(file.name)) {
+    await cargarSheetJS();
+    const wb = XLSX.read(buf, { type: 'array', cellDates: true });
+    let err = null;
+    for (const nom of wb.SheetNames) {
+      const filas = XLSX.utils.sheet_to_json(wb.Sheets[nom], { header: 1, raw: false, dateNF: 'dd/mm/yyyy', defval: '' }).map(r => r.map(x => String(x ?? '')));
+      try { return leerEstadoBanco(filas); } catch (e) { err = e; }
+    }
+    throw err || new Error('El Excel no trae hojas.');
+  }
+  let txt; try { txt = new TextDecoder('utf-8', { fatal: true }).decode(buf); } catch (er) { txt = new TextDecoder('windows-1252').decode(buf); }
+  return leerEstadoBanco(txt);
 }
 function dlgConciliar() {
   S.conc = null;
   openModal(`<h2 style="margin-top:0">Conciliar con el banco</h2>
-    <div class="mut sm">Sube el archivo CSV de movimientos que bajas de Afirme. La app busca cada cheque por su número, te enseña qué va a marcar como cobrado y no cambia nada hasta que confirmes.</div>
-    <label class="f">Estado de cuenta (CSV)</label><input type="file" id="concFile" accept=".csv,text/csv">
+    <div class="mut sm">Sube el estado de cuenta (CSV o Excel) que bajas del banco: Afirme, Santander, Scotiabank… La app busca cada cheque por su número, te enseña qué va a marcar como cobrado y no cambia nada hasta que confirmes.</div>
+    <label class="f">Estado de cuenta</label><input type="file" id="concFile" accept=".csv,.txt,.xlsx,.xls,text/csv">
     <div id="concPaso"></div>`);
   $('#concFile').onchange = async e => {
     const file = e.target.files && e.target.files[0]; if (!file) return;
     const box = $('#concPaso'); box.innerHTML = '<div class="spin">Leyendo archivo…</div>';
     try {
-      const buf = await file.arrayBuffer(); let txt;
-      try { txt = new TextDecoder('utf-8', { fatal: true }).decode(buf); } catch (er) { txt = new TextDecoder('windows-1252').decode(buf); }
-      const ed = leerEstadoBanco(txt);
+      const ed = await leerArchivoBanco(file);
       if (ed.cuentas.length > 1) throw new Error(`El archivo trae movimientos de varias cuentas (${ed.cuentas.join(', ')}). Baja un archivo por cuenta.`);
-      if (!ed.cuentas.length) throw new Error('El archivo no trae el número de cuenta (columna Cuenta).');
-      const cuenta = ed.cuentas[0], ligada = S.chequeras.find(c => String(c.cuenta_banco || '') === cuenta);
+      const cuenta = ed.cuentas[0] || null, ligada = cuenta ? S.chequeras.find(c => String(c.cuenta_banco || '') === cuenta) : null;
       S.conc = { ...ed, cuenta, nombre: file.name, chequeraId: ligada ? ligada.id : null };
-      const libres = S.chequeras.filter(c => !c.cuenta_banco);
+      const opciones = cuenta ? S.chequeras.filter(c => !c.cuenta_banco) : S.chequeras;
       box.innerHTML = `<div class="card" style="margin-top:12px">
-        <div><b>Cuenta ${esc(cuenta)}</b> · del ${fdate(ed.desde)} al ${fdate(ed.hasta)}</div>
+        <div><b>${cuenta ? 'Cuenta ' + esc(cuenta) : 'Cuenta sin número en el archivo'}</b> · del ${fdate(ed.desde)} al ${fdate(ed.hasta)}</div>
         <div class="mut sm">${ed.nTot} movimientos, de ellos ${ed.movs.length} cheques cobrados.</div>
+        ${!ed.movs.length ? '<div class="warnbox">No encontré cheques cobrados en este archivo. Si sí trae cheques, mándale una copia a Pedro para ajustar la lectura de este banco.</div>' : ''}
         ${ligada ? `<div class="okbox">Esta cuenta es de la chequera <b>${esc(ligada.nombre)}</b>.</div>`
-          : `<div class="warnbox">Esta cuenta todavía no está ligada a ninguna chequera. Elige de cuál es; la app lo recordará para la próxima vez.</div>
-             <label class="f">Chequera</label><select id="concCh"><option value="">Elige…</option>${libres.map(c => `<option value="${c.id}">${esc(c.nombre)}</option>`).join('')}</select>`}
+          : `<div class="warnbox">${cuenta ? 'Esta cuenta todavía no está ligada a ninguna chequera. Elige de cuál es; la app lo recordará para la próxima vez.' : 'El archivo no trae el número de cuenta. Elige con cuidado la chequera a la que corresponde.'}</div>
+             <label class="f">Chequera</label><select id="concCh"><option value="">Elige…</option>${opciones.map(c => `<option value="${c.id}">${esc(c.nombre)}</option>`).join('')}</select>`}
         <div class="row" style="margin-top:12px"><button class="btn gold grow" data-act="concrevisar">Revisar contra la app</button></div></div><div id="concRes"></div>`;
     } catch (er) { box.innerHTML = `<div class="warnbox">${esc(errMsg(er))}</div>`; }
   };
