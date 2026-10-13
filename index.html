@@ -178,6 +178,8 @@ body{font-variant-numeric:tabular-nums}
 .card.cd{border-left:4px solid #c3ccd8;padding:15px 15px 14px;margin-bottom:14px}
 .card.cd.st-pendiente{border-left-color:#e0a23a}
 .card.cd.st-rechazado,.card.cd.st-cancelado{border-left-color:var(--bad)}
+.card.cd.st-autorizado{border-left-color:#2f6fb8}.card.cd.st-cobrado{border-left-color:var(--ok)}
+#lst .card.cd.st-cancelado .cd-ben{text-decoration:line-through;text-decoration-color:#b3261e88}
 .card.cd.st-cancelado{background:linear-gradient(0deg,var(--card),var(--card))}
 .cd-top{display:flex;gap:12px;align-items:flex-start}
 .cd-ben{font-size:17px;font-weight:700;line-height:1.25;overflow-wrap:anywhere}
@@ -312,6 +314,7 @@ button.lnk[data-act=quitaradj]{background:none;border:0;padding:2px 4px;color:va
 :root[data-theme="dark"] .card.cd.st-pendiente,:root[data-theme="dark"] .item.st-pendiente{border-left-color:#e0a23a}
 :root[data-theme="dark"] .card.cd.st-rechazado,:root[data-theme="dark"] .card.cd.st-cancelado,:root[data-theme="dark"] .item.st-rechazado,:root[data-theme="dark"] .item.st-cancelado{border-left-color:var(--bad)}
 :root[data-theme="dark"] .item.st-autorizado{border-left-color:#4b8ad6}
+:root[data-theme="dark"] .card.cd.st-autorizado{border-left-color:#4b8ad6}
 :root[data-theme="dark"] .item.st-cobrado{border-left-color:var(--ok)}
 :root[data-theme="dark"] .item .sub,:root[data-theme="dark"] .hl2{color:#b5c2d4}
 :root[data-theme="dark"] .summary{background:linear-gradient(135deg,#162131,#1a2a40)}
@@ -1138,9 +1141,47 @@ async function loadList(reset) {
     if (tok !== S.listTok || !$('#resumen')) return;
     $('#resumen').innerHTML = (pc || []).length ? `<div class="card summary"><div class="ico">${ICON.money}</div><div class="grow"><div class="mut sm">Autorizados por cobrar</div><div class="money big">${fmt(tot)}</div></div><div class="mut sm">${(pc || []).length} cheque(s)</div></div>` : '';
   } else $('#resumen').innerHTML = '';
-  const html = S.list.map(c => rowCheque(c)).join('');
-  $('#lst').outerHTML = `<div id="lst">${S.list.length ? html : `<div class="card empty">${ICON.empty}<div>Sin resultados.</div></div>`}</div>`;
+  const html = S.list.map(c => cardHist(c)).join('');
+  $('#lst').outerHTML = `<div id="lst" class="cards">${S.list.length ? html : `<div class="card empty">${ICON.empty}<div>Sin resultados.</div></div>`}</div>`;
   $('#more').innerHTML = S.list.length < S.count ? `<button class="btn ghost" data-act="mas">Ver más (${S.list.length} de ${S.count})</button>` : '';
+}
+/* Tarjeta del Historial: misma información que en Pendientes (folios, documentos, detalle), sin botones de autorizar. */
+function cardHist(c) {
+  const fol = foliosActivos(c), hist = c.es_historial, canc = c.estatus === 'cancelado';
+  const st = (c.estatus === 'autorizado' && c.cobrado) ? 'cobrado' : (hist && !canc ? 'hist' : c.estatus);
+  const cuadra = sumFolios(c) === cents(c.monto);
+  const hayFoto = archActivos(c, 'foto_cheque').length > 0, fac = archActivos(c, 'factura').length;
+  const alertas = hist || canc ? '' : [
+    fol.length && !cuadra ? '<span class="chip rechazado">NO CUADRA</span>' : '',
+    fac || c.sin_factura_motivo ? '' : '<span class="chip warn">PDTE. FACTURA</span>',
+    hayFoto ? '' : c.sin_foto_motivo ? '<span class="chip warn">SIN FOTO</span>' : '<span class="chip rechazado">FALTA FOTO DEL CHEQUE</span>'
+  ].join('');
+  const resumen = fol.map(f => esc(cargoNombre(f.cargo_id)) + ' ' + (f.sin_folio ? 'sin folio' : esc(f.folio_numero))).join(' · ');
+  return `<div class="card cd st-${st}">
+    <div class="cd-top">
+      <div class="grow cd-id">
+        <div class="cd-ben">${esc(c.beneficiario)}</div>
+        <div class="cd-sub">Cheque ${c.numero_cheque} · ${esc(chequeraNombre(c.chequera_id))} · ${fdate(c.fecha)}</div>
+      </div>
+      <div class="money cd-monto">${fmt(c.monto)}</div>
+    </div>
+    <div class="cd-body">
+    ${c.concepto ? `<div class="cd-con">${esc(c.concepto)}</div>` : ''}
+    <div class="alerts">${estadoChip(c)}${alertas}</div>
+    ${fol.length ? `<details class="fol"><summary><b>${fol.length} folio${fol.length === 1 ? '' : 's'}</b><span class="mut">${resumen ? ' · ' + resumen : ''}</span></summary>
+      <table><thead><tr><th>Cargo</th><th>Folio</th><th>Detalle</th><th class="r">Monto</th></tr></thead><tbody>
+      ${fol.map(f => `<tr><td>${esc(cargoNombre(f.cargo_id))}</td><td>${f.sin_folio ? '<span class="chip warn">SIN FOLIO</span>' : esc(f.folio_numero)}</td><td>${esc([f.proveedor, f.descripcion, f.obra].filter(Boolean).join(' · '))}${f.sin_folio && f.sin_folio_motivo ? `<div class="mut sm">Motivo: ${esc(f.sin_folio_motivo)}</div>` : ''}</td><td class="r money">${fmt(f.monto)}</td></tr>`).join('')}
+      </tbody></table></details>` : ''}
+    ${c.capturado_por_nombre || c.solicito ? `<div class="cd-meta">${c.capturado_por_nombre ? 'Capturó: ' + esc(c.capturado_por_nombre) : ''}${c.capturado_por_nombre && c.solicito ? ' · ' : ''}${c.solicito ? 'Solicitó: ' + esc(c.solicito) : ''}</div>` : ''}
+    ${c.autorizado_por_nombre && !hist ? `<div class="cd-meta">Autorizó: ${esc(c.autorizado_por_nombre)}${c.fecha_autorizacion ? ' · ' + fdate(fechaMty(c.fecha_autorizacion)) : ''}</div>` : ''}
+    ${c.cobrado && c.fecha_cobro ? `<div class="cd-meta">Cobrado el ${fdate(c.fecha_cobro)}</div>` : ''}
+    ${!hist && !canc && !hayFoto && c.sin_foto_motivo ? `<div class="cd-meta">Sin foto: ${esc(c.sin_foto_motivo)}${c.sin_foto_por_nombre ? ' (' + esc(c.sin_foto_por_nombre) + ')' : ''}</div>` : ''}
+    ${canc && c.motivo_cancelacion ? `<div class="cd-meta">Cancelación: ${esc(c.motivo_cancelacion)}</div>` : ''}
+    ${c.estatus === 'rechazado' && c.motivo_rechazo ? `<div class="cd-meta">Rechazo: ${esc(c.motivo_rechazo)}</div>` : ''}
+    ${hist && c.nota_historial ? `<div class="cd-meta">Nota: ${esc(c.nota_historial)}</div>` : ''}
+    </div>
+    <div class="cd-side"><div class="cd-tools">${docsMenu(c)}<button class="btn ghost sm" data-act="detalle" data-id="${c.id}">Detalle</button></div></div>
+  </div>`;
 }
 function rowCheque(c) {
   const fol = foliosActivos(c);
