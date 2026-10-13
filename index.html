@@ -226,9 +226,37 @@ details.dd .ddm button svg{width:18px;height:18px;flex:none;stroke:currentColor;
   .card.cd .cd-side .cd-tools{margin-top:8px}
   .card.cd .cd-side .cd-wait{align-self:flex-start}
   .card.cd .cd-con{margin-top:6px}
-  #lst{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:12px;align-items:stretch}
-  #lst .empty{grid-column:1/-1}
+  #lst .item{padding:12px 18px}
+  #lst .item .main{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:16px}
+  #lst .item .main>*{grid-column:1}
+  #lst .item .main .fec{grid-column:2;grid-row:1 / span 2;align-self:center;color:var(--mut);white-space:nowrap}
+  #lst .item .side{min-width:150px}
 }
+/* Barra de filtros fija y con selección múltiple */
+.fbar{position:sticky;top:var(--hdr,58px);z-index:15;padding:10px 11px;margin-bottom:12px;box-shadow:0 6px 16px rgba(20,52,92,.10)}
+.fbar .filters{align-items:center}
+.fdds{display:flex;gap:8px;flex:1 1 100%;flex-wrap:wrap;align-items:center}
+@media(min-width:640px){.fdds{flex:3 1 420px}}
+details.fdd{flex:1 1 0;min-width:0;display:block}
+details.fdd>summary{width:100%;display:flex;align-items:center;gap:4px;justify-content:space-between;text-align:left;padding:9px 10px;font-weight:600;font-size:13.5px}
+details.fdd>summary .ft{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1}
+details.fdd>summary .fn{flex:none;background:#2f6fb8;color:#fff;border-radius:9px;font-size:11px;min-width:18px;padding:1px 5px;text-align:center}details.fdd>summary .fn[hidden]{display:none}
+details.fdd.on>summary{background:var(--infobg,#e7f0fb);border-color:#2f6fb8;color:var(--navy)}
+details.fdd .ddm{max-height:min(60vh,420px);overflow:auto;min-width:220px}
+details.fdd:last-of-type .ddm{left:auto;right:0}
+details.fdd .ddm label{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;cursor:pointer;font-size:14px;color:var(--navy)}
+details.fdd .ddm label:hover{background:#eef2f9}
+details.fdd .ddm input[type=checkbox]{width:18px;height:18px;flex:none;margin:0;accent-color:#2f6fb8}
+details.fdd .ddm .ddh{display:flex;justify-content:space-between;align-items:center;padding:4px 6px 6px;border-bottom:1px solid #e3e7ef;margin-bottom:2px}
+details.fdd .ddm .ddh button{width:auto;padding:4px 8px;font-size:12.5px;color:#2f6fb8}details.fdd .ddm .ddh button[hidden]{display:none}
+button.lnk[data-act=quitaradj]{background:none;border:0;padding:2px 4px;color:var(--bad);text-decoration:underline;cursor:pointer;font:inherit;font-size:13px;box-shadow:none}button.lnk[hidden]{display:none}
+.fbar .flimpia{flex:none;padding:8px 10px}.fbar .flimpia[hidden]{display:none}.fbar .flimpia .lx{display:none}
+@media(min-width:640px){.fbar .flimpia{order:3}}
+@media(max-width:639px){.fbar .filters input{flex:1 1 0}.fdds{gap:6px}details.fdd>summary{padding:8px 6px 8px 8px;font-size:12.5px;gap:3px}details.fdd>summary::after{font-size:10px}details.fdd[data-fk=ch]{flex-grow:1.3}details.fdd[data-fk=mes]{flex-grow:.75}}
+@media(max-width:560px){.fbar .flimpia .lt{display:none}.fbar .flimpia .lx{display:inline}.fbar{padding:8px}.fbar .flimpia{padding:8px 12px}}
+:root[data-theme="dark"] details.fdd .ddm label{color:#d6e5fa}
+:root[data-theme="dark"] details.fdd .ddm label:hover{background:#25384f}
+:root[data-theme="dark"] details.fdd.on>summary{background:#22344d;color:#d6e5fa}
 .tema{display:flex;gap:8px}.tema .btn{flex:1}.tema .btn.on{background:var(--navy);color:#fff;border-color:var(--navy)}
 
 .crwrap{position:relative;margin:12px auto;touch-action:none;user-select:none;overflow:hidden;border-radius:8px;background:#111}
@@ -388,7 +416,7 @@ if (!window.supabase) { document.addEventListener('DOMContentLoaded', () => { co
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, autoRefreshToken: true } });
 
 /* ===================== ESTADO ===================== */
-const S = { perfil: null, cargos: [], chequeras: [], series: {}, tab: 'pend', filt: { q: '', chequera: '' },
+const S = { perfil: null, cargos: [], chequeras: [], series: {}, tab: 'pend', filt: { q: '', ch: [], mes: [], st: [] },
             list: [], count: 0, page: 0, pendCount: 0, F: null };
 const $ = (s, r = document) => r.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -419,6 +447,7 @@ function toast(msg, type = '') {
   const t = $('#toast'); t.textContent = msg; t.className = type; clearTimeout(toast._t);
   toast._t = setTimeout(() => t.classList.add('hidden'), type === 'err' ? 6500 : 3000);
 }
+const fechaMty = ts => new Date(ts).toLocaleDateString('en-CA', { timeZone: 'America/Monterrey' });
 const errMsg = e => (e && (e.message || e.error_description)) || String(e);
 /* Acciones diferidas con "Deshacer" (autorizar) */
 function diferir(texto, fn, ids = [], ms = 6000) {
@@ -439,6 +468,7 @@ function deshacerDiferido() {
   toast('Listo, no se autorizó.');
 }
 document.addEventListener('visibilitychange', () => { if (document.hidden) flushDiferido(); });
+window.addEventListener('pagehide', () => flushDiferido());
 /* Cierre de sesión por inactividad (45 min) */
 (function () {
   let t, MS = 45 * 60 * 1000;
@@ -549,7 +579,7 @@ const ICON = {
   money: '<svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/></svg>',
   empty: '<svg viewBox="0 0 24 24"><path d="M5 4h14v16H5z"/><path d="M9 9h6M9 13h6"/></svg>'
 };
-const rolTxt = r => ({ capturista: 'Administración', administrador: 'Administrador', contador: 'Contador' }[r] || r);
+const rolTxt = r => ({ capturista: 'Administración', administrador: 'Administrador', contador: 'Contador', lector: 'Solo consulta' }[r] || r);
 const iniciales = n => String(n || '?').replace(/^ING\.\s*/i, '').split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase();
 const fdia = d => { const [y, m, dd] = d.split('-'); const M = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre']; return `${Number(dd)} de ${M[Number(m) - 1]} de ${y}`; };
 const folioTxt = f => f.sin_folio ? 'SIN FOLIO' : f.folio_numero;
@@ -635,6 +665,7 @@ async function loadCatalogs() {
     sb.from('chequeras').select('*').eq('activa', true).order('nombre'),
     sb.from('cargos').select('*').eq('activo', true).order('id'),
     sb.from('series_folio').select('*')]);
+  if (a.error || b.error || c.error) { const e = a.error || b.error || c.error; if (S.chequeras.length && S.cargos.length) { toast('No se pudieron actualizar los catálogos (revisa tu conexión): ' + errMsg(e), 'err'); return; } toast('No se pudieron cargar chequeras y cargos (revisa tu conexión y vuelve a abrir la app): ' + errMsg(e), 'err'); }
   S.chequeras = a.data || []; S.cargos = b.data || [];
   S.series = {}; (c.data || []).forEach(s => S.series[s.cargo_id] = s);
 }
@@ -734,6 +765,7 @@ const SEL = '*, cheque_folios(id,cargo_id,folio_numero,proveedor,descripcion,obr
 
 /* ===================== VISTA: AUTORIZAR / PENDIENTES ===================== */
 async function viewPend() {
+  const tok = S.pendTok = (S.pendTok || 0) + 1;
   $('#view').innerHTML = `<div class="pagehead"><h2>${esAdmin() ? 'Por autorizar' : 'Pendientes'}</h2><span class="sub">${esAdmin() ? 'Cheques en espera de tu autorización' : 'Cheques en espera de autorización'}</span></div><div id="pushAviso"></div><div id="pendList"><div class="sk"></div><div class="sk"></div></div>`;
   try { let noIos = false; try { noIos = localStorage.getItem('jocris_ios_aviso') === 'no'; } catch (e) { }
     if (esIOS() && !esInstalada() && !noIos) $('#pushAviso').innerHTML = `<div class="card" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><div class="grow"><b>Instala la app en tu iPhone</b><div class="mut sm">Se abre más rápido y puedes recibir avisos.</div></div><button class="btn gold sm" data-act="instalar">Cómo instalar</button><button class="btn ghost sm" data-act="iosno">Ahora no</button></div>`;
@@ -742,12 +774,12 @@ async function viewPend() {
     if (esAdmin() && !oculto && pushSoportado() && Notification.permission === 'default' && !$('#pushAviso').innerHTML) $('#pushAviso').innerHTML = `<div class="card" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><div class="grow"><b>Recibe un aviso en tu celular</b><div class="mut sm">Cuando haya cheques por autorizar, aunque tengas la app cerrada.</div></div><button class="btn gold sm" data-act="pushon">Activar</button><button class="btn ghost sm" data-act="pushno">Ahora no</button></div>`;
   } catch (e) { }
   const { data, error } = await sb.from('cheques').select(SEL).eq('estatus', 'pendiente').eq('es_historial', false).order('creado_en', { ascending: true });
-  if (S.tab !== 'pend' || !$('#pendList')) return;
+  if (tok !== S.pendTok || S.tab !== 'pend' || !$('#pendList')) return;
   if (error) return $('#pendList').innerHTML = `<div class="warnbox">${esc(errMsg(error))}</div>`;
   const canc = (await sb.from('cheques').select(SEL).eq('estatus', 'cancelado').eq('es_historial', false).is('cancelacion_enterada_en', null).order('actualizado_en', { ascending: true })).data || [];
   S.pendCount = data.length + canc.length; refreshPendCount();
   S.avisos = await calcAvisos(data);
-  if (S.tab !== 'pend' || !$('#pendList')) return;
+  if (tok !== S.pendTok || S.tab !== 'pend' || !$('#pendList')) return;
   S.pendMap = new Map(data.map(c => [c.id, c])); const bar0 = $('#selbar'); if (bar0) bar0.classList.add('hidden');
   const rech = (await sb.from('cheques').select(SEL).eq('estatus', 'rechazado').eq('es_historial', false).order('actualizado_en', { ascending: false }).limit(20)).data || [];
   let html = '';
@@ -762,6 +794,7 @@ async function viewPend() {
   if (listos >= 2) html += `<div class="selrow"><button class="btn ghost sm" data-act="selall">Elegir los ${listos} listos para autorizar</button></div>`;
   html += `<div class="cards">` + todos.map(c => c.estatus === 'cancelado' ? cardCancel(c) : cardPend(c)).join('') + `</div>`;
   if (rech.length) html += `<h3>Rechazados (esperan corrección)</h3><div class="cards">` + rech.map(c => cardPend(c, true)).join('') + `</div>`;
+  if (tok !== S.pendTok || S.tab !== 'pend' || !$('#pendList')) return;
   $('#pendList').outerHTML = html;
 }
 const DOCICO = {
@@ -994,56 +1027,106 @@ async function viewRep() {
 }
 
 /* ===================== VISTA: LISTA DE CHEQUES ===================== */
+const MESES_N = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+const ESTATUS_F = [['cobrado', 'Cobrados'], ['porcobrar', 'Autorizados sin cobrar'], ['pendiente', 'Pendientes de autorizar'], ['rechazado', 'Rechazados'], ['cancelado', 'Cancelados']];
+const mesTxt = m => { const [y, mm] = m.split('-'); return MESES_N[Number(mm) - 1].toUpperCase() + ' ' + y; };
 async function cargarMeses() {
   if (!S.mesesCache || Date.now() - S.mesesCache.t > 60000) {
     let rows = [], from = 0;
     for (;;) { const { data, error } = await sb.from('cheques').select('fecha,chequera_id').order('fecha', { ascending: false }).range(from, from + 999); if (error || !data) break; rows = rows.concat(data); if (data.length < 1000) break; from += 1000; }
     S.mesesCache = { t: Date.now(), rows };
   }
-  const N = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
   const f = S.filt, set = new Set();
-  S.mesesCache.rows.forEach(r => { if (!f.chequera || String(r.chequera_id) === String(f.chequera)) set.add(String(r.fecha).slice(0, 7)); });
-  const meses = [...set].sort().reverse();
-  const sel = $('#fmes'); if (!sel) return;
-  if (f.mes && !set.has(f.mes)) f.mes = '';
-  sel.innerHTML = '<option value="">Todos los meses</option>' + meses.map(m => { const [y, mm] = m.split('-'); return `<option value="${m}" ${f.mes === m ? 'selected' : ''}>${N[Number(mm) - 1].toUpperCase()} ${y}</option>`; }).join('');
+  S.mesesCache.rows.forEach(r => { if (!f.ch.length || f.ch.includes(String(r.chequera_id))) set.add(String(r.fecha).slice(0, 7)); });
+  S.mesesDisp = [...set].sort().reverse();
+  const antes = f.mes.length; f.mes = f.mes.filter(m => set.has(m));
+  pintaFdd('mes');
+  return antes !== f.mes.length;
+}
+/* Opciones de cada filtro: [valor, texto] */
+function opcFiltro(k) {
+  if (k === 'ch') return S.chequeras.map(c => [String(c.id), c.nombre]);
+  if (k === 'mes') return (S.mesesDisp || []).map(m => [m, mesTxt(m)]);
+  return ESTATUS_F;
+}
+const FDD_TXT = { ch: ['Chequera', 'Chequeras'], mes: ['Mes', 'Meses'], st: ['Estatus', 'Estatus'] };
+function fddResumen(k) {
+  const sel = S.filt[k], op = opcFiltro(k);
+  if (!sel.length) return FDD_TXT[k][0];
+  if (sel.length === 1) { const o = op.find(x => x[0] === sel[0]); return o ? o[1] : sel[0]; }
+  return FDD_TXT[k][1];
+}
+function fddHtml(k) {
+  const sel = S.filt[k], op = opcFiltro(k);
+  return `<details class="dd fdd ${sel.length ? 'on' : ''}" data-fk="${k}"><summary class="btn ghost sm"><span class="ft">${esc(fddResumen(k))}</span><b class="fn" ${sel.length > 1 ? '' : 'hidden'}>${sel.length}</b></summary><div class="ddm">
+    <div class="ddh"><span class="mut sm">Puedes elegir varios</span><button type="button" data-act="fddnada" data-k="${k}" ${sel.length ? '' : 'hidden'}>Quitar selección</button></div>
+    ${op.length ? op.map(([v, t]) => `<label><input type="checkbox" data-fk="${k}" value="${esc(v)}" ${sel.includes(v) ? 'checked' : ''}><span>${esc(t)}</span></label>`).join('') : '<div class="mut sm" style="padding:8px 10px">Sin opciones</div>'}
+  </div></details>`;
+}
+function pintaFdd(k) {
+  const d = document.querySelector(`details.fdd[data-fk="${k}"]`); if (!d) return;
+  const abierto = d.open, tmp = document.createElement('div'); tmp.innerHTML = fddHtml(k);
+  const n = tmp.firstElementChild; if (abierto) n.open = true; d.replaceWith(n);
+  const lb = $('#flimpia'); if (lb) lb.hidden = !(S.filt.ch.length || S.filt.mes.length || S.filt.st.length || S.filt.q);
+}
+function fddResumenes() {
+  ['ch', 'mes', 'st'].forEach(k => { const d = document.querySelector(`details.fdd[data-fk="${k}"]`); if (!d) return; d.classList.toggle('on', !!S.filt[k].length); const t = d.querySelector('.ft'); if (t) t.textContent = fddResumen(k); const n = d.querySelector('.fn'); if (n) { n.textContent = S.filt[k].length; n.hidden = S.filt[k].length < 2; } const q = d.querySelector('[data-act=fddnada]'); if (q) q.hidden = !S.filt[k].length; });
+  const lb = $('#flimpia'); if (lb) lb.hidden = !(S.filt.ch.length || S.filt.mes.length || S.filt.st.length || S.filt.q);
+}
+function onFiltroCambio(k) {
+  fddResumenes();
+  clearTimeout(S.fTimer);
+  S.fTimer = setTimeout(async () => { if (k === 'ch') await cargarMeses(); loadList(true); }, 300);
 }
 function viewCheques() {
   const f = S.filt;
   $('#view').innerHTML = `<div class="pagehead"><h2>Historial</h2><span class="sub" id="hcount"></span></div>
-  <div class="card" style="padding:11px"><div class="filters">
+  <div class="card fbar"><div class="filters">
     <input type="text" id="fq" placeholder="Buscar beneficiario, cheque o folio" value="${esc(f.q)}">
-    <select id="fch" aria-label="Chequera"><option value="">Todas las chequeras</option>${S.chequeras.map(c => `<option value="${c.id}" ${String(f.chequera) === String(c.id) ? 'selected' : ''}>${esc(c.nombre)}</option>`).join('')}</select>
-    <select id="fmes" aria-label="Mes"><option value="">Todos los meses</option></select>
-    <select id="fcob" aria-label="Estatus">${[['', 'Todos los estatus'], ['cobrado', 'Cobrados'], ['porcobrar', 'Autorizados sin cobrar'], ['pendiente', 'Pendientes de autorizar'], ['cancelado', 'Cancelados']].map(([v, t]) => `<option value="${v}" ${(f.cob || '') === v ? 'selected' : ''}>${t}</option>`).join('')}</select>
+    <button class="btn ghost sm flimpia" id="flimpia" data-act="flimpia" title="Quitar todos los filtros" ${f.ch.length || f.mes.length || f.st.length || f.q ? '' : 'hidden'}><span class="lt">Limpiar</span><span class="lx">✕</span></button><div class="fdds">${fddHtml('ch')}${fddHtml('mes')}${fddHtml('st')}</div>
   </div></div>
   <div class="row" style="margin-bottom:12px"><button class="btn ghost sm" data-act="huecos">Huecos de numeración</button>${puedeCapturar() ? '<button class="btn ghost sm" data-act="conciliar">Conciliar banco</button>' : ''}${puedeOperar() ? '<button class="btn ghost sm" data-act="cancelado">Registrar cancelado</button>' : ''}</div><div id="resumen"></div><div id="lst" class="spin">Cargando…</div><div id="more" class="r"></div>`;
-  let t; $('#fq').oninput = e => { clearTimeout(t); t = setTimeout(() => { f.q = e.target.value.trim(); loadList(true); }, 350); };
-  $('#fch').onchange = async e => { f.chequera = e.target.value; await cargarMeses(); loadList(true); };
-  $('#fmes').onchange = e => { f.mes = e.target.value; loadList(true); };
-  $('#fcob').onchange = e => { f.cob = e.target.value; loadList(true); };
-  const mes0 = f.mes; cargarMeses().then(() => { if (f.mes !== mes0) loadList(true); });
+  let t; $('#fq').oninput = e => { clearTimeout(t); t = setTimeout(() => { f.q = e.target.value.trim(); fddResumenes(); loadList(true); }, 350); };
+  $('.fbar').addEventListener('change', e => {
+    const cb = e.target.closest('input[type=checkbox][data-fk]'); if (!cb) return;
+    const k = cb.dataset.fk, arr = f[k];
+    if (cb.checked) { if (!arr.includes(cb.value)) arr.push(cb.value); } else f[k] = arr.filter(v => v !== cb.value);
+    onFiltroCambio(k);
+  });
+  ponHdr();
+  cargarMeses().then(cambio => { if (cambio) loadList(true); });
   loadList(true);
+}
+/* Arma los filtros de PostgREST en un solo .or() para que se combinen con Y */
+function filtroGrupos(f, term, idsFolio) {
+  const g = [];
+  if (f.mes.length) g.push(f.mes.map(m => { const [yy, mm] = m.split('-').map(Number); const sig = mm === 12 ? `${yy + 1}-01-01` : `${yy}-${String(mm + 1).padStart(2, '0')}-01`; return `and(fecha.gte.${m}-01,fecha.lt.${sig})`; }));
+  if (f.st.length) g.push(f.st.map(s => s === 'cobrado' ? 'and(estatus.eq.autorizado,cobrado.is.true)' : s === 'porcobrar' ? 'and(estatus.eq.autorizado,cobrado.is.false)' : `estatus.eq.${s}`));
+  if (term) {
+    const c = [`beneficiario.ilike.*${term}*`, `concepto.ilike.*${term}*`];
+    if (/^\d+$/.test(term) && term.length < 10) c.push(`numero_cheque.eq.${term}`);
+    if (idsFolio.length) c.push(`id.in.(${idsFolio.join(',')})`);
+    g.push(c);
+  }
+  return g;
 }
 async function loadList(reset) {
   const tok = S.listTok = (S.listTok || 0) + 1; const mb = $('#more button'); if (mb) mb.disabled = true;
   const f = S.filt; if (reset) { S.page = 0; S.list = []; $('#lst').innerHTML = '<div class="sk s"></div><div class="sk s"></div><div class="sk s"></div>'; }
   let q = sb.from('cheques').select(SEL, { count: 'exact' });
-  if (f.chequera) q = q.eq('chequera_id', Number(f.chequera));
-  if (f.cob === 'cobrado') q = q.eq('estatus', 'autorizado').eq('cobrado', true);
-  else if (f.cob === 'porcobrar') q = q.eq('estatus', 'autorizado').eq('cobrado', false);
-  else if (f.cob === 'pendiente' || f.cob === 'cancelado') q = q.eq('estatus', f.cob);
-  if (f.mes) { const [yy, mm] = f.mes.split('-').map(Number); const sig = mm === 12 ? `${yy + 1}-01-01` : `${yy}-${String(mm + 1).padStart(2, '0')}-01`; q = q.gte('fecha', f.mes + '-01').lt('fecha', sig); }
-  if (f.q) {
-    const term = f.q.replace(/[,()%*]/g, ' ').trim(); const conds = [`beneficiario.ilike.%${term}%`, `concepto.ilike.%${term}%`];
-    if (/^\d+$/.test(term) && term.length < 10) { conds.push(`numero_cheque.eq.${term}`); }
-    const { data: fo } = await sb.from('cheque_folios').select('cheque_id').eq('activo', true).or(`folio_numero.ilike.${term},proveedor.ilike.%${term}%`).limit(200);
-    const ids = [...new Set((fo || []).map(x => x.cheque_id))];
-    if (ids.length) conds.push(`id.in.(${ids.join(',')})`);
-    q = q.or(conds.join(','));
+  if (f.ch.length) q = q.in('chequera_id', f.ch.map(Number));
+  const term = f.q.replace(/[,()%*"\\:]/g, ' ').replace(/\s+/g, ' ').trim();
+  let ids = [];
+  if (term) {
+    const { data: fo, error: efo } = await sb.from('cheque_folios').select('cheque_id').eq('activo', true).or(`folio_numero.ilike.${term},proveedor.ilike.*${term}*`).limit(200);
+    if (efo) console.warn('busqueda folios', efo);
+    ids = [...new Set((fo || []).map(x => x.cheque_id))];
   }
+  const g = filtroGrupos(f, term, ids);
+  if (g.length === 1) q = q.or(g[0].join(','));
+  else if (g.length > 1) q = q.or(`and(${g.map(x => `or(${x.join(',')})`).join(',')})`);
   // Siempre por número de cheque, del más alto al más bajo (sin importar estatus ni fecha).
-  q = q.order('numero_cheque', { ascending: false }).order('fecha', { ascending: false }).order('creado_en', { ascending: false }).range(S.page * PAGE, S.page * PAGE + PAGE - 1);
+  q = q.order('numero_cheque', { ascending: false }).order('fecha', { ascending: false }).order('creado_en', { ascending: false }).order('id').range(S.page * PAGE, S.page * PAGE + PAGE - 1);
   const { data, error, count } = await q;
   if (tok !== S.listTok || !$('#lst')) return;
   if (error) { $('#lst').innerHTML = `<div class="warnbox">${esc(errMsg(error))}</div>`; return; }
@@ -1091,13 +1174,13 @@ async function openDetail(id) {
     let acciones = '';
     if (!hist) {
       const sinFoto = !c.es_historial && c.estatus !== 'cancelado' && !archActivos(c, 'foto_cheque').length && !c.sin_foto_motivo;
-      if (esAdmin() && c.estatus === 'pendiente') acciones += `<button class="btn ok" data-act="autorizar" data-id="${id}" ${sinFoto ? 'disabled title="Falta la foto del cheque"' : ''}>Autorizar</button><button class="btn bad" data-act="rechazar" data-id="${id}">Rechazar</button>`;
+      if (esAdmin() && c.estatus === 'pendiente') acciones += `<button class="btn ok" data-act="autorizar" data-id="${id}" ${sinFoto ? 'disabled title="Falta la foto del cheque"' : (!cuadra ? 'disabled title="Los folios no cuadran con el monto del cheque"' : '')}>Autorizar</button><button class="btn bad" data-act="rechazar" data-id="${id}">Rechazar</button>`;
       if (puedeTocar(c) && ['pendiente', 'rechazado'].includes(c.estatus)) acciones += `<button class="btn gold" data-act="editar" data-id="${id}">Editar</button>`;
       if (c.estatus === 'autorizado' && !c.cobrado && ['administrador', 'capturista', 'contador'].includes(rol())) acciones += `<button class="btn" data-act="cobrar" data-id="${id}">Marcar cobrado</button>`;
       if (esAdmin() && c.cobrado) acciones += `<button class="btn ghost" data-act="descobrar" data-id="${id}">Desmarcar cobro</button>`;
       const mismoDia = c.creado_en && new Date(c.creado_en).toLocaleDateString('en-CA', { timeZone: 'America/Monterrey' }) === new Date().toLocaleDateString('en-CA', { timeZone: 'America/Monterrey' });
       if ((esAdmin() || (puedeOperar() && mismoDia)) && !c.cobrado && c.estatus !== 'cancelado') acciones += `<button class="btn ghost" data-act="cancelar" data-id="${id}">Cancelar cheque</button>`;
-      acciones += `<button class="btn ghost" data-act="poliza" data-id="${id}">Ver póliza</button>`;
+      if (c.estatus !== 'cancelado') acciones += `<button class="btn ghost" data-act="poliza" data-id="${id}">Ver póliza</button>`;
       if (puedeReexpedir(c)) acciones += `<button class="btn gold" data-act="reexpedir" data-id="${id}">Crear nuevo cheque igual</button>`;
     }
     const puedeSubir = !hist && (c.estatus !== 'cancelado' || puedeCapturar());
@@ -1824,7 +1907,8 @@ function armarHojas(lines, folios, h) {
     (grupos[k] = grupos[k] || []).push({ l, f: par[i] });
   });
   const hojas = [];
-  Object.values(grupos).forEach(g => { for (let i = 0; i < g.length; i += 9) hojas.push(g.slice(i, i + 9)); });
+  // Cancún cabe en una tabla de hasta 9; el folio JOCRIS a partir de 7 folios ya no cabe en la hoja carta.
+  Object.entries(grupos).forEach(([k, g]) => { const n = k === 'CANCUN' ? 9 : 6; for (let i = 0; i < g.length; i += n) hojas.push(g.slice(i, i + n)); });
   return hojas.map(g => {
     const cargo = cargoNombre(Number(g[0].l.cargo_id));
     if (esCancun(g[0].l.cargo_id)) {
@@ -1959,12 +2043,12 @@ async function viewNuevo(editCheque, copiaDe) {
   <div id="sumbar" class="sumbar"></div>
   <h3>Folio (archivo o foto)</h3>
   <div class="card">
-    <div class="row"><button class="btn ghost sm" data-act="pickfolio">Adjuntar folio (un solo archivo para todos)</button><span id="folInfo" class="mut sm">${F.folioFiles.length ? F.folioFiles.length + ' archivo(s) listo(s) para subir' : 'Sin adjuntar'}</span></div>
+    <div class="row"><button class="btn ghost sm" data-act="pickfolio">Adjuntar folio (un solo archivo para todos)</button><span id="folInfo" class="mut sm">${F.folioFiles.length ? F.folioFiles.length + ' archivo(s) listo(s) para subir' : 'Sin adjuntar'}</span><button class="lnk sm" data-act="quitaradj" data-k="folio" id="folQuitar" ${F.folioFiles.length ? '' : 'hidden'}>Quitar</button></div>
     <div class="mut sm" style="margin-top:6px">Sube aquí el PDF o la foto de los folios que ya tienes: un solo archivo aunque el cheque cubra varios folios. Los folios que genera el sistema se guardan solos.</div>
   </div>
   <h3>Factura</h3>
   <div class="card">
-    <div class="row"><button class="btn ghost sm" data-act="pickfac">Adjuntar factura (foto o PDF)</button><span id="facInfo" class="mut sm">${F.files.length ? F.files.length + ' archivo(s)' : (F.editId ? 'Puedes agregarla desde el detalle' : 'Sin adjuntar')}</span></div>
+    <div class="row"><button class="btn ghost sm" data-act="pickfac">Adjuntar factura (foto o PDF)</button><span id="facInfo" class="mut sm">${F.files.length ? F.files.length + ' archivo(s)' : (F.editId ? 'Puedes agregarla desde el detalle' : 'Sin adjuntar')}</span><button class="lnk sm" data-act="quitaradj" data-k="factura" id="facQuitar" ${F.files.length ? '' : 'hidden'}>Quitar</button></div>
     <label class="f">Nota sobre la factura (opcional)</label><input type="text" id="h_sin_factura_motivo" placeholder="Ej. el proveedor la entrega después, pago de nómina…" value="${esc(h.sin_factura_motivo)}">
     <div class="mut sm" style="margin-top:6px">No es necesaria para autorizar: la puedes subir después desde el detalle del cheque.</div>
   </div>
@@ -2010,7 +2094,7 @@ function pintaAlertas() {
 function dlgHuecos() {
   const hs = S.huecos || [], cap = puedeOperar();
   openModal(`<h2 style="margin-top:0">Cheques sin dar de alta</h2>` + (hs.length ? hs.map((r, i) => `<div class="card"><div class="b">${esc(r.q.nombre)}</div>
-    ${r.nums.map(x => `<div class="warnbox"><b>${x.n}</b> — ${x.d ? 'DETENIDO: ' + esc(x.d.motivo) + `<div class="mut sm">Lo marcó ${esc(x.d.creado_por_nombre || '')} el ${fdate(x.d.creado_en)}</div>` : '<span class="mut">sin motivo registrado</span>'}</div>`).join('')}
+    ${r.nums.map(x => `<div class="warnbox"><b>${x.n}</b> — ${x.d ? 'DETENIDO: ' + esc(x.d.motivo) + `<div class="mut sm">Lo marcó ${esc(x.d.creado_por_nombre || '')} el ${fdate(fechaMty(x.d.creado_en))}</div>` : '<span class="mut">sin motivo registrado</span>'}</div>`).join('')}
     ${cap && r.nums.some(x => !x.d) ? `<label class="f">Motivo para los que no tienen</label><input type="text" id="mh_${r.q.id}" placeholder="Ej. DETENIDO POR FALTA DE FIRMA"><div class="row" style="margin-top:8px"><button class="btn gold sm" data-act="motivohuecos" data-q="${r.q.id}">Guardar motivo</button></div>` : ''}
     <div class="mut sm" style="margin-top:6px">Cuando lo captures con ese número, o lo registres como cancelado, la alerta se quita sola.</div></div>`).join('')
     : '<div class="okbox">No hay huecos: todas las chequeras llevan numeración continua desde el primer cheque capturado.</div>') + '<div class="mut sm">Se revisa desde el primer cheque capturado en el sistema (el historial no cuenta).</div>');
@@ -2265,7 +2349,7 @@ async function polizaPDF(id) {
   const { jsPDF } = window.jspdf; const doc = new jsPDF({ unit: 'mm', format: 'letter' });
   const LIL = [241, 208, 236], PW = 215.9, FX = 5.5, FW = PW - 2 * 5.5, BX = 13.6, BW = PW - 2 * 13.6, RH = 4.8, FONT = 'times';
   const fechaLarga = (() => { const [y, m, d] = String(c.fecha).slice(0, 10).split('-'); const M = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']; return `${Number(d)} de ${M[Number(m) - 1]} de ${y}`; })();
-  const letra = montoLetra(c.monto).replace(/ M\.N\.$/, 'MN').replace(/ DE PESOS /, ' PESOS ');
+  const letra = montoLetra(c.monto);
   const importe = Number(c.monto || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const parts = String(chequeraNombre(c.chequera_id) || '').trim().split(/\s+/); const banco = parts.length > 1 ? parts.pop() : ''; const empresa = parts.join(' ');
   let y = 8.8, pageTop = 4.2;
@@ -2281,7 +2365,7 @@ async function polizaPDF(id) {
     if (i === 0) txt('CHEQUE POLIZA', BX + 8, yy, h, 11, true);
     if (i === 1) { txt('FECHA', 126.5, yy, h, 10, true); txt(fechaLarga, 150.6, yy, h, 9.5, true); }
     if (i === 3) { txt(c.beneficiario, BX + 0.8, yy, h, c.beneficiario.length > 55 ? 7.5 : 9, true); txt('$', 148.5, yy, h, 9, true); txt(importe, 190, yy, h, 9, true, { align: 'right' }); }
-    if (i === 5) txt('(' + letra + ')', BX + 0.8, yy, h, 8.5, true);
+    if (i === 5) { doc.setFont(FONT, 'bold'); doc.setFontSize(8.5); const w = doc.getTextWidth('(' + letra + ')'); txt('(' + letra + ')', BX + 0.8, yy, h, w > BW - 2 ? 8.5 * (BW - 2) / w : 8.5, true); }
   });
   // --- Recuadro 2: cheque y chequera ---
   y += 4.6;
@@ -2338,6 +2422,11 @@ const normCol = s => String(s || '').normalize('NFD').replace(/[^\x00-\x7F]/g, '
 const numBanco = s => { let t = String(s ?? '').trim(); if (!t) return NaN; const neg = /^\(.*\)$/.test(t) || /-\s*$/.test(t) || /^-/.test(t.replace(/^\$\s*/, '')); t = t.replace(/[()$,\s-]/g, ''); const n = Number(t); return isFinite(n) && t !== '' ? (neg ? -n : n) : NaN; };
 const MESES_B = { ene: 1, feb: 2, mar: 3, abr: 4, may: 5, jun: 6, jul: 7, ago: 8, sep: 9, set: 9, oct: 10, nov: 11, dic: 12, jan: 1, apr: 4, aug: 8, dec: 12 };
 function fechaBanco(s) {
+  const r = fechaBanco0(s); if (!r) return null;
+  const [y, mo, d] = r.split('-').map(Number), dt = new Date(Date.UTC(y, mo - 1, d));
+  return (y >= 2000 && y <= 2100 && dt.getUTCMonth() === mo - 1 && dt.getUTCDate() === d) ? r : null;
+}
+function fechaBanco0(s) {
   const t = String(s || '').trim(); let m;
   if ((m = t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/))) return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
   if ((m = t.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})\b/))) { const y = m[3].length === 2 ? '20' + m[3] : m[3]; return `${y}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`; }
@@ -2391,7 +2480,9 @@ async function leerArchivoBanco(file) {
     const wb = XLSX.read(buf, { type: 'array', cellDates: true });
     let err = null;
     for (const nom of wb.SheetNames) {
-      const filas = XLSX.utils.sheet_to_json(wb.Sheets[nom], { header: 1, raw: false, dateNF: 'dd/mm/yyyy', defval: '' }).map(r => r.map(x => String(x ?? '')));
+      // Las fechas de Excel llegan como Date: se pasan a AAAA-MM-DD sin depender del formato de la celda (evita invertir día y mes).
+      const ymd = d => { const x = new Date(d.getTime() + 43200000); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`; };
+      const filas = XLSX.utils.sheet_to_json(wb.Sheets[nom], { header: 1, raw: true, defval: '' }).map(r => r.map(x => x instanceof Date ? ymd(x) : String(x ?? '')));
       try { return leerEstadoBanco(filas); } catch (e) { err = e; }
     }
     throw err || new Error('El Excel no trae hojas.');
@@ -2531,7 +2622,7 @@ async function respaldoExcel() {
     let bit = []; try { bit = await traerTodo('bitacora', '*, cheques(numero_cheque,beneficiario,chequera_id)', ['creado_en']); } catch (e) { bit = []; }
     const byId = {}; ch.forEach(c => { byId[c.id] = c; });
     const si = v => v ? 'SI' : 'NO';
-    const cheques = ch.map(c => ({ 'PÓLIZA': c.poliza_numero ?? '', 'CHEQUERA': chequeraNombre(c.chequera_id), 'NO. CHEQUE': c.numero_cheque, 'FECHA': c.fecha, 'BENEFICIARIO': c.beneficiario, 'MONTO': Number(c.monto), 'ESTATUS': String(c.estatus || '').toUpperCase(), 'HISTORIAL (EXCEL ORIGINAL)': si(c.es_historial), 'CONCEPTO': c.concepto || '', 'SOLICITÓ': c.solicito || '', 'CAPTURÓ': c.capturado_por_nombre || '', 'AUTORIZÓ': c.autorizado_por_nombre || '', 'FECHA AUTORIZACIÓN': c.fecha_autorizacion ? String(c.fecha_autorizacion).slice(0, 10) : '', 'COBRADO': si(c.cobrado), 'FECHA COBRO': c.fecha_cobro || '', 'MOTIVO CANCELACIÓN': c.motivo_cancelacion || '', 'MOTIVO RECHAZO': c.motivo_rechazo || '', 'FACTURA': c.sin_factura_motivo || '', 'NOTA': c.nota_historial || '' }));
+    const cheques = ch.map(c => ({ 'PÓLIZA': c.poliza_numero ?? '', 'CHEQUERA': chequeraNombre(c.chequera_id), 'NO. CHEQUE': c.numero_cheque, 'FECHA': c.fecha, 'BENEFICIARIO': c.beneficiario, 'MONTO': Number(c.monto), 'ESTATUS': String(c.estatus || '').toUpperCase(), 'HISTORIAL (EXCEL ORIGINAL)': si(c.es_historial), 'CONCEPTO': c.concepto || '', 'SOLICITÓ': c.solicito || '', 'CAPTURÓ': c.capturado_por_nombre || '', 'AUTORIZÓ': c.autorizado_por_nombre || '', 'FECHA AUTORIZACIÓN': c.fecha_autorizacion ? fechaMty(c.fecha_autorizacion) : '', 'COBRADO': si(c.cobrado), 'FECHA COBRO': c.fecha_cobro || '', 'MOTIVO CANCELACIÓN': c.motivo_cancelacion || '', 'MOTIVO RECHAZO': c.motivo_rechazo || '', 'FACTURA': c.sin_factura_motivo || '', 'NOTA': c.nota_historial || '' }));
     const folios = []; ch.forEach(c => (c.cheque_folios || []).forEach(f => folios.push({ 'PÓLIZA': c.poliza_numero ?? '', 'CHEQUERA': chequeraNombre(c.chequera_id), 'NO. CHEQUE': c.numero_cheque, 'BENEFICIARIO': c.beneficiario, 'CARGO': cargoNombre(f.cargo_id), 'FOLIO': f.sin_folio ? 'SIN FOLIO' : f.folio_numero, 'MOTIVO SIN FOLIO': f.sin_folio_motivo || '', 'PROVEEDOR': f.proveedor || '', 'DESCRIPCIÓN': f.descripcion || '', 'OBRA / VILLA': f.obra || '', 'MONTO': Number(f.monto), 'VIGENTE': si(f.activo) })));
     const arch = []; ch.forEach(c => (c.archivos || []).forEach(a => arch.push({ 'PÓLIZA': c.poliza_numero ?? '', 'CHEQUERA': chequeraNombre(c.chequera_id), 'NO. CHEQUE': c.numero_cheque, 'BENEFICIARIO': c.beneficiario, 'TIPO': String(a.tipo || '').toUpperCase(), 'ARCHIVO': a.nombre || '', 'VIGENTE': si(a.activo) })));
     const bita = bit.map(b => ({ 'FECHA Y HORA': fdt(b.creado_en), 'USUARIO': b.usuario_nombre || '', 'ACCIÓN': String(b.accion || '').replace(/_/g, ' ').toUpperCase(), 'CHEQUERA': b.cheques ? chequeraNombre(b.cheques.chequera_id) : '', 'NO. CHEQUE': b.cheques ? b.cheques.numero_cheque : '', 'BENEFICIARIO': b.cheques ? b.cheques.beneficiario : '' }));
@@ -2579,6 +2670,8 @@ const aMayus = ev => {
   const a = el.selectionStart, b = el.selectionEnd; el.value = u; try { el.setSelectionRange(a, b); } catch (e) {}
 };
 document.addEventListener('input', aMayus, true);
+function ponHdr() { const h = document.querySelector('header.top'), n = document.querySelector('nav.tabs'); if (!h) return; const navArriba = n && getComputedStyle(n).position === 'sticky'; document.documentElement.style.setProperty('--hdr', (h.offsetHeight + (navArriba ? n.offsetHeight : 0)) + 'px'); }
+window.addEventListener('resize', ponHdr); window.addEventListener('orientationchange', () => setTimeout(ponHdr, 300));
 document.addEventListener('compositionend', aMayus, true);
 document.addEventListener('click', ev => {
   document.querySelectorAll('details.dd[open]').forEach(d => { if (!d.contains(ev.target)) d.removeAttribute('open'); });
@@ -2586,7 +2679,7 @@ document.addEventListener('click', ev => {
     document.querySelectorAll('.card.up,.item.up').forEach(c => { if (!c.querySelector('details.dd[open]')) c.classList.remove('up'); });
     const ab = document.querySelector('details.dd[open]'); if (!ab) return;
     const c = ab.closest('.card,.item'); if (c) c.classList.add('up');
-    const m = ab.querySelector('.ddm'); if (m) { const r = m.getBoundingClientRect(); const navH = (document.querySelector('nav.tabs') || { offsetHeight: 0 }).offsetHeight; const lim = window.innerHeight - navH - 8; if (r.bottom > lim && !ab.closest('.sheet')) window.scrollBy({ top: r.bottom - lim + 8, behavior: 'smooth' }); }
+    const m = ab.querySelector('.ddm'); if (m) { const r = m.getBoundingClientRect(); const navH = (document.querySelector('nav.tabs') || { offsetHeight: 0 }).offsetHeight; const lim = window.innerHeight - navH - 8; if (r.bottom > lim && !ab.closest('.sheet') && !ab.closest('.fbar')) window.scrollBy({ top: r.bottom - lim + 8, behavior: 'smooth' }); }
   }, 0);
 });
 document.addEventListener('click', async ev => {
@@ -2662,6 +2755,8 @@ document.addEventListener('click', async ev => {
       }
       case 'enterar': { el.disabled = true; await rpc('enterar_cancelacion', { p_id: id }); toast('Cancelación confirmada.', 'ok'); refreshView(); break; }
       case 'mas': loadList(false); break;
+      case 'fddnada': { const k = el.dataset.k; S.filt[k] = []; pintaFdd(k); onFiltroCambio(k); break; }
+      case 'flimpia': { S.filt.ch = []; S.filt.mes = []; S.filt.st = []; S.filt.q = ''; const fq = $('#fq'); if (fq) fq.value = ''; await cargarMeses(); ['ch', 'st'].forEach(pintaFdd); fddResumenes(); loadList(true); break; }
       case 'poliza': { const dd = el.closest('details.dd'); if (dd) dd.removeAttribute('open'); polizaPDF(id); break; }
       case 'verarch': { const c = await loadCheque(id); const a = archActivos(c, el.dataset.tipo)[0]; if (a) abrirPath(a.path); break; }
       case 'verpath': { const dd = el.closest('details.dd'); if (dd) dd.removeAttribute('open'); abrirPath(el.dataset.path); break; }
@@ -2722,7 +2817,7 @@ document.addEventListener('click', async ev => {
         el.disabled = true; const c = await rpc('registrar_cheque_cancelado', { p_chequera: ch, p_numero: num, p_fecha: fe, p_motivo: mo });
         let warn = ''; if (ccFiles.length) { try { await subirArchivo(c.id, 'otro', ccFiles); } catch (e) { warn = errMsg(e); } }
         ccFiles = []; closeModal(); toast(`Cheque ${num} registrado como cancelado.` + (warn ? ' La foto no se pudo subir.' : ''), warn ? 'err' : 'ok'); cargarAlertas(true); refreshView(); break; }
-      case 'ccfoto': { ccFiles = await pickFuenteT('foto_cheque'); $('#ccInfo').textContent = ccFiles.length ? ccFiles.length + ' archivo(s)' : 'Sin foto'; break; }
+      case 'ccfoto': { const nf = await pickFuenteT('foto_cheque'); if (nf.length) ccFiles = nf; $('#ccInfo').textContent = ccFiles.length ? ccFiles.length + ' archivo(s)' : 'Sin foto'; break; }
       case 'conciliar': dlgConciliar(); break;
       case 'concrevisar': await concRevisar(); break;
       case 'okconc': await concAplicar(); break;
@@ -2750,7 +2845,8 @@ document.addEventListener('click', async ev => {
         renderLines(); break;
       }
       case 'pickcheque': { const fs = await pickFuenteT('foto_cheque'); if (fs.length) { S.F.chequeFiles = S.F.chequeFiles.concat(fs); leerFotoCheque(fs[0]); } $('#chqInfo').textContent = S.F.chequeFiles.length ? S.F.chequeFiles.length + ' foto(s) lista(s) para subir' : 'Sin foto'; break; }
-      case 'pickfolio': { const fs = await pickFuenteT('folio'); S.F.folioFiles = fs; $('#folInfo').textContent = fs.length ? fs.length + ' archivo(s) listo(s) para subir' : 'Sin adjuntar'; break; }
+      case 'pickfolio': { const nf = await pickFuenteT('folio'); if (nf.length) S.F.folioFiles = nf; const fs = S.F.folioFiles; $('#folInfo').textContent = fs.length ? fs.length + ' archivo(s) listo(s) para subir' : 'Sin adjuntar'; $('#folQuitar').hidden = !fs.length; break; }
+      case 'quitaradj': { if (!S.F) break; if (el.dataset.k === 'folio') { S.F.folioFiles = []; $('#folInfo').textContent = 'Sin adjuntar'; $('#folQuitar').hidden = true; } else { S.F.files = []; $('#facInfo').textContent = 'Sin adjuntar'; $('#facQuitar').hidden = true; } break; }
       case 'dlfolio': { const hj = (S.hojas || [])[Number(el.dataset.i)]; if (hj) bajarBlob(hj.blob || hj.doc.output('blob'), hj.nombre); break; }
       case 'firma': dlgFirma(); break;
       case 'firmalimpiar': { const cv = $('#firmaPad'); cv.getContext('2d').clearRect(0, 0, cv.width, cv.height); break; }
@@ -2762,7 +2858,7 @@ document.addEventListener('click', async ev => {
         const F = S.F, i = Number(el.dataset.i); const tot = cents(parseMoney(F.h.monto) || 0);
         const otros = F.lines.reduce((a, l, j) => j === i ? a : a + cents(parseMoney(l.monto) || 0), 0); const falta = tot - otros;
         if (falta > 0) { F.lines[i].monto = (falta / 100).toFixed(2); renderLines(); } else toast('No falta nada por repartir.', 'err'); break; }
-      case 'pickfac': { const files = await pickFuenteT('factura'); S.F.files = files; $('#facInfo').textContent = files.length ? files.length + ' archivo(s) listo(s) para subir' : 'Sin adjuntar'; break; }
+      case 'pickfac': { const nf = await pickFuenteT('factura'); if (nf.length) S.F.files = nf; const files = S.F.files; $('#facInfo').textContent = files.length ? files.length + ' archivo(s) listo(s) para subir' : 'Sin adjuntar'; $('#facQuitar').hidden = !files.length; break; }
       case 'guardar': guardarCheque(); break;
       case 'confirmguardar': { const ms = $('#motSalta'); if (ms) { if (ms.value.trim().length < 3) return toast('Escribe por qué se salta el cheque (queda como alerta).', 'err'); if (S.F) S.F.saltaMotivo = ms.value.trim(); } closeModal(); guardarCheque(true); break; }
       case 'saveserie': {
