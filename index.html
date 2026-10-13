@@ -1491,6 +1491,24 @@ function similitud(a, b) {
   const A = bg(a), B = bg(b); let inter = 0, n = 0; A.forEach((v, k) => { n += v; if (B.has(k)) inter += Math.min(v, B.get(k)); }); B.forEach(v => n += v);
   return n ? 2 * inter / n : (a === b ? 1 : 0);
 }
+/* ===================== CATÁLOGO DE PROVEEDORES / BENEFICIARIOS ===================== */
+async function cargarProvs(forzar) {
+  if (S.provs && !forzar) return S.provs;
+  try {
+    const { data } = await sb.from('proveedores').select('nombre,alias').eq('activo', true).order('nombre');
+    S.provs = data || [];
+  } catch (e) { S.provs = S.provs || []; }
+  return S.provs;
+}
+/* Compara un nombre capturado con el catálogo: devuelve {ok:true} si ya existe, o {nuevo:true, parecido:'NOMBRE'|null}. */
+function revisaNombreCat(nombre, provs) {
+  const n = String(nombre || '').trim().toUpperCase().replace(/\s+/g, ' ');
+  if (!n || !provs || !provs.length) return { ok: true };
+  if (provs.some(p => p.nombre === n || (p.alias || []).some(a => String(a).toUpperCase() === n))) return { ok: true };
+  const nn = normNom(n); let mejor = null, ms = 0;
+  provs.forEach(p => { [p.nombre, ...(p.alias || [])].forEach(x => { const s = nn === normNom(x) ? 1 : similitud(nn, normNom(x)); if (s > ms) { ms = s; mejor = p.nombre; } }); });
+  return { nuevo: true, parecido: ms >= 0.72 ? mejor : null };
+}
 function difLectura(L, h) {
   const out = []; if (!L) return out;
   if (L.numero_cheque && h.numero_cheque && String(Number(L.numero_cheque)) !== String(Number(h.numero_cheque))) out.push(`La foto dice cheque ${L.numero_cheque} y capturaste ${h.numero_cheque}.`);
@@ -1912,9 +1930,9 @@ async function viewNuevo(editCheque, copiaDe) {
     }
   }
   const F = S.F, h = F.h;
-  const { data: bens } = await sb.from('cheques').select('beneficiario').order('creado_en', { ascending: false }).limit(1000);
+  const provs = await cargarProvs();
   if (S.tab !== 'nuevo') return;
-  const uniq = [...new Set((bens || []).map(x => x.beneficiario))].slice(0, 400);
+  const uniq = provs.map(p => p.nombre);
   $('#view').innerHTML = `<div class="pagehead"><h2>${F.editId ? 'Editar cheque' : 'Nuevo cheque'}</h2></div>${F.copia ? `<div class="okbox" style="margin-bottom:10px"><b>Nuevo cheque con los datos del ${F.copia.numero} (cancelado).</b> Ya van copiados chequera, beneficiario, monto, concepto, folios y todos sus documentos (menos la foto del cheque). Pon el <b>número del cheque nuevo</b> y toma su foto.${F.copia.arch.length ? `<div style="margin-top:6px">Archivos que se copian al cheque nuevo:</div>${F.copia.arch.map((a, i) => `<label class="row" style="gap:8px;margin-top:4px"><input type="checkbox" data-act="copiaarch" data-i="${i}" ${a.on ? 'checked' : ''} style="width:auto"> <span>${({ factura: 'Factura', folio: 'Folio', comprobante_cobro: 'Comprobante', otro: 'Documento' })[a.tipo] || 'Archivo'}: ${esc(a.nombre)}</span></label>`).join('')}` : '<div class="mut sm" style="margin-top:6px">El cheque cancelado no tenía documentos subidos.</div>'}</div>` : ''}${F.editId || !puedeOperar() ? '' : '<div class="mut sm" style="margin:-6px 0 10px">¿El cheque ya salió cancelado de origen? <a href="#" data-act="cancelado">Regístralo aquí</a></div>'}
   <div class="card">
     <div class="grid2">
@@ -2044,6 +2062,12 @@ async function revisionCaptura(h, tot, esEdit) {
   if (dias < 0) r.avisos.push(`La fecha del cheque es futura (${fdate(h.fecha)}).`);
   else if (dias > 10) r.avisos.push(`La fecha del cheque es de hace ${dias} días (${fdate(h.fecha)}).`);
   try {
+    const rc = revisaNombreCat(h.beneficiario, await cargarProvs());
+    if (rc.nuevo) r.avisos.push(rc.parecido
+      ? `"${h.beneficiario.trim().toUpperCase()}" no está en el catálogo y se parece a "${rc.parecido}". Si es el mismo, vuelve y escríbelo como "${rc.parecido}". Si es otro, confirma y se dará de alta como proveedor nuevo.`
+      : `"${h.beneficiario.trim().toUpperCase()}" es un beneficiario nuevo: al guardar quedará dado de alta en el catálogo de proveedores.`);
+  } catch (e) { /* aviso opcional */ }
+  try {
     const ben = h.beneficiario.trim().toUpperCase();
     const desde = new Date(f.getTime() - 15 * 86400000).toISOString().slice(0, 10);
     const { data: dup } = await sb.from('cheques').select('numero_cheque,fecha,chequera_id').eq('beneficiario', ben).eq('monto', tot).gte('fecha', desde).neq('estatus', 'cancelado').limit(3);
@@ -2076,7 +2100,7 @@ function renderLines() {
       ${l.modo === 'sinfolio' ? `<div><label class="f">No. de folio</label><input type="text" value="SIN FOLIO" disabled></div>` : `<div><label class="f">No. de folio</label><input type="text" inputmode="numeric" data-k="folio_numero" placeholder="${esc(l._ph || '')}" value="${esc(l.folio_numero)}"></div>`}
     </div>
     <div class="grid2">
-      <div><label class="f">Proveedor</label><input type="text" data-k="proveedor" value="${esc(l.proveedor)}"></div>
+      <div><label class="f">Proveedor</label><input type="text" data-k="proveedor" list="dlBen" autocomplete="off" value="${esc(l.proveedor)}"></div>
       <div><label class="f">Obra / villa</label><input type="text" data-k="obra" value="${esc(l.obra)}"></div>
     </div>
     <label class="f">Descripción</label><input type="text" data-k="descripcion" value="${esc(l.descripcion)}">
@@ -2161,7 +2185,7 @@ async function guardarCheque(confirmado = false) {
     else { payload.clave_submision = F.clave; c = await rpc('capturar_cheque', { p: payload }); }
     let subidaErr = '';
     if (!F.editId && F._salta && F.saltaMotivo) { try { await rpc('registrar_detenidos', { p_chequera: F._salta.chequera, p_numeros: F._salta.nums, p_motivo: F.saltaMotivo }); } catch (e) { subidaErr = 'no se pudo guardar la alerta del cheque saltado: ' + errMsg(e); } }
-    S.ult = {}; cargarAlertas(true);
+    S.ult = {}; S.provs = null; cargarAlertas(true);
     if (F.chequeFiles.length) { try { await subirArchivo(c.id, 'foto_cheque', F.chequeFiles, `Foto_cheque_${c.numero_cheque}.pdf`); } catch (e) { subidaErr = 'foto del cheque: ' + errMsg(e) + (puedeArchivos() ? ' (súbela desde el detalle: el Ing. no podrá autorizar sin ella)' : ' (pídele a Pedro que la suba: el Ing. no podrá autorizar sin ella)'); } }
     if (F.files.length) { try { await subirArchivo(c.id, 'factura', F.files); } catch (e) { subidaErr = (subidaErr ? subidaErr + ' · ' : '') + errMsg(e); } }
     if (F.folioFiles.length) {
