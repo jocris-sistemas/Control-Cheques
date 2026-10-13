@@ -472,10 +472,11 @@ function deshacerDiferido() {
 }
 document.addEventListener('visibilitychange', () => { if (document.hidden) flushDiferido(); });
 window.addEventListener('pagehide', () => flushDiferido());
-/* Cierre de sesión por inactividad (45 min) */
+/* Cierre de sesión por inactividad (45 min), salvo en dispositivos marcados como seguros */
+function dispSeguro() { try { return localStorage.getItem('jocris_disp_seguro') === '1'; } catch (e) { return false; } }
 (function () {
   let t, MS = 45 * 60 * 1000;
-  const rearma = () => { clearTimeout(t); t = setTimeout(async () => { if (!S.perfil || S.dif) return rearma(); try { await soltarPush(); await sb.auth.signOut(); } catch (e) { } S.perfil = null; renderLogin(); setTimeout(() => toast('Se cerró la sesión por inactividad.'), 300); }, MS); };
+  const rearma = () => { clearTimeout(t); if (dispSeguro()) return; t = setTimeout(async () => { if (!S.perfil || S.dif) return rearma(); try { await soltarPush(); await sb.auth.signOut(); } catch (e) { } S.perfil = null; renderLogin(); setTimeout(() => toast('Se cerró la sesión por inactividad.'), 300); }, MS); };
   ['click', 'keydown', 'touchstart', 'scroll'].forEach(e => window.addEventListener(e, rearma, { passive: true }));
   window.__rearma = rearma;
   rearma();
@@ -552,6 +553,12 @@ async function soltarPush() { try { const s = await pushActual(); if (s) await r
 async function desactivarPush() { const sub = await pushActual(); if (!sub) return; try { await rpc('quitar_push', { p_endpoint: sub.endpoint }); } catch (e) { } await sub.unsubscribe(); }
 // Al entrar, si ya estaban activadas, se vuelve a registrar (el navegador a veces cambia la suscripción).
 async function resincronizarPush() { try { if (pushSoportado() && Notification.permission === 'granted') { const sub = await pushActual(); if (sub) await guardarSub(sub); } } catch (e) { } }
+function htmlDispSeguro() {
+  const on = dispSeguro();
+  return `<div class="mut sm" style="margin-bottom:6px">${on ? 'Activo en este dispositivo: aquí la sesión ya no se cerrará sola. ' : ''}Úsalo solo en un celular o computadora de uso personal — nunca en un equipo compartido o público.</div>${on
+    ? '<button class="btn ghost" data-act="dispseg" data-v="0">Quitar: sí cerrar por inactividad aquí</button>'
+    : '<button class="btn ghost" data-act="dispseg" data-v="1">Marcar este dispositivo como seguro</button>'}`;
+}
 async function htmlPush() {
   if (!pushSoportado()) return `<div class="mut sm" style="margin-bottom:6px">${esIOS() && !esInstalada() ? 'En iPhone primero instala la app (Safari → Compartir → "Agregar a inicio") y ábrela desde ese ícono.' : 'Este navegador no permite notificaciones.'}</div>`;
   const sub = await pushActual(); const on = !!sub && Notification.permission === 'granted';
@@ -2692,6 +2699,7 @@ function menuCuenta() {
   <div class="row" style="margin-top:12px"><button class="btn" data-act="cambiarpass">Guardar contraseña</button><button class="btn ghost" data-act="salir">Cerrar sesión</button></div>
   <h3>Notificaciones</h3><div id="pushBox"><div class="mut sm">Revisando…</div></div>
   <h3>Apariencia</h3><div class="tema">${[['auto', 'Automático'], ['light', 'Claro'], ['dark', 'Oscuro']].map(([v, t]) => `<button class="btn ghost sm ${temaPref() === v ? 'on' : ''}" data-act="tema" data-v="${v}">${t}</button>`).join('')}</div>
+  <h3>Sesión por inactividad</h3><div id="dispSegBox">${htmlDispSeguro()}</div>
   <h3>Instalar en el celular</h3><button class="btn ghost" data-act="instalar">Instalar app</button>
   <details class="mas"><summary>Ver más opciones</summary>
   ${veCaja() ? `<h3>Acumulado</h3><div class="row" style="gap:8px"><button class="btn ghost" data-act="modulo" data-mod="caja">Abrir Acumulado</button><button class="btn ghost" data-act="cajaresp">Respaldo del Acumulado en Excel</button></div>` : ''}
@@ -2736,6 +2744,7 @@ document.addEventListener('click', async ev => {
       case 'menu': menuCuenta(); break;
       case 'respaldo': respaldoExcel(); break;
       case 'tema': { try { localStorage.setItem('jocris_tema', el.dataset.v); } catch (e) { } aplicaTema(); document.querySelectorAll('.tema .btn').forEach(b => b.classList.toggle('on', b.dataset.v === el.dataset.v)); break; }
+      case 'dispseg': { try { localStorage.setItem('jocris_disp_seguro', el.dataset.v); } catch (e) { } if (window.__rearma) window.__rearma(); const bds = $('#dispSegBox'); if (bds) bds.innerHTML = htmlDispSeguro(); toast(el.dataset.v === '1' ? 'Listo: aquí ya no se cerrará la sesión por inactividad.' : 'Listo: aquí la sesión volverá a cerrarse por inactividad.', 'ok'); break; }
       case 'verpass': { const inp = document.getElementById(el.dataset.for); const ver = inp.type === 'password'; inp.type = ver ? 'text' : 'password'; el.innerHTML = ver ? EYE_OFF : EYE; inp.focus(); break; }
       case 'instalar': {
         if (window.__pwaPrompt) { window.__pwaPrompt.prompt(); await window.__pwaPrompt.userChoice; window.__pwaPrompt = null; break; }
