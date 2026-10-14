@@ -446,7 +446,7 @@ const puedeCapturar = () => ['administrador', 'capturista', 'contador'].includes
 const puedeOperar = () => ['administrador', 'capturista'].includes(rol());
 /* El contador solo corrige / marca sin foto en los cheques que él mismo capturó */
 const mismoDiaMty = c => !!(c && c.creado_en) && new Date(c.creado_en).toLocaleDateString('en-CA', { timeZone: 'America/Monterrey' }) === new Date().toLocaleDateString('en-CA', { timeZone: 'America/Monterrey' });
-const puedeCancelar = c => !!c && !c.es_historial && !c.cobrado && c.estatus !== 'cancelado' && (esAdmin() || (puedeOperar() && mismoDiaMty(c)));
+const puedeCancelar = c => !!c && !c.es_historial && !c.cobrado && c.estatus !== 'cancelado' && (esAdmin() || (puedeOperar() && (c.estatus === 'pendiente' || mismoDiaMty(c))));
 const puedeTocar = c => rol() === 'contador' ? (!!c && c.capturado_por === S.perfil?.id) : puedeCapturar();
 /* Solo Pedro (perfiles.puede_archivos) agrega, reemplaza o quita cualquier documento de un cheque ya capturado.
    Los demás solo pueden cambiar o quitar lo que ellos mismos subieron, durante 24 horas. */
