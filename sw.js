@@ -30,7 +30,8 @@ self.addEventListener('push', e => {
 });
 self.addEventListener('notificationclick', e => {
   e.notification.close();
-  const url = new URL((e.notification.data && e.notification.data.url) || './', self.registration.scope).href;
+  let url = self.registration.scope;
+  try { const u = new URL((e.notification.data && e.notification.data.url) || './', self.registration.scope); if (u.origin === self.location.origin) url = u.href; } catch (x) { }
   e.waitUntil(clients.matchAll({ type: 'window', includeUncontrolled: true }).then(ws => {
     for (const w of ws) { if (w.url.indexOf(self.registration.scope) === 0) { w.postMessage('refrescar'); return w.focus(); } }
     return clients.openWindow(url);
