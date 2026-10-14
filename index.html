@@ -693,7 +693,7 @@ window.addEventListener('resize', altoHeader);
 function renderShell() {
   const tabs = [['pend', esAdmin() ? 'Autorizar' : 'Pendientes'], ['cheques', 'Historial']];
   if (puedeCapturar()) tabs.push(['nuevo', 'Nuevo']);
-  tabs.push(['rep', 'Reportes']);
+  tabs.push(['rep', 'Indicadores']);
   $('#app').innerHTML = `
   <header class="top">
     <div class="brand"><span class="mark">J</span><div>${veCaja() ? 'JOCRIS' : 'JOCRIS · <span class="tl">Control de </span>Cheques'}<small>${esc(S.perfil.nombre)} · ${esc(rolTxt(S.perfil.rol))}</small></div></div>
@@ -970,68 +970,30 @@ function barrasHtml(items, nota) {
   return `<div class="bars">${items.map(i => `<div class="brow" title="${esc(i.l)}: ${fmt(i.v / 100)}${i.n ? ' · ' + i.n : ''}"><div class="bhead"><span class="bl">${esc(i.l)}${i.n ? ` <span class="bn">· ${esc(i.n)}</span>` : ''}</span><span class="bv money">${fmt(i.v / 100)}</span></div><div class="bt"><i style="width:${Math.max(1.5, i.v / mx * 100).toFixed(1)}%"></i></div></div>`).join('')}</div>${nota ? `<div class="mut sm" style="margin-top:8px">${nota}</div>` : ''}`;
 }
 async function viewRep() {
-  const per = S.repPer || 'mes', tok = S.repTok = (S.repTok || 0) + 1;
-  $('#view').innerHTML = `<div class="pagehead"><h2>Reportes</h2><span class="sub">Cheques autorizados, por cobrar y pendientes por completar</span></div>
-    <div class="card" style="padding:11px"><div class="filters"><select id="repPer" aria-label="Periodo">${[['mes', 'Mes en curso'], ['mes_ant', 'Mes anterior'], ['90', 'Últimos 90 días'], ['anio', 'Este año']].map(([v, t]) => `<option value="${v}" ${per === v ? 'selected' : ''}>${t}</option>`).join('')}</select></div></div>
-    <div id="repBody"><div class="sk"></div><div class="sk"></div><div class="sk"></div></div>`;
-  $('#repPer').onchange = e => { S.repPer = e.target.value; viewRep(); };
+  const tok = S.repTok = (S.repTok || 0) + 1;
+  $('#view').innerHTML = `<div class="pagehead"><h2>Indicadores</h2><span class="sub">Cheques autorizados</span></div>
+    <div id="repBody"><div class="sk"></div><div class="sk"></div></div>`;
   try {
-    const [d0, d1, nomPer] = rangoPeriodo(per);
-    const hoy = diaD(isoD(new Date()));
-    const hace84 = isoD(new Date(hoy.getTime() - 84 * 86400000));
-    const desde = d0 < hace84 ? d0 : hace84;
-    const [aut, porCob, pend] = await Promise.all([
-      fetchAll(() => sb.from('cheques').select('id,numero_cheque,chequera_id,fecha,beneficiario,monto,estatus,cheque_folios(cargo_id,monto,activo)').eq('estatus', 'autorizado').gte('fecha', desde).order('fecha', { ascending: false })),
-      fetchAll(() => sb.from('cheques').select('id,numero_cheque,chequera_id,fecha,beneficiario,monto').eq('estatus', 'autorizado').eq('es_historial', false).eq('cobrado', false).order('fecha', { ascending: true })),
-      fetchAll(() => sb.from('cheques').select('id,numero_cheque,fecha,beneficiario,monto,estatus,sin_foto_motivo,sin_factura_motivo,archivos(tipo,activo)').eq('es_historial', false).in('estatus', ['pendiente', 'autorizado']).gte('fecha', isoD(new Date(hoy.getTime() - 90 * 86400000))).order('fecha', { ascending: true }))]);
-    const enPer = aut.filter(c => c.fecha >= d0 && c.fecha <= d1 && cents(c.monto) > 0);
-    const tot = enPer.reduce((a, c) => a + cents(c.monto), 0);
-    // por semana (lunes a domingo), últimas 12
-    const lunes = iso => { const d = diaD(iso); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return d; };
-    const semanas = []; const l0 = lunes(isoD(hoy));
-    for (let i = 11; i >= 0; i--) { const d = new Date(l0.getTime() - i * 7 * 86400000); d.setHours(12); semanas.push({ k: isoD(d), d, v: 0, n: 0 }); }
-    aut.forEach(c => { if (cents(c.monto) <= 0) return; const k = isoD(lunes(c.fecha)); const w = semanas.find(x => x.k === k); if (w) { w.v += cents(c.monto); w.n++; } });
-    const wItems = semanas.map(w => ({ l: `${dm(w.d)} – ${dm(new Date(w.d.getTime() + 6 * 86400000))}`, v: w.v, n: w.n ? `${w.n} cheque${w.n === 1 ? '' : 's'}` : '' }));
-    // por cargo
-    const pc = new Map();
-    enPer.forEach(c => (c.cheque_folios || []).filter(f => f.activo).forEach(f => pc.set(f.cargo_id, (pc.get(f.cargo_id) || 0) + cents(f.monto))));
-    const cargoArr = [...pc.entries()].map(([k, v]) => ({ l: cargoNombre(k), v })).sort((a, b) => b.v - a.v);
-    const cargoTop = cargoArr.slice(0, 8); const otrosC = cargoArr.slice(8).reduce((a, x) => a + x.v, 0); if (otrosC) cargoTop.push({ l: 'Otros cargos', v: otrosC });
-    // por beneficiario
+    const hoy = new Date(); hoy.setHours(12, 0, 0, 0);
+    const [d0m, d1m, nomPer] = rangoPeriodo('mes');
+    const ini = isoD(new Date(hoy.getFullYear(), hoy.getMonth() - 11, 1, 12));
+    const aut = await fetchAll(() => sb.from('cheques').select('id,fecha,beneficiario,monto').eq('estatus', 'autorizado').gte('fecha', ini).order('fecha', { ascending: false }));
+    // gasto por mes, últimos 12 meses
+    const meses = [];
+    for (let i = 11; i >= 0; i--) { const d = new Date(hoy.getFullYear(), hoy.getMonth() - i, 1, 12); meses.push({ k: isoD(d).slice(0, 7), v: 0, n: 0 }); }
+    aut.forEach(c => { if (cents(c.monto) <= 0) return; const m = meses.find(x => x.k === String(c.fecha).slice(0, 7)); if (m) { m.v += cents(c.monto); m.n++; } });
+    const mItems = meses.slice().reverse().map(m => { const [y, mm] = m.k.split('-'); return { l: `${MESES_N[Number(mm) - 1].charAt(0).toUpperCase()}${MESES_N[Number(mm) - 1].slice(1)} ${y}`, v: m.v, n: m.n ? `${m.n} cheque${m.n === 1 ? '' : 's'}` : '' }; });
+    // principales beneficiarios del mes en curso
+    const enMes = aut.filter(c => c.fecha >= d0m && c.fecha <= d1m && cents(c.monto) > 0);
+    const totMes = enMes.reduce((a, c) => a + cents(c.monto), 0);
     const pb = new Map();
-    enPer.forEach(c => { const k = String(c.beneficiario || '').trim().toUpperCase(); const o = pb.get(k) || { v: 0, n: 0 }; o.v += cents(c.monto); o.n++; pb.set(k, o); });
-    const benArr = [...pb.entries()].map(([k, o]) => ({ l: k, v: o.v, n: `${o.n} cheque${o.n === 1 ? '' : 's'}` })).sort((a, b) => b.v - a.v).slice(0, 8);
-    // por cobrar (antigüedad)
-    const edad = c => Math.max(0, Math.round((hoy - diaD(c.fecha)) / 86400000));
-    const bk = [['0 a 30 días', 0, 30], ['31 a 60 días', 31, 60], ['61 a 90 días', 61, 90], ['Más de 90 días', 91, 99999]].map(([l, a, b]) => {
-      const xs = porCob.filter(c => edad(c) >= a && edad(c) <= b); return { l, v: xs.reduce((s2, c) => s2 + cents(c.monto), 0), n: `${xs.length} cheque${xs.length === 1 ? '' : 's'}` };
-    });
-    const totCob = porCob.reduce((a, c) => a + cents(c.monto), 0);
-    const viejos = porCob.filter(c => edad(c) > 30).slice(0, 6);
-    // pendientes por completar
-    const incompletos = pend.map(c => {
-      const arch = (c.archivos || []).filter(a => a.activo);
-      const f = [];
-      if (!arch.some(a => a.tipo === 'foto_cheque') && !c.sin_foto_motivo) f.push('Falta foto');
-      if (!arch.some(a => a.tipo === 'factura') && !c.sin_factura_motivo) f.push('Falta factura');
-      return { c, f, dias: edad(c) };
-    }).filter(x => x.f.length);
-    const nFoto = incompletos.filter(x => x.f.includes('Falta foto')).length, nFac = incompletos.filter(x => x.f.includes('Falta factura')).length;
+    enMes.forEach(c => { const k = String(c.beneficiario || '').trim().toUpperCase(); const o = pb.get(k) || { v: 0, n: 0 }; o.v += cents(c.monto); o.n++; pb.set(k, o); });
+    const benArr = [...pb.entries()].map(([k, o]) => ({ l: k, v: o.v, n: `${o.n} cheque${o.n === 1 ? '' : 's'}` })).sort((a, b) => b.v - a.v).slice(0, 10);
     if (S.tab !== 'rep' || !$('#repBody') || tok !== S.repTok) return;
     $('#repBody').innerHTML = `
-      <div class="kpis">
-        <div class="kpi"><div class="mut sm">Autorizado · ${nomPer}</div><div class="money big">${fmt(tot / 100)}</div></div>
-        <div class="kpi"><div class="mut sm">Cheques</div><div class="big">${enPer.length}</div></div>
-        <div class="kpi"><div class="mut sm">Promedio por cheque</div><div class="money big">${fmt(enPer.length ? tot / enPer.length / 100 : 0)}</div></div>
-        <div class="kpi"><div class="mut sm">Por cobrar hoy</div><div class="money big">${fmt(totCob / 100)}</div><div class="mut sm">${porCob.length} cheque${porCob.length === 1 ? '' : 's'}</div></div>
-      </div>
       <div class="repgrid">
-        <div class="card"><h3 class="rh">Gasto por semana</h3>${barrasHtml(wItems, 'Cheques autorizados, de lunes a domingo, últimas 12 semanas.')}</div>
-        <div class="card"><h3 class="rh">Principales beneficiarios · ${nomPer}</h3>${barrasHtml(benArr)}</div>
-        <div class="card wide"><h3 class="rh">Pendientes por completar</h3>
-          <div class="mut sm" style="margin-bottom:8px">${incompletos.length ? `${nFoto} sin foto del cheque · ${nFac} sin factura (cheques de los últimos 90 días, pendientes o autorizados)` : 'Todo completo. No falta ninguna foto ni factura.'}</div>
-          ${incompletos.slice(0, 15).map(x => `<div class="rrow"><button class="lnk" data-act="detalle" data-id="${x.c.id}">Cheque ${x.c.numero_cheque} · ${esc(x.c.beneficiario)}</button><span class="rtags">${x.f.map(t => `<span class="chip warn">${t}</span>`).join('')}<span class="mut sm">${x.dias} día${x.dias === 1 ? '' : 's'}</span></span></div>`).join('')}
-          ${incompletos.length > 15 ? `<div class="mut sm" style="margin-top:6px">Y ${incompletos.length - 15} más.</div>` : ''}</div>
+        <div class="card"><h3 class="rh">Gasto por mes</h3>${barrasHtml(mItems, 'Cheques autorizados por mes, últimos 12 meses.')}</div>
+        <div class="card"><h3 class="rh">Principales beneficiarios · ${nomPer}</h3>${barrasHtml(benArr, enMes.length ? `Total del mes: ${fmt(totMes / 100)} en ${enMes.length} cheque${enMes.length === 1 ? '' : 's'}.` : '')}</div>
       </div>`;
   } catch (e) { if (tok === S.repTok && $('#repBody')) $('#repBody').innerHTML = `<div class="warnbox">${esc(errMsg(e))}</div>`; }
 }
