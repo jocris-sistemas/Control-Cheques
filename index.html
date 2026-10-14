@@ -1243,7 +1243,7 @@ async function openDetail(id) {
         ${puedeSubir && puedeArchivos() ? `<div class="row" style="margin-top:10px">
           ${c.estatus !== 'cancelado' ? `<button class="btn ghost sm" data-act="subir" data-id="${id}" data-tipo="foto_cheque">+ Foto del cheque</button><button class="btn ghost sm" data-act="subir" data-id="${id}" data-tipo="factura">+ Factura</button><button class="btn ghost sm" data-act="subir" data-id="${id}" data-tipo="folio">+ Folio</button>` : ''}
           ${c.estatus !== 'cancelado' && !archActivos(c, 'comprobante_cobro').length ? `<button class="btn ghost sm" data-act="subir" data-id="${id}" data-tipo="comprobante_cobro">+ Ticket / ficha de depósito</button>` : ''}
-          <button class="btn ghost sm" data-act="subir" data-id="${id}" data-tipo="otro">${c.estatus === 'cancelado' ? '+ Foto del cheque cancelado' : '+ Otro'}</button>${c.estatus !== 'cancelado' ? `<button class="btn ghost sm" data-act="copiardocs" data-id="${id}">Copiar documentos de un cheque cancelado</button>` : ''}</div>`
+          ${c.estatus === 'cancelado' ? `<button class="btn ghost sm" data-act="subircanc" data-id="${id}">${archActivos(c, 'foto_cheque').length ? 'Reemplazar con foto del cheque cancelado' : '+ Foto del cheque cancelado'}</button>` : `<button class="btn ghost sm" data-act="subir" data-id="${id}" data-tipo="otro">+ Otro</button>`}${c.estatus !== 'cancelado' ? `<button class="btn ghost sm" data-act="copiardocs" data-id="${id}">Copiar documentos de un cheque cancelado</button>` : ''}</div>`
           : (!hist && puedeCapturar() ? '<div class="mut sm" style="margin-top:8px">Para agregar, reemplazar o quitar documentos de un cheque ya capturado, avisa a Pedro. Lo que tú subiste lo puedes cambiar o quitar durante 24 horas.</div>' : '')}
         ${!hist && puedeTocar(c) && c.estatus === 'pendiente' && !archActivos(c, 'foto_cheque').length && (puedeOperar() || !c.sin_foto_motivo) ? `<div class="row" style="margin-top:8px">${c.sin_foto_motivo ? `<button class="btn ghost sm" data-act="quitarsf" data-id="${id}">Quitar marca "sin foto"</button>` : `<button class="btn ghost sm" data-act="sinfoto" data-id="${id}">No hay foto</button>`}</div>` : ''}
       </div>
@@ -1674,6 +1674,8 @@ async function leerFotoCheque(file) {
   } catch (e) { if (S.F !== F || F.lecTok !== tok) return; F.lecturaEstado = 'error'; F.lecturaError = String(e.message || e).slice(0, 120); }
   pintaLectura();
 }
+// La foto de un cheque cancelado se recorta/mejora como foto del cheque (a color), no como documento en blanco y negro.
+async function tipoEscaneo(chequeId, tipo) { if (tipo !== 'otro') return tipo; try { const q = await sb.from('cheques').select('estatus').eq('id', chequeId).maybeSingle(); if (q.data && q.data.estatus === 'cancelado') return 'foto_cheque'; } catch (e) { } return tipo; }
 async function pickFuenteT(tipo) { const fs = await pickFuente(); return fs.length ? await escanearFotos(fs, tipo || 'otro') : fs; }
 async function filesToPdf(files) {
   if (files.length === 1 && files[0].type === 'application/pdf') return files[0];
@@ -1780,6 +1782,8 @@ async function horizTodos(motivo) {
 }
 async function subirArchivo(chequeId, tipo, files, nombreFijo, opts = {}) {
   const blob = await filesToPdf(files);
+  // En un cheque cancelado, la foto (tipo "otro") siempre se llama "Foto cheque cancelado".
+  if (tipo === 'otro' && !nombreFijo) { try { const q = await sb.from('cheques').select('estatus').eq('id', chequeId).maybeSingle(); if (q.data && q.data.estatus === 'cancelado') nombreFijo = 'Foto cheque cancelado.pdf'; } catch (e) { } }
   const path = `${chequeId}/${tipo}-${Date.now()}.pdf`;
   const up = await sb.storage.from(BUCKET).upload(path, blob, { contentType: 'application/pdf' });
   if (up.error) throw up.error;
@@ -2825,11 +2829,17 @@ document.addEventListener('click', async ev => {
       case 'subir': {
         const c = await loadCheque(id); const hay = archActivos(c, el.dataset.tipo).length > 0;
         if (hay) { dlgMotivoArch('Agregar documento', 'oksubir', id, { tipo: el.dataset.tipo }, 'Elegir archivo…'); break; }
-        const files = await pickFuenteT(el.dataset.tipo); if (!files.length) break; toast('Subiendo…');
+        const files = await pickFuenteT(await tipoEscaneo(id, el.dataset.tipo)); if (!files.length) break; toast('Subiendo…');
         await subirArchivo(id, el.dataset.tipo, files, null, { agregar: true }); toast('Documento guardado.', 'ok'); openDetail(id); refreshView(true); break; }
+      case 'subircanc': {
+        const files = await pickFuenteT('foto_cheque'); if (!files.length) break; toast('Subiendo…');
+        const { data: ant } = await sb.from('archivos').select('id').eq('cheque_id', id).eq('tipo', 'foto_cheque').eq('activo', true).order('creado_en', { ascending: false }).limit(1);
+        if (ant && ant.length) { await reemplazarConBlob(ant[0].id, id, await filesToPdf(files), 'Foto cheque cancelado.pdf', 'Cheque cancelado: la foto del cheque cancelado sustituye la foto original'); }
+        else await subirArchivo(id, 'foto_cheque', files, 'Foto cheque cancelado.pdf', { agregar: true });
+        toast('Foto del cheque cancelado guardada.', 'ok'); openDetail(id); refreshView(true); break; }
       case 'oksubir': {
         const m = ($('#mot').value || '').trim(); if (m.length < 5) return toast('Escribe el motivo (mín. 5 letras).', 'err');
-        const files = await pickFuenteT(el.dataset.tipo); if (!files.length) break; toast('Subiendo…');
+        const files = await pickFuenteT(await tipoEscaneo(id, el.dataset.tipo)); if (!files.length) break; toast('Subiendo…');
         await subirArchivo(id, el.dataset.tipo, files, null, { agregar: true, motivo: m }); toast('Documento guardado.', 'ok'); openDetail(id); refreshView(true); break; }
       case 'reemplazar': dlgMotivoArch('Reemplazar documento', 'okreemplazar', el.dataset.id, { cheque: el.dataset.cheque, tipo: el.dataset.tipo || 'otro' }, 'Elegir el archivo nuevo…'); break;
       case 'okreemplazar': {
@@ -2856,7 +2866,7 @@ document.addEventListener('click', async ev => {
         const ch = Number($('#cc_ch').value), num = Number($('#cc_num').value), fe = $('#cc_fecha').value, mo = $('#cc_mot').value.trim();
         if (!ch || !num || !fe || !mo) return toast('Llena chequera, número, fecha y motivo.', 'err');
         el.disabled = true; const c = await rpc('registrar_cheque_cancelado', { p_chequera: ch, p_numero: num, p_fecha: fe, p_motivo: mo });
-        let warn = ''; if (ccFiles.length) { try { await subirArchivo(c.id, 'otro', ccFiles); } catch (e) { warn = errMsg(e); } }
+        let warn = ''; if (ccFiles.length) { try { await subirArchivo(c.id, 'foto_cheque', ccFiles, 'Foto cheque cancelado.pdf'); } catch (e) { warn = errMsg(e); } }
         ccFiles = []; closeModal(); toast(`Cheque ${num} registrado como cancelado.` + (warn ? ' La foto no se pudo subir.' : ''), warn ? 'err' : 'ok'); cargarAlertas(true); refreshView(); break; }
       case 'ccfoto': { const nf = await pickFuenteT('foto_cheque'); if (nf.length) ccFiles = nf; $('#ccInfo').textContent = ccFiles.length ? ccFiles.length + ' archivo(s)' : 'Sin foto'; break; }
       case 'conciliar': dlgConciliar(); break;
