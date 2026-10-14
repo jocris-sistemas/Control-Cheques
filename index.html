@@ -445,6 +445,8 @@ const puedeCapturar = () => ['administrador', 'capturista', 'contador'].includes
 /* Operaciones de oficina que el contador no hace (cancelados, series, huecos) */
 const puedeOperar = () => ['administrador', 'capturista'].includes(rol());
 /* El contador solo corrige / marca sin foto en los cheques que él mismo capturó */
+const mismoDiaMty = c => !!(c && c.creado_en) && new Date(c.creado_en).toLocaleDateString('en-CA', { timeZone: 'America/Monterrey' }) === new Date().toLocaleDateString('en-CA', { timeZone: 'America/Monterrey' });
+const puedeCancelar = c => !!c && !c.es_historial && !c.cobrado && c.estatus !== 'cancelado' && (esAdmin() || (puedeOperar() && mismoDiaMty(c)));
 const puedeTocar = c => rol() === 'contador' ? (!!c && c.capturado_por === S.perfil?.id) : puedeCapturar();
 /* Solo Pedro (perfiles.puede_archivos) agrega, reemplaza o quita cualquier documento de un cheque ya capturado.
    Los demás solo pueden cambiar o quitar lo que ellos mismos subieron, durante 24 horas. */
@@ -922,6 +924,7 @@ function cardPend(c, rechazado = false) {
     <div class="cd-tools">
       ${docsMenu(c)}
       <button class="btn ghost sm" data-act="detalle" data-id="${c.id}">Detalle</button>
+      ${puedeCancelar(c) ? `<button class="btn ghost sm" data-act="cancelar" data-id="${c.id}">Cancelar cheque</button>` : ''}
       ${!okFoto && !rechazado && puedeTocar(c) ? `<button class="btn ghost sm" data-act="sinfoto" data-id="${c.id}">No hay foto</button>` : ''}
     </div>
     ${esAdmin() && !rechazado ? `<div class="cd-act">
@@ -1207,8 +1210,7 @@ async function openDetail(id) {
       if (puedeTocar(c) && ['pendiente', 'rechazado'].includes(c.estatus)) acciones += `<button class="btn gold" data-act="editar" data-id="${id}">Editar</button>`;
       if (c.estatus === 'autorizado' && !c.cobrado && ['administrador', 'capturista', 'contador'].includes(rol())) acciones += `<button class="btn" data-act="cobrar" data-id="${id}">Marcar cobrado</button>`;
       if (esAdmin() && c.cobrado) acciones += `<button class="btn ghost" data-act="descobrar" data-id="${id}">Desmarcar cobro</button>`;
-      const mismoDia = c.creado_en && new Date(c.creado_en).toLocaleDateString('en-CA', { timeZone: 'America/Monterrey' }) === new Date().toLocaleDateString('en-CA', { timeZone: 'America/Monterrey' });
-      if ((esAdmin() || (puedeOperar() && mismoDia)) && !c.cobrado && c.estatus !== 'cancelado') acciones += `<button class="btn ghost" data-act="cancelar" data-id="${id}">Cancelar cheque</button>`;
+      if (puedeCancelar(c)) acciones += `<button class="btn ghost" data-act="cancelar" data-id="${id}">Cancelar cheque</button>`;
       if (c.estatus !== 'cancelado') acciones += `<button class="btn ghost" data-act="poliza" data-id="${id}">Ver póliza</button>`;
       if (puedeReexpedir(c)) acciones += `<button class="btn gold" data-act="reexpedir" data-id="${id}">Crear nuevo cheque igual</button>`;
     }
