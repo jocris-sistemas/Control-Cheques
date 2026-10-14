@@ -12,8 +12,8 @@
 <meta name="apple-mobile-web-app-title" content="JOCRIS">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>JOCRIS · Cheques y Acumulado</title>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js" integrity="sha384-Rj26LVGvoeRVR6+mwQmFfcR3QOBEwT+ZmuCWpuiqeTzJpCs0ER4ITAWGb4Hiy3Ok" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js" integrity="sha384-JcnsjUPPylna1s1fvi1u12X5qjY5OL56iySh75FdtrwhO/SWXgMjoVqcKyIIWOLk" crossorigin="anonymous"></script>
 <style>
 :root{
   --navy:#14345c; --navy2:#1d4577; --gold:#c99a3c; --bg:#f3f5f9; --card:#fff; --ink:#1b2430; --mut:#6b7482;
@@ -401,6 +401,8 @@ input.autollenado{background:rgba(224,180,74,.16)!important;border-color:#e0b44a
 
 <script>
 /* ===================== CONFIG ===================== */
+// No permitir que otra página meta la app en un marco (evita clics engañosos sobre "Autorizar")
+if (window.top !== window.self) { let mismo = false; try { mismo = window.top.location.origin === location.origin; } catch (e) { } if (!mismo) { document.documentElement.style.display = 'none'; try { window.top.location = location.href; } catch (e) { } throw new Error('La app no se puede abrir dentro de otra página.'); } }
 const SUPABASE_URL = 'https://hbttxvanyqczspljtqpz.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_J4abyTF0BPq47eBTVLjIFQ_5-x2HOiJ';
 const BUCKET = 'cheques-archivos';
@@ -416,7 +418,15 @@ function aplicaTema() {
 aplicaTema();
 try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', aplicaTema); } catch (e) { }
 if (!window.supabase) { document.addEventListener('DOMContentLoaded', () => { const a = document.getElementById('app'); if (a) a.innerHTML = '<div class="login"><div class="box"><div class="warnbox">No hay conexión a internet. Conéctate y vuelve a abrir la app.</div><button class="btn gold" onclick="location.reload()">Reintentar</button></div></div>'; }); throw new Error('Sin conexión: no cargó supabase-js'); }
-const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, autoRefreshToken: true } });
+const fetchKA = (u, o = {}) => (String(u).indexOf('/rest/v1/rpc/') > 0 && typeof o.body === 'string' && o.body.length < 50000) ? fetch(u, { ...o, keepalive: true }) : fetch(u, o);
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, autoRefreshToken: true }, global: { fetch: fetchKA } });
+/* Cerrar sesión de verdad: solo en este dispositivo, y recargando para no dejar datos del usuario en memoria */
+async function cerrarSesion(msg) {
+  try { await sb.auth.signOut({ scope: 'local' }); } catch (e) { }
+  try { if (msg) sessionStorage.setItem('jocris_msg_login', msg); } catch (e) { }
+  location.reload();
+}
+const msgLogin = () => { let m = ''; try { m = sessionStorage.getItem('jocris_msg_login') || ''; sessionStorage.removeItem('jocris_msg_login'); } catch (e) { } return m; };
 
 /* ===================== ESTADO ===================== */
 const S = { perfil: null, cargos: [], chequeras: [], series: {}, tab: 'pend', filt: { q: '', ch: [], mes: [], st: [] },
@@ -474,9 +484,12 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) flush
 window.addEventListener('pagehide', () => flushDiferido());
 /* Cierre de sesión por inactividad (45 min), salvo en dispositivos marcados como seguros */
 function dispSeguro() { try { return localStorage.getItem('jocris_disp_seguro') === '1'; } catch (e) { return false; } }
+const MS_INACT = 45 * 60 * 1000; let _ultMarca = 0;
+function marcaAct(forzar) { const n = Date.now(); if (!forzar && n - _ultMarca < 30000) return; _ultMarca = n; try { localStorage.setItem('jocris_ult_act', String(n)); } catch (e) { } }
+function inactivoDemasiado() { if (dispSeguro()) return false; let u = 0; try { u = Number(localStorage.getItem('jocris_ult_act')) || 0; } catch (e) { } return u > 0 && Date.now() - u > MS_INACT; }
 (function () {
-  let t, MS = 45 * 60 * 1000;
-  const rearma = () => { clearTimeout(t); if (dispSeguro()) return; t = setTimeout(async () => { if (!S.perfil || S.dif) return rearma(); try { await soltarPush(); await sb.auth.signOut(); } catch (e) { } S.perfil = null; renderLogin(); setTimeout(() => toast('Se cerró la sesión por inactividad.'), 300); }, MS); };
+  let t, MS = MS_INACT;
+  const rearma = () => { clearTimeout(t); marcaAct(); if (dispSeguro()) return; t = setTimeout(async () => { if (!S.perfil || S.dif) return rearma(); await cerrarSesion('Se cerró la sesión por inactividad.'); }, MS); };
   ['click', 'keydown', 'touchstart', 'scroll'].forEach(e => window.addEventListener(e, rearma, { passive: true }));
   window.__rearma = rearma;
   rearma();
@@ -573,7 +586,7 @@ async function rpc(name, args) {
   return data;
 }
 function openModal(html) { $('#modal').innerHTML = `<div class="overlay" data-act="ovl"><div class="sheet"><button class="x" data-act="close">×</button>${html}</div></div>`; }
-function closeModal() { $('#modal').innerHTML = ''; }
+function closeModal() { S.detTok = (S.detTok || 0) + 1; $('#modal').innerHTML = ''; }
 
 function estadoChip(c) {
   if (c.es_historial) return c.cobrado ? '<span class="chip cobrado">Historial · Cobrado</span>' : (c.estatus === 'cancelado' ? '<span class="chip cancelado">Historial · Cancelado</span>' : '<span class="chip historial">Historial</span>');
@@ -652,15 +665,18 @@ function renderLogin(msg = '') {
         : /fetch|network|load failed/i.test(m) ? 'No hay conexión con el servidor. Revisa tu internet e inténtalo de nuevo.'
         : 'No se pudo entrar: ' + m); return;
     }
+    marcaAct(true);
     try { await boot(); } catch (e) { back('Entraste, pero la app no pudo cargar: ' + String(e.message || e)); }
   };
 }
 async function boot() {
   const { data: { session } } = await sb.auth.getSession();
-  if (!session) return renderLogin();
+  if (!session) return renderLogin(msgLogin());
+  if (inactivoDemasiado()) return cerrarSesion('Se cerró la sesión por inactividad.');
+  marcaAct(true);
   const { data: p, error: pe } = await sb.from('perfiles').select('*').eq('id', session.user.id).maybeSingle();
   if (pe) { $('#app').innerHTML = `<div class="login"><div class="logo"><b>JOCRIS</b><span>Control de Cheques</span></div><div class="box"><div class="warnbox">No hay conexión con el servidor. Revisa tu internet.</div><button class="btn gold grow" id="btnRetry">Reintentar</button></div></div>`; $('#btnRetry').onclick = () => { $('#app').innerHTML = '<div class="spin">Cargando…</div>'; boot().catch(() => boot()); }; return; }
-  if (!p || !p.activo) { await sb.auth.signOut(); return renderLogin('Tu usuario no está activo en el sistema. Avísale a Pedro.'); }
+  if (!p || !p.activo) return cerrarSesion('Tu usuario no está activo en el sistema. Avísale a Pedro.');
   S.perfil = p;
   $('#app').innerHTML = '<div class="spin">Cargando…</div>';
   await loadCatalogs();
@@ -755,10 +771,11 @@ window.addEventListener('popstate', ev => {
 });
 window.addEventListener('message', ev => {
   if (ev.origin !== location.origin && location.protocol.indexOf('http') === 0) return;
+  const frm = $('#cajaWrap iframe'); if (!frm || ev.source !== frm.contentWindow) return;
   const d = ev.data || {};
   if (d.caja === 'actividad' && window.__rearma) window.__rearma();
   if (d.caja === 'nav') revisaGuardia();
-  if (d.caja === 'sesion') sb.auth.getSession().then(({ data }) => { if (!data.session && S.perfil) { S.perfil = null; renderLogin(); } });
+  if (d.caja === 'sesion') sb.auth.getSession().then(({ data }) => { if (!data.session && S.perfil) { S.perfil = null; location.reload(); } });
 });
 function go(tab) {
   S.tab = tab;
@@ -843,7 +860,7 @@ async function calcAvisos(pend) {
   const out = new Map(); if (!pend.length) return out;
   try {
     const desde = new Date(Date.now() - 120 * 86400000).toISOString().slice(0, 10);
-    const { data: rec } = await sb.from('cheques').select('id,numero_cheque,chequera_id,beneficiario,monto,fecha,estatus').gte('fecha', desde).order('fecha', { ascending: false }).limit(1000);
+    const rec = await fetchAll(() => sb.from('cheques').select('id,numero_cheque,chequera_id,beneficiario,monto,fecha,estatus').gte('fecha', desde).order('fecha', { ascending: false }));
     const base = (rec || []).filter(r => !['cancelado', 'rechazado'].includes(r.estatus));
     const nums = [...new Set(pend.flatMap(c => foliosActivos(c).filter(f => !f.sin_folio && f.folio_numero).map(f => String(f.folio_numero))))];
     let fol = [];
@@ -1005,7 +1022,7 @@ const mesTxt = m => { const [y, mm] = m.split('-'); return MESES_N[Number(mm) - 
 async function cargarMeses() {
   if (!S.mesesCache || Date.now() - S.mesesCache.t > 60000) {
     let rows = [], from = 0;
-    for (;;) { const { data, error } = await sb.from('cheques').select('fecha,chequera_id').order('fecha', { ascending: false }).range(from, from + 999); if (error || !data) break; rows = rows.concat(data); if (data.length < 1000) break; from += 1000; }
+    for (;;) { const { data, error } = await sb.from('cheques').select('fecha,chequera_id').order('fecha', { ascending: false }).order('id').range(from, from + 999); if (error || !data) break; rows = rows.concat(data); if (data.length < 1000) break; from += 1000; }
     S.mesesCache = { t: Date.now(), rows };
   }
   const f = S.filt, set = new Set();
@@ -1105,7 +1122,7 @@ async function loadList(reset) {
   S.count = count; S.list = S.list.concat(data); S.page++;
   const hc = $('#hcount'); if (hc) hc.textContent = (count || 0) + ' cheque(s)';
   if (!f.q) {
-    const { data: pc } = await sb.from('cheques').select('monto').eq('es_historial', false).eq('estatus', 'autorizado').eq('cobrado', false);
+    let pc = []; try { pc = await fetchAll(() => sb.from('cheques').select('id,monto').eq('es_historial', false).eq('estatus', 'autorizado').eq('cobrado', false)); } catch (e) { pc = []; }
     const tot = (pc || []).reduce((a, x) => a + cents(x.monto), 0) / 100;
     if (tok !== S.listTok || !$('#resumen')) return;
     $('#resumen').innerHTML = (pc || []).length ? `<div class="card summary"><div class="ico">${ICON.money}</div><div class="grow"><div class="mut sm">Autorizados por cobrar</div><div class="money big">${fmt(tot)}</div></div><div class="mut sm">${(pc || []).length} cheque(s)</div></div>` : '';
@@ -1172,11 +1189,13 @@ async function cargaComs(id) {
 }
 const comsHtml = l => l.length ? l.map(m => `<div class="cmt"><b>${esc(m.autor_nombre)}</b> <span class="mut sm">${fdt(m.creado_en)}</span><div>${esc(m.texto)}</div></div>`).join('') : '<div class="mut sm">Sin comentarios. Úsalo para dejar una nota o duda sobre este cheque.</div>';
 async function openDetail(id) {
+  const tk = S.detTok = (S.detTok || 0) + 1;
   openModal('<div class="spin">Cargando…</div>');
   try {
     const c = await loadCheque(id);
     const { data: bit } = await sb.from('bitacora').select('*').eq('cheque_id', id).order('creado_en', { ascending: true });
     const coms = await cargaComs(id);
+    if (tk !== S.detTok) return;
     const fol = foliosActivos(c); const cuadra = sumFolios(c) === cents(c.monto);
     const arch = archActivos(c);
     const tipoTxt = { factura: 'Factura', folio: 'Folio', comprobante_cobro: 'Ticket / ficha de depósito', foto_cheque: 'Foto del cheque', otro: 'Otro' };
@@ -1218,7 +1237,7 @@ async function openDetail(id) {
       </tbody></table></div>
       ${cuadra ? '' : `<div class="warnbox">No cuadra: folios ${fmt(sumFolios(c) / 100)} vs cheque ${fmt(c.monto)}.</div>`}`}
       <h3>Documentos</h3><div class="card files">
-        ${arch.length ? arch.map(a => `<div class="row" style="margin-bottom:6px"><span class="chip historial">${tipoTxt[a.tipo]}</span><button class="lnk grow" style="text-align:left" data-act="verpath" data-path="${esc(a.path)}">${esc(a.nombre || 'archivo')}</button>${puedeEditarArch(a) && !hist ? `<details class="dd"><summary class="btn ghost sm">Editar</summary><div class="ddm" style="left:auto;right:0"><button data-act="reemplazar" data-id="${a.id}" data-cheque="${id}" data-tipo="${a.tipo}">Reemplazar archivo…</button>${/\.pdf$/i.test(a.nombre || a.path) ? `<button data-act="horizontal" data-id="${a.id}" data-cheque="${id}">Pasar a hoja horizontal</button><button data-act="girar" data-id="${a.id}" data-cheque="${id}">Girar 90°</button>` : ''}<div class="sep"></div><button class="bad" data-act="quitar" data-id="${a.id}" data-cheque="${id}">Quitar…</button></div></details>` : ''}</div>`).join('') : '<span class="mut">Aún no hay documentos.</span>'}
+        ${arch.length ? arch.map(a => `<div class="row" style="margin-bottom:6px"><span class="chip historial">${esc(tipoTxt[a.tipo] || a.tipo)}</span><button class="lnk grow" style="text-align:left" data-act="verpath" data-path="${esc(a.path)}">${esc(a.nombre || 'archivo')}</button>${puedeEditarArch(a) && !hist ? `<details class="dd"><summary class="btn ghost sm">Editar</summary><div class="ddm" style="left:auto;right:0"><button data-act="reemplazar" data-id="${a.id}" data-cheque="${id}" data-tipo="${esc(a.tipo)}">Reemplazar archivo…</button>${/\.pdf$/i.test(a.nombre || a.path) ? `<button data-act="horizontal" data-id="${a.id}" data-cheque="${id}">Pasar a hoja horizontal</button><button data-act="girar" data-id="${a.id}" data-cheque="${id}">Girar 90°</button>` : ''}<div class="sep"></div><button class="bad" data-act="quitar" data-id="${a.id}" data-cheque="${id}">Quitar…</button></div></details>` : ''}</div>`).join('') : '<span class="mut">Aún no hay documentos.</span>'}
         ${puedeSubir && puedeArchivos() ? `<div class="row" style="margin-top:10px">
           ${c.estatus !== 'cancelado' ? `<button class="btn ghost sm" data-act="subir" data-id="${id}" data-tipo="foto_cheque">+ Foto del cheque</button><button class="btn ghost sm" data-act="subir" data-id="${id}" data-tipo="factura">+ Factura</button><button class="btn ghost sm" data-act="subir" data-id="${id}" data-tipo="folio">+ Folio</button>` : ''}
           ${c.estatus !== 'cancelado' && !archActivos(c, 'comprobante_cobro').length ? `<button class="btn ghost sm" data-act="subir" data-id="${id}" data-tipo="comprobante_cobro">+ Ticket / ficha de depósito</button>` : ''}
@@ -1231,7 +1250,7 @@ async function openDetail(id) {
         <div class="row" style="margin-top:10px"><input type="text" id="cmtTxt" maxlength="1000" placeholder="Escribe un comentario…" autocomplete="off" style="flex:1"><button class="btn gold sm" data-act="comentar" data-id="${id}">Enviar</button></div></div>
       <h3>Bitácora</h3><div>${(bit || []).map(b => `<div class="log"><b>${esc(b.accion.replace(/_/g, ' '))}</b> · ${esc(b.usuario_nombre || '')}<br><span class="mut">${fdt(b.creado_en)}</span></div>`).join('') || '<span class="mut">Sin movimientos</span>'}</div>
     `);
-  } catch (e) { openModal(`<div class="warnbox">${esc(errMsg(e))}</div>`); }
+  } catch (e) { if (tk === S.detTok) openModal(`<div class="warnbox">${esc(errMsg(e))}</div>`); }
 }
 
 /* ===================== ARCHIVOS ===================== */
@@ -1380,7 +1399,7 @@ function cargarOpenCV() {
   if (_cvP) return _cvP;
   _cvP = new Promise((ok, no) => {
     const sc = document.createElement('script'); sc.async = true;
-    sc.src = 'https://cdn.jsdelivr.net/npm/@techstark/opencv-js@4.12.0-release.1/dist/opencv.js';
+    sc.src = 'https://cdn.jsdelivr.net/npm/@techstark/opencv-js@4.12.0-release.1/dist/opencv.js'; sc.integrity = 'sha384-i8A4fJEsRcMFMyEEDNri/2MR12DhkFLlUF+9oxUrxs6prIcRj7YtWAQ1OJ+iE0C7'; sc.crossOrigin = 'anonymous';
     sc.onload = () => { const t0 = Date.now(); const iv = setInterval(() => { const c = window.cv; if (c && c.Mat) { clearInterval(iv); try { delete c.then; } catch (e) { } window.__cvMod = c; ok(c); } else if (Date.now() - t0 > 60000) { clearInterval(iv); _cvP = null; no(new Error('OpenCV no inicializó')); } }, 80); };
     sc.onerror = () => { _cvP = null; no(new Error('No se pudo cargar el detector de orillas.')); };
     document.head.appendChild(sc);
@@ -1588,8 +1607,7 @@ function similitud(a, b) {
 async function cargarProvs(forzar) {
   if (S.provs && !forzar) return S.provs;
   try {
-    const { data } = await sb.from('proveedores').select('nombre,alias').eq('activo', true).order('nombre');
-    S.provs = data || [];
+    S.provs = await fetchAll(() => sb.from('proveedores').select('nombre,alias').eq('activo', true).order('nombre'));
   } catch (e) { S.provs = S.provs || []; }
   return S.provs;
 }
@@ -1620,7 +1638,7 @@ function pintaLectura() {
   if (st === 'leyendo') { box.innerHTML = '<div class="mut sm" style="margin-top:8px">Leyendo la foto del cheque…</div>'; return; }
   if (st === 'error') { box.innerHTML = `<div class="mut sm" style="margin-top:8px">No se pudo leer la foto automáticamente${F.lecturaError ? ' (' + esc(F.lecturaError) + ')' : ''}. Revisa los datos a mano.</div>`; return; }
   const L = F.lectura, dif = difLectura(L, F.h);
-  const dice = [L.numero_cheque ? 'Cheque ' + esc(L.numero_cheque) : '', L.monto != null ? fmt(L.monto) : '', L.beneficiario ? esc(L.beneficiario) : '', L.fecha ? fdate(L.fecha) : ''].filter(Boolean).join(' · ');
+  const dice = [L.numero_cheque ? 'Cheque ' + esc(L.numero_cheque) : '', L.monto != null ? fmt(L.monto) : '', L.beneficiario ? esc(L.beneficiario) : '', L.fecha ? esc(fdate(L.fecha)) : ''].filter(Boolean).join(' · ');
   const nomC = { numero_cheque: 'número', fecha: 'fecha', monto: 'monto', beneficiario: 'beneficiario' }, au = [...(F.autoCampos || [])].map(k => nomC[k]).filter(Boolean);
   const auTxt = au.length ? `<div style="margin-top:4px">Llené con la foto: <b>${au.join(', ')}</b> (marcados en amarillo). Revísalos; si algo se leyó mal, corrígelo en su casilla.</div>` : '';
   box.innerHTML = `<div class="${dif.length ? 'warnbox' : 'okbox'}" style="margin-top:8px"><b>La foto dice:</b> ${dice || 'no se alcanzó a leer'}${dif.length ? '<ul style="margin:6px 0 0 18px;padding:0">' + dif.map(t => `<li>${esc(t)}</li>`).join('') + '</ul>' : '<div>Coincide con lo capturado.</div>'}${auTxt}
@@ -1768,10 +1786,10 @@ async function subirArchivo(chequeId, tipo, files, nombreFijo, opts = {}) {
   else await rpc('registrar_archivo', { p_cheque: chequeId, p_tipo: tipo, p_path: path, p_nombre: nombre });
 }
 async function abrirPath(path) {
-  const w = window.open('', '_blank');
-  const { data, error } = await sb.storage.from(BUCKET).createSignedUrl(path, 300);
-  if (error) { if (w) w.close(); return toast(errMsg(error), 'err'); }
-  if (w) w.location = data.signedUrl; else location.href = data.signedUrl;
+  const w = window.open('', '_blank'); if (w) { try { w.opener = null; } catch (e) { } }
+  let r; try { r = await sb.storage.from(BUCKET).createSignedUrl(path, 300); } catch (e) { r = { error: e }; }
+  if (r.error) { if (w) w.close(); return toast(errMsg(r.error), 'err'); }
+  if (w) w.location = r.data.signedUrl; else toast('Permite ventanas emergentes para ver el documento.', 'err');
 }
 
 /* ===================== FOLIOS GENERADOS POR EL SISTEMA ===================== */
@@ -1986,7 +2004,7 @@ function firmaDesdeImagen(file) {
 function dlgFirma() {
   openModal(`<h2 style="margin-top:0">Mi firma</h2>
     <div class="mut sm">Se imprime junto a “Solicitó” en los folios que genera el sistema, solo cuando tú eres quien solicita. Solo tú la ves.</div>
-    ${S.firma ? `<div class="card" style="margin-top:10px"><div class="mut sm">Firma guardada</div><img id="firmaAct" src="${S.firma}" style="max-width:230px;max-height:140px;display:block;margin-top:6px;background:#fff"></div>` : ''}
+    ${S.firma ? `<div class="card" style="margin-top:10px"><div class="mut sm">Firma guardada</div><img id="firmaAct" src="${/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(S.firma) ? S.firma : ''}" style="max-width:230px;max-height:140px;display:block;margin-top:6px;background:#fff"></div>` : ''}
     <label class="f">Dibújala aquí con el dedo o el mouse</label>
     <canvas id="firmaPad" width="${FIRMA_W}" height="${FIRMA_H}" style="width:100%;max-width:340px;aspect-ratio:${FIRMA_W}/${FIRMA_H};border:1px dashed #98a2b3;border-radius:8px;background:#fff;touch-action:none;display:block"></canvas>
     <div class="row" style="margin-top:10px"><button class="btn gold" data-act="firmaguardar">Guardar firma dibujada</button><button class="btn ghost" data-act="firmalimpiar">Borrar trazo</button></div>
@@ -2007,6 +2025,7 @@ async function guardarFirma(dataUrl) {
 const newLine = () => ({ cargo_id: '', folio_numero: '', touched: false, proveedor: '', descripcion: '', obra: '', monto: '', modo: 'archivo', venc: '', periodo: '', conceptos: '', motivo_sf: '' });
 async function viewNuevo(editCheque, copiaDe) {
   await loadCatalogs();
+  if (S.tab !== 'nuevo') return;
   if (!S.F) {
     S.F = { editId: null, clave: crypto.randomUUID(), files: [], folioFiles: [], chequeFiles: [], lines: [newLine()],
       h: { chequera_id: '', numero_cheque: '', fecha: today(), beneficiario: '', monto: '', concepto: '', solicito: S.perfil.nombre, sin_factura_motivo: '' } };
@@ -2314,16 +2333,18 @@ let _pdfjsP = null;
 function cargarPdfJs() {
   if (window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
   if (_pdfjsP) return _pdfjsP;
-  const V = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/';
-  _pdfjsP = new Promise((ok, no) => { const sc = document.createElement('script'); sc.src = V + 'pdf.min.js';
-    sc.onload = () => { try { window.pdfjsLib.GlobalWorkerOptions.workerSrc = V + 'pdf.worker.min.js'; ok(window.pdfjsLib); } catch (e) { _pdfjsP = null; no(e); } };
+  const V = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/';
+  _pdfjsP = new Promise((ok, no) => { const sc = document.createElement('script'); sc.src = V + 'pdf.min.js'; sc.integrity = 'sha384-/1qUCSGwTur9vjf/z9lmu/eCUYbpOTgSjmpbMQZ1/CtX2v/WcAIKqRv+U1DUCG6e'; sc.crossOrigin = 'anonymous';
+    sc.onload = async () => { try {
+      const r = await fetch(V + 'pdf.worker.min.js', { integrity: 'sha384-SnzOobpRMLXZ52iJvZm/C0fYw0OQemTXzTjIsdsfMcrCtCEe9qgzxTd3RSklO5x2' });
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc = URL.createObjectURL(new Blob([await r.text()], { type: 'text/javascript' })); ok(window.pdfjsLib); } catch (e) { _pdfjsP = null; no(e); } };
     sc.onerror = () => { _pdfjsP = null; no(new Error('No se pudo cargar el visor de PDF.')); }; document.head.appendChild(sc); });
   return _pdfjsP;
 }
 // Dibuja cada hoja del PDF como imagen (en el celular el navegador no sabe mostrar PDF dentro de la página).
 async function pintarPdf(blob, cont) {
   const lib = await cargarPdfJs(); const data = new Uint8Array(await blob.arrayBuffer());
-  const pdf = await lib.getDocument({ data }).promise; cont.innerHTML = '';
+  const pdf = await lib.getDocument({ data, isEvalSupported: false }).promise; cont.innerHTML = '';
   const w = cont.clientWidth || 340, dpr = Math.min(window.devicePixelRatio || 1, 2.5);
   for (let n = 1; n <= pdf.numPages; n++) {
     const page = await pdf.getPage(n); const v0 = page.getViewport({ scale: 1 }); const vp = page.getViewport({ scale: (w / v0.width) * dpr });
@@ -2406,8 +2427,9 @@ async function viewSeries() {
 async function viewBit() {
   $('#view').innerHTML = `<div class="pagehead"><h2>Bitácora</h2><span class="sub">Últimos 150 movimientos</span></div><div id="bl" class="spin">Cargando…</div>`;
   const { data, error } = await sb.from('bitacora').select('*, cheques(poliza_numero,numero_cheque,beneficiario)').order('creado_en', { ascending: false }).limit(150);
+  if (S.tab !== 'bit' || !$('#bl')) return;
   if (error) return $('#bl').innerHTML = `<div class="warnbox">${esc(errMsg(error))}</div>`;
-  $('#bl').outerHTML = `<div class="card">${data.map(b => `<div class="log"><b>${esc(b.accion.replace(/_/g, ' '))}</b> · ${esc(b.usuario_nombre || '')} · <span class="mut">${fdt(b.creado_en)}</span>
+  $('#bl').outerHTML = `<div class="card">${data.map(b => `<div class="log"><b>${esc(String(b.accion || '').replace(/_/g, ' '))}</b> · ${esc(b.usuario_nombre || '')} · <span class="mut">${fdt(b.creado_en)}</span>
     ${b.cheques ? `<br><a href="#" data-act="detalle" data-id="${b.cheque_id}">Cheque ${b.cheques.numero_cheque} · ${esc(b.cheques.beneficiario)}</a>` : (b.detalle && b.detalle.cargo ? `<br><span class="mut">${esc(b.detalle.cargo)}: ${esc(b.detalle.antes)} → ${esc(b.detalle.despues)}</span>` : '')}</div>`).join('') || '<span class="mut">Sin movimientos</span>'}</div>`;
 }
 
@@ -2531,10 +2553,13 @@ async function concRevisar() {
   if (!C.chequeraId || !S.chequeras.find(c => c.id === C.chequeraId && c.cuenta_banco)) { const v = $('#concCh') && $('#concCh').value; if (!v) return toast('Elige la chequera de esta cuenta.', 'err'); C.chequeraId = Number(v); }
   const res = $('#concRes'); res.innerHTML = '<div class="spin">Comparando con la app…</div>';
   const nums = C.movs.map(m => m.n), mn = Math.min(...nums), mx = Math.max(...nums), campos = 'id,numero_cheque,fecha,beneficiario,monto,estatus,cobrado,fecha_cobro';
-  const [enRango, sinCob] = await Promise.all([
-    nums.length ? fetchAll(() => sb.from('cheques').select(campos).eq('chequera_id', C.chequeraId).gte('numero_cheque', mn).lte('numero_cheque', mx)) : Promise.resolve([]),
-    fetchAll(() => sb.from('cheques').select(campos).eq('chequera_id', C.chequeraId).eq('estatus', 'autorizado').eq('cobrado', false).lte('fecha', C.hasta))
-  ]);
+  let enRango, sinCob;
+  try {
+    [enRango, sinCob] = await Promise.all([
+      nums.length ? fetchAll(() => sb.from('cheques').select(campos).eq('chequera_id', C.chequeraId).gte('numero_cheque', mn).lte('numero_cheque', mx)) : Promise.resolve([]),
+      fetchAll(() => sb.from('cheques').select(campos).eq('chequera_id', C.chequeraId).eq('estatus', 'autorizado').eq('cobrado', false).lte('fecha', C.hasta))
+    ]);
+  } catch (e) { res.innerHTML = `<div class="warnbox">${esc(errMsg(e))}</div>`; return; }
   const porNum = new Map(enRango.map(c => [c.numero_cheque, c])), vistos = new Set();
   const A = { marcar: [], ya: [], pend: [], alerta: [], noexiste: [], dup: [], dev: [], sincobrar: [] };
   for (const m of C.movs) {
@@ -2613,7 +2638,7 @@ async function concExcel() {
 /* ===================== RESPALDO EN EXCEL ===================== */
 function cargarSheetJS() {
   if (window.XLSX) return Promise.resolve();
-  return new Promise((ok, no) => { const sc = document.createElement('script'); sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'; sc.onload = ok; sc.onerror = () => no(new Error('No se pudo cargar el generador de Excel. Revisa tu internet.')); document.head.appendChild(sc); });
+  return new Promise((ok, no) => { const sc = document.createElement('script'); sc.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js'; sc.integrity = 'sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw'; sc.crossOrigin = 'anonymous'; sc.onload = ok; sc.onerror = () => no(new Error('No se pudo cargar el generador de Excel. Revisa tu internet.')); document.head.appendChild(sc); });
 }
 async function traerTodo(tabla, sel, orden) {
   let out = [], from = 0; const N = 1000;
@@ -2657,7 +2682,7 @@ async function respaldoExcel() {
 /* ===================== MENU CUENTA ===================== */
 function menuCuenta() {
   openModal(`<h2 style="margin-top:0">Mi cuenta</h2><div class="card"><div class="b">${esc(S.perfil.nombre)}</div><div class="mut">${esc(S.perfil.correo)} · ${esc(rolTxt(S.perfil.rol))}</div></div>
-  <h3>Cambiar contraseña</h3><label class="f">Nueva contraseña (mínimo 8 caracteres)</label>${pwField('np1', 'new-password')}<label class="f">Repítela</label>${pwField('np2', 'new-password')}
+  <h3>Cambiar contraseña</h3><label class="f">Contraseña actual</label>${pwField('np0', 'current-password')}<label class="f">Nueva contraseña (mínimo 8 caracteres)</label>${pwField('np1', 'new-password')}<label class="f">Repítela</label>${pwField('np2', 'new-password')}
   <div class="row" style="margin-top:12px"><button class="btn" data-act="cambiarpass">Guardar contraseña</button><button class="btn ghost" data-act="salir">Cerrar sesión</button></div>
   <h3>Notificaciones</h3><div id="pushBox"><div class="mut sm">Revisando…</div></div>
   <h3>Apariencia</h3><div class="tema">${[['auto', 'Automático'], ['light', 'Claro'], ['dark', 'Oscuro']].map(([v, t]) => `<button class="btn ghost sm ${temaPref() === v ? 'on' : ''}" data-act="tema" data-v="${v}">${t}</button>`).join('')}</div>
@@ -2722,9 +2747,11 @@ document.addEventListener('click', async ev => {
         if (f.contentWindow.go) f.contentWindow.go('bit'); break; }
       case 'cajaresp': { closeModal(); abrirModulo('caja'); const f = cajaFrame(); await f._listo; for (let i = 0; i < 50 && !f.contentDocument.querySelector('nav.tabs'); i++) await new Promise(r => setTimeout(r, 200));
         if (f.contentWindow.respaldoExcel) await f.contentWindow.respaldoExcel(); break; }
-      case 'salir': if (S.dif) await flushDiferido(); await soltarPush(); await sb.auth.signOut(); S.perfil = null; closeModal(); renderLogin(); break;
+      case 'salir': if (S.dif) await flushDiferido(); try { await desactivarPush(); } catch (e) { } await cerrarSesion(); break;
       case 'cambiarpass': {
-        const a = $('#np1').value, b = $('#np2').value; if (a.length < 8) return toast('Mínimo 8 caracteres.', 'err'); if (a !== b) return toast('No coinciden.', 'err');
+        const a0 = $('#np0').value, a = $('#np1').value, b = $('#np2').value; if (!a0) return toast('Escribe tu contraseña actual.', 'err'); if (a.length < 8) return toast('Mínimo 8 caracteres.', 'err'); if (a !== b) return toast('No coinciden.', 'err');
+        el.disabled = true; const v = await sb.auth.signInWithPassword({ email: S.perfil.correo, password: a0 }); el.disabled = false;
+        if (v.error) return toast('La contraseña actual no es correcta.', 'err');
         const { error } = await sb.auth.updateUser({ password: a }); if (error) return toast(errMsg(error), 'err'); toast('Contraseña actualizada.', 'ok'); closeModal(); break; }
       case 'prevprint': imprimirPrev(); break;
       case 'prevdl': bajarBlob(S.prev.blob, S.prev.nombre); break;
@@ -2885,7 +2912,10 @@ function refreshView(soft) {
 }
 window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); window.__pwaPrompt = e; });
 if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) navigator.serviceWorker.register('sw.js').catch(() => {});
-sb.auth.onAuthStateChange(ev => { if (ev === 'SIGNED_OUT' && S.perfil) { S.perfil = null; renderLogin(); } });
+sb.auth.onAuthStateChange((ev, ses) => {
+  if (ev === 'SIGNED_OUT' && S.perfil) { S.perfil = null; location.reload(); }
+  else if (ev === 'SIGNED_IN' && S.perfil && ses && ses.user && ses.user.id !== S.perfil.id) { S.perfil = null; location.reload(); }
+});
 boot();
 </script>
 </body>
