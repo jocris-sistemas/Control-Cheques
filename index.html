@@ -2687,19 +2687,21 @@ async function respaldoExcel() {
 
 /* ===================== MENU CUENTA ===================== */
 function menuCuenta() {
-  openModal(`<h2 style="margin-top:0">Mi cuenta</h2><div class="card"><div class="b">${esc(S.perfil.nombre)}</div><div class="mut">${esc(S.perfil.correo)} · ${esc(rolTxt(S.perfil.rol))}</div></div>
-  <h3>Cambiar contraseña</h3><label class="f">Contraseña actual</label>${pwField('np0', 'current-password')}<label class="f">Nueva contraseña (mínimo 8 caracteres)</label>${pwField('np1', 'new-password')}<label class="f">Repítela</label>${pwField('np2', 'new-password')}
-  <div class="row" style="margin-top:12px"><button class="btn" data-act="cambiarpass">Guardar contraseña</button><button class="btn ghost" data-act="salir">Cerrar sesión</button></div>
+  const R = 'display:flex;flex-wrap:wrap;gap:8px';
+  openModal(`<h2 style="margin-top:0">Mi cuenta</h2>
+  <div class="card" style="display:flex;align-items:center;justify-content:space-between;gap:10px"><div style="min-width:0"><div class="b">${esc(S.perfil.nombre)}</div><div class="mut">${esc(S.perfil.correo)} · ${esc(rolTxt(S.perfil.rol))}</div></div><button class="btn ghost sm" data-act="salir">Cerrar sesión</button></div>
+  <h3>Accesos</h3><div style="${R}">${veCaja() ? '<button class="btn ghost" data-act="modulo" data-mod="caja">Abrir Acumulado</button>' : ''}${veBitacora() ? '<button class="btn ghost" data-act="verbit">Bitácora de Cheques</button>' : ''}${veBitacora() && veCaja() ? '<button class="btn ghost" data-act="verbitcaja">Bitácora de Acumulado</button>' : ''}<button class="btn ghost" data-act="firma">${S.firma ? 'Cambiar mi firma' : 'Agregar mi firma'}</button></div>
   <h3>Notificaciones</h3><div id="pushBox"><div class="mut sm">Revisando…</div></div>
   <h3>Apariencia</h3><div class="tema">${[['auto', 'Automático'], ['light', 'Claro'], ['dark', 'Oscuro']].map(([v, t]) => `<button class="btn ghost sm ${temaPref() === v ? 'on' : ''}" data-act="tema" data-v="${v}">${t}</button>`).join('')}</div>
+  <details class="mas"><summary>Seguridad</summary>
+  <h3>Cambiar contraseña</h3><label class="f">Contraseña actual</label>${pwField('np0', 'current-password')}<label class="f">Nueva contraseña (mínimo 8 caracteres)</label>${pwField('np1', 'new-password')}<label class="f">Repítela</label>${pwField('np2', 'new-password')}
+  <div class="row" style="margin-top:12px"><button class="btn" data-act="cambiarpass">Guardar contraseña</button></div>
   <h3>Sesión por inactividad</h3><div id="dispSegBox">${htmlDispSeguro()}</div>
-  <h3>Instalar en el celular</h3><button class="btn ghost" data-act="instalar">Instalar app</button>
-  <details class="mas"><summary>Ver más opciones</summary>
-  ${veCaja() ? `<h3>Acumulado</h3><div class="row" style="gap:8px"><button class="btn ghost" data-act="modulo" data-mod="caja">Abrir Acumulado</button><button class="btn ghost" data-act="cajaresp">Respaldo del Acumulado en Excel</button></div>` : ''}
-  <h3>Mi firma</h3><div class="mut sm" style="margin-bottom:6px">${S.firma ? 'Ya tienes una firma guardada.' : 'Aún no tienes firma guardada.'}</div><button class="btn ghost" data-act="firma">${S.firma ? 'Cambiar mi firma' : 'Agregar mi firma'}</button>
-  ${veBitacora() ? `<h3>Bitácora</h3><div class="row" style="gap:8px"><button class="btn ghost" data-act="verbit">Bitácora de Cheques</button>${veCaja() ? '<button class="btn ghost" data-act="verbitcaja">Bitácora de Acumulado</button>' : ''}</div>` : ''}
+  </details>
+  <details class="mas"><summary>Herramientas</summary>
+  <h3>Respaldo</h3><div class="mut sm" style="margin-bottom:6px">Descarga todos los cheques, folios, archivos y la bitácora en un Excel. Se recomienda hacerlo cada semana y guardarlo en tu computadora o en Drive.</div><div style="${R}"><button class="btn ghost" id="btnRespaldo" data-act="respaldo">Respaldo de Cheques en Excel</button>${veCaja() ? '<button class="btn ghost" data-act="cajaresp">Respaldo del Acumulado en Excel</button>' : ''}</div>
   ${puedeArchivos() ? `<h3>Facturas del SAT (carga masiva)</h3><div class="mut sm" style="margin-bottom:6px">Elige los PDF de la carpeta de facturas. Cada archivo ya trae el cheque al que pertenece. Se omiten los cheques cancelados y los que ya tienen factura.</div><input type="file" id="satFiles" accept="application/pdf,.pdf" multiple style="margin-bottom:8px"><div id="satOut"></div>` : ''}
-  <h3>Respaldo</h3><div class="mut sm" style="margin-bottom:6px">Descarga todos los cheques, folios, archivos y la bitácora en un Excel. Se recomienda hacerlo cada semana y guardarlo en tu computadora o en Drive.</div><button class="btn ghost" id="btnRespaldo" data-act="respaldo">Descargar respaldo en Excel</button>
+  <h3>Instalar en el celular</h3><button class="btn ghost" data-act="instalar">Instalar app</button>
   </details>`);
   htmlPush().then(h => { const b = $('#pushBox'); if (b) b.innerHTML = h; });
   const satInp = $('#satFiles'); if (satInp) satInp.onchange = () => satPrepara(Array.from(satInp.files));
