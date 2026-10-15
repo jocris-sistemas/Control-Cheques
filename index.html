@@ -279,6 +279,8 @@ button.lnk[data-act=quitaradj]{background:none;border:0;padding:2px 4px;color:va
 .brow .bt{height:8px;border-radius:4px;background:rgba(120,140,170,.16);margin-top:4px;overflow:hidden}
 .brow .bt i{display:block;height:100%;background:var(--navy);border-radius:0 4px 4px 0}
 .brow .bn{font-size:12px;color:var(--mut)}
+.kpi[data-drill],.brow[data-drill]{cursor:pointer}.kpi[data-drill]:hover,.brow[data-drill]:hover .bl{color:var(--navy);text-decoration:underline}
+.kpi[data-drill]::after{content:'Ver cheques ›';display:block;font-size:11.5px;color:var(--mut);margin-top:4px}
 .rrow .lnk{background:none;border:0;padding:0;font:inherit;color:var(--navy);text-decoration:underline;text-underline-offset:2px;cursor:pointer;box-shadow:none}
 :root[data-theme="dark"] .rrow .lnk{color:#8fb4e8}
 .rsub{margin:12px 0 4px;font-size:12.5px;color:var(--mut);font-weight:700}
@@ -987,7 +989,7 @@ function rangoPeriodo(per) {
 function barrasHtml(items, nota) {
   const mx = Math.max(1, ...items.map(i => i.v));
   if (!items.length) return '<div class="mut sm">Sin datos en este periodo.</div>';
-  return `<div class="bars">${items.map(i => `<div class="brow" title="${esc(i.l)}: ${fmt(i.v / 100)}${i.n ? ' · ' + i.n : ''}"><div class="bhead"><span class="bl">${esc(i.l)}${i.n ? ` <span class="bn">· ${esc(i.n)}</span>` : ''}</span><span class="bv money">${fmt(i.v / 100)}</span></div><div class="bt"><i style="width:${Math.max(1.5, i.v / mx * 100).toFixed(1)}%"></i></div></div>`).join('')}</div>${nota ? `<div class="mut sm" style="margin-top:8px">${nota}</div>` : ''}`;
+  return `<div class="bars">${items.map(i => `<div class="brow"${i.d ? ` data-drill="${esc(i.d)}" role="button" tabindex="0"` : ''} title="${esc(i.l)}: ${fmt(i.v / 100)}${i.n ? ' · ' + i.n : ''}"><div class="bhead"><span class="bl">${esc(i.l)}${i.n ? ` <span class="bn">· ${esc(i.n)}</span>` : ''}</span><span class="bv money">${fmt(i.v / 100)}</span></div><div class="bt"><i style="width:${Math.max(1.5, i.v / mx * 100).toFixed(1)}%"></i></div></div>`).join('')}</div>${nota ? `<div class="mut sm" style="margin-top:8px">${nota}</div>` : ''}`;
 }
 async function viewRep() {
   const tok = S.repTok = (S.repTok || 0) + 1;
@@ -997,9 +999,9 @@ async function viewRep() {
   try {
     const hoy = new Date(); hoy.setHours(12, 0, 0, 0);
     const [d0m, d1m, nomPer] = rangoPeriodo('mes');
-    const ini = isoD(new Date(hoy.getFullYear(), hoy.getMonth() - 11, 1, 12));
+    const ini = [isoD(new Date(hoy.getFullYear(), hoy.getMonth() - 11, 1, 12)), '2026-01-01'].sort().pop(); // últimos 12 meses, pero nunca antes de 2026
     const repSel = $('#repCh'); if (repSel) repSel.onchange = () => { S.repCh = repSel.value; viewRep(); };
-    const aut0 = await fetchAll(() => sb.from('cheques').select('id,fecha,beneficiario,monto,cobrado,chequera_id').eq('estatus', 'autorizado').gte('fecha', ini).order('fecha', { ascending: false }));
+    const aut0 = await fetchAll(() => sb.from('cheques').select('id,fecha,beneficiario,monto,cobrado,chequera_id,numero_cheque').eq('estatus', 'autorizado').gte('fecha', ini).order('fecha', { ascending: false }));
     const aut = S.repCh ? aut0.filter(c => String(c.chequera_id) === String(S.repCh)) : aut0;
     // gasto por mes, últimos 12 meses
     const meses = [];
@@ -1007,13 +1009,13 @@ async function viewRep() {
     aut.forEach(c => { if (cents(c.monto) <= 0) return; const m = meses.find(x => x.k === String(c.fecha).slice(0, 7)); if (m) { m.v += cents(c.monto); m.n++; } });
     const i0 = meses.findIndex(x => x.v > 0); // quita meses vacíos al inicio (sin datos)
     if (i0 > 0) meses.splice(0, i0);
-    const mItems = meses.slice().reverse().map(m => { const [y, mm] = m.k.split('-'); return { l: `${MESES_N[Number(mm) - 1].charAt(0).toUpperCase()}${MESES_N[Number(mm) - 1].slice(1)} ${y}`, v: m.v, n: m.n ? `${m.n} cheque${m.n === 1 ? '' : 's'}` : '' }; });
+    const mItems = meses.slice().reverse().map(m => { const [y, mm] = m.k.split('-'); return { d: 'm:' + m.k, l: `${MESES_N[Number(mm) - 1].charAt(0).toUpperCase()}${MESES_N[Number(mm) - 1].slice(1)} ${y}`, v: m.v, n: m.n ? `${m.n} cheque${m.n === 1 ? '' : 's'}` : '' }; });
     // principales beneficiarios del mes en curso
     const enMes = aut.filter(c => c.fecha >= d0m && c.fecha <= d1m && cents(c.monto) > 0);
     const totMes = enMes.reduce((a, c) => a + cents(c.monto), 0);
     const pb = new Map();
     enMes.forEach(c => { const k = String(c.beneficiario || '').trim().toUpperCase(); const o = pb.get(k) || { v: 0, n: 0 }; o.v += cents(c.monto); o.n++; pb.set(k, o); });
-    const benArr = [...pb.entries()].map(([k, o]) => ({ l: k, v: o.v, n: `${o.n} cheque${o.n === 1 ? '' : 's'}` })).sort((a, b) => b.v - a.v).slice(0, 10);
+    const benArr = [...pb.entries()].map(([k, o]) => ({ d: 'b:' + k, l: k, v: o.v, n: `${o.n} cheque${o.n === 1 ? '' : 's'}` })).sort((a, b) => b.v - a.v).slice(0, 10);
     // indicadores
     const totAll = meses.reduce((a, m) => a + m.v, 0), nAll = meses.reduce((a, m) => a + m.n, 0);
     const cur = meses[meses.length - 1] || { v: 0, n: 0 }, comp = meses.slice(0, -1).filter(m => m.v > 0);
@@ -1022,16 +1024,31 @@ async function viewRep() {
     const mxTxt = mxM.k ? `${MESES_N[Number(mxM.k.slice(5)) - 1]} ${mxM.k.slice(0, 4)}` : '';
     const porCobrar = aut.filter(c => !c.cobrado && cents(c.monto) > 0);
     const totPC = porCobrar.reduce((a, c) => a + cents(c.monto), 0);
-    const kp = (t, v, n) => `<div class="kpi"><div class="mut sm">${t}</div><div class="big">${v}</div>${n ? `<div class="mut sm">${n}</div>` : ''}</div>`;
+    const kp = (t, v, n, d) => `<div class="kpi"${d ? ` data-drill="${d}" role="button" tabindex="0"` : ''}><div class="mut sm">${t}</div><div class="big">${v}</div>${n ? `<div class="mut sm">${n}</div>` : ''}</div>`;
     const kpisHtml = `<div class="kpis k6">
-      ${kp('Total autorizado', fmt(totAll / 100), `${nAll} cheque${nAll === 1 ? '' : 's'}`)}
+      ${kp('Total autorizado', fmt(totAll / 100), `${nAll} cheque${nAll === 1 ? '' : 's'}`, 'total')}
       ${kp('Promedio mensual', fmt(prom / 100), comp.length ? `${comp.length} mes${comp.length === 1 ? '' : 'es'} completo${comp.length === 1 ? '' : 's'}` : '')}
-      ${kp('Mes en curso', fmt(cur.v / 100), `${cur.n} cheque${cur.n === 1 ? '' : 's'} · parcial`)}
-      ${kp('Mes más alto', fmt(mxM.v / 100), mxTxt)}
+      ${kp('Mes en curso', fmt(cur.v / 100), `${cur.n} cheque${cur.n === 1 ? '' : 's'} · parcial`, 'm:' + (meses[meses.length - 1] || {}).k)}
+      ${kp('Mes más alto', fmt(mxM.v / 100), mxTxt, mxM.k ? 'm:' + mxM.k : '')}
       ${kp('Cheque promedio', fmt((nAll ? Math.round(totAll / nAll) : 0) / 100), 'monto por cheque')}
-      ${kp('Autorizados sin cobrar', fmt(totPC / 100), `${porCobrar.length} cheque${porCobrar.length === 1 ? '' : 's'}`)}
+      ${kp('Autorizados sin cobrar', fmt(totPC / 100), `${porCobrar.length} cheque${porCobrar.length === 1 ? '' : 's'}`, 'pc')}
     </div>`;
+    const drillRep = key => {
+      const ok = c => cents(c.monto) > 0;
+      let arr = [], tit = '';
+      if (key === 'total') { arr = aut.filter(ok); tit = 'Total autorizado'; }
+      else if (key === 'pc') { arr = porCobrar; tit = 'Autorizados sin cobrar'; }
+      else if (key.startsWith('m:')) { const mk = key.slice(2); arr = aut.filter(c => ok(c) && String(c.fecha).slice(0, 7) === mk); tit = mesTxt(mk); }
+      else if (key.startsWith('b:')) { const b = key.slice(2); arr = enMes.filter(c => String(c.beneficiario || '').trim().toUpperCase() === b); tit = b + ' · ' + nomPer; }
+      arr = arr.slice().sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)) || b.numero_cheque - a.numero_cheque);
+      const tot = arr.reduce((a, c) => a + cents(c.monto), 0);
+      openModal(`<h2 style="margin-top:0">${esc(tit)}</h2><div class="mut sm" style="margin-bottom:8px">${arr.length} cheque${arr.length === 1 ? '' : 's'} · <b>${fmt(tot / 100)}</b></div>
+        <div style="max-height:62vh;overflow:auto;border-top:1px solid var(--line)">${arr.map(c => `<div style="display:flex;justify-content:space-between;gap:10px;padding:8px 2px;border-bottom:1px solid var(--line)"><div style="min-width:0"><div style="font-weight:600;overflow-wrap:anywhere">${esc(c.beneficiario)}</div><div class="mut sm">Cheque ${c.numero_cheque} · ${esc(chequeraNombre(c.chequera_id))} · ${fdate(c.fecha)}${c.cobrado ? '' : ' · <b>sin cobrar</b>'}</div></div><div class="money" style="white-space:nowrap;font-weight:700">${fmt(cents(c.monto) / 100)}</div></div>`).join('') || '<div class="mut sm" style="padding:10px">Sin cheques.</div>'}</div>
+        <div class="row" style="margin-top:12px"><button class="btn ghost grow" data-act="close">Cerrar</button></div>`);
+    };
     if (S.tab !== 'rep' || !$('#repBody') || tok !== S.repTok) return;
+    $('#repBody').onclick = ev => { const e = ev.target.closest('[data-drill]'); if (e && e.dataset.drill) drillRep(e.dataset.drill); };
+    $('#repBody').onkeydown = ev => { if (ev.key !== 'Enter') return; const e = ev.target.closest('[data-drill]'); if (e && e.dataset.drill) drillRep(e.dataset.drill); };
     $('#repBody').innerHTML = kpisHtml + `
       <div class="repgrid">
         <div class="card"><h3 class="rh">Gasto por mes</h3>${barrasHtml(mItems, 'Cheques autorizados por mes, últimos 12 meses.')}</div>
@@ -1127,8 +1144,6 @@ function filtroGrupos(f, term, idsFolio) {
 async function loadList(reset) {
   const tok = S.listTok = (S.listTok || 0) + 1; const mb = $('#more button'); if (mb) mb.disabled = true;
   const f = S.filt; if (reset) { S.page = 0; S.list = []; $('#lst').innerHTML = '<div class="sk s"></div><div class="sk s"></div><div class="sk s"></div>'; }
-  let q = sb.from('cheques').select(SEL, { count: 'exact' });
-  if (f.ch.length) q = q.in('chequera_id', f.ch.map(Number));
   const term = f.q.replace(/[,()%*"\\:]/g, ' ').replace(/\s+/g, ' ').trim();
   let ids = [];
   if (term) {
@@ -1137,8 +1152,14 @@ async function loadList(reset) {
     ids = [...new Set((fo || []).map(x => x.cheque_id))];
   }
   const g = filtroGrupos(f, term, ids);
-  if (g.length === 1) q = q.or(g[0].join(','));
-  else if (g.length > 1) q = q.or(`and(${g.map(x => `or(${x.join(',')})`).join(',')})`);
+  const conFiltros = q0 => {
+    let q = q0;
+    if (f.ch.length) q = q.in('chequera_id', f.ch.map(Number));
+    if (g.length === 1) q = q.or(g[0].join(','));
+    else if (g.length > 1) q = q.or(`and(${g.map(x => `or(${x.join(',')})`).join(',')})`);
+    return q;
+  };
+  let q = conFiltros(sb.from('cheques').select(SEL, { count: 'exact' }));
   // Siempre por número de cheque, del más alto al más bajo (sin importar estatus ni fecha).
   q = q.order('numero_cheque', { ascending: false }).order('fecha', { ascending: false }).order('creado_en', { ascending: false }).order('id').range(S.page * PAGE, S.page * PAGE + PAGE - 1);
   const { data, error, count } = await q;
@@ -1146,7 +1167,14 @@ async function loadList(reset) {
   if (error) { $('#lst').innerHTML = `<div class="warnbox">${esc(errMsg(error))}</div>`; return; }
   S.count = count; S.list = S.list.concat(data); S.page++;
   const hc = $('#hcount'); if (hc) hc.textContent = (count || 0) + ' cheque(s)';
-  if (!f.q) {
+  if (f.q || f.ch.length || f.mes.length || f.st.length) {
+    let fr = []; try { fr = await fetchAll(() => conFiltros(sb.from('cheques').select('id,monto,estatus,cobrado'))); } catch (e) { fr = []; }
+    if (tok !== S.listTok || !$('#resumen')) return;
+    const vals = fr.filter(x => x.estatus === 'autorizado' || x.estatus === 'pendiente');
+    const sm = a => a.reduce((t, x) => t + cents(x.monto), 0) / 100;
+    const cob = vals.filter(x => x.estatus === 'autorizado' && x.cobrado), pcb = vals.filter(x => !(x.estatus === 'autorizado' && x.cobrado));
+    $('#resumen').innerHTML = fr.length ? `<div class="card summary"><div class="ico">${ICON.money}</div><div class="grow"><div class="mut sm">Suma de lo filtrado (sin cancelados ni rechazados)</div><div class="money big">${fmt(sm(vals))}</div><div class="mut sm">Cobrados ${fmt(sm(cob))} · Sin cobrar ${fmt(sm(pcb))}</div></div><div class="mut sm">${vals.length} cheque(s)</div></div>` : '';
+  } else if (!f.q) {
     let pc = []; try { pc = await fetchAll(() => sb.from('cheques').select('id,monto').eq('es_historial', false).eq('estatus', 'autorizado').eq('cobrado', false)); } catch (e) { pc = []; }
     const tot = (pc || []).reduce((a, x) => a + cents(x.monto), 0) / 100;
     if (tok !== S.listTok || !$('#resumen')) return;
@@ -2232,7 +2260,24 @@ function suggest() {
   // Los folios se capturan siempre a mano: la numeración se comparte con los gastos en efectivo, que la app no ve.
   S.F.lines.forEach(l => { l._ph = 'Escribe el folio'; });
 }
+/* Nombre = beneficiario del cheque y, en "sin folio", Conceptos = descripción, mientras el usuario no los haya cambiado a mano */
+function syncAuto() {
+  const F = S.F; if (!F || !F.lines) return;
+  const ben = String(F.h.beneficiario || '').trim().toUpperCase();
+  F.lines.forEach((l, i) => {
+    const row = document.querySelector(`#lines .line[data-i="${i}"]`);
+    if (!l.provTouched && l.proveedor !== ben && (!String(l.proveedor || '').trim() || l.proveedor === l._provAuto)) {
+      l.proveedor = ben; l._provAuto = ben;
+      const e = row && row.querySelector('[data-k="proveedor"]'); if (e) e.value = ben;
+    }
+    if (l.modo === 'sinfolio' && !l.conTouched) {
+      const d = l.descripcion || '';
+      if (l.conceptos !== d) { l.conceptos = d; const e = row && row.querySelector('[data-k="conceptos"]'); if (e) e.value = d; }
+    }
+  });
+}
 function renderLines() {
+  syncAuto();
   suggest();
   $('#lines').innerHTML = S.F.lines.map((l, i) => `<div class="line" data-i="${i}">
     ${S.F.lines.length > 1 ? `<div class="row"><span class="grow"></span><button class="btn ghost sm" data-act="rmline" data-i="${i}">Quitar este folio</button></div>` : ''}
@@ -2241,7 +2286,7 @@ function renderLines() {
       ${l.modo === 'sinfolio' ? `<div><label class="f">No. de folio</label><input type="text" value="SIN FOLIO" disabled></div>` : `<div><label class="f">No. de folio</label><input type="text" inputmode="numeric" data-k="folio_numero" placeholder="${esc(l._ph || '')}" value="${esc(l.folio_numero)}"></div>`}
     </div>
     <div class="grid2">
-      <div><label class="f">Proveedor</label><input type="text" data-k="proveedor" list="dlBen" autocomplete="off" value="${esc(l.proveedor)}"></div>
+      <div><label class="f">Nombre</label><input type="text" data-k="proveedor" list="dlBen" autocomplete="off" value="${esc(l.proveedor)}"></div>
       <div><label class="f">Obra / villa</label><input type="text" data-k="obra" value="${esc(l.obra)}"></div>
     </div>
     <label class="f">Descripción</label><input type="text" data-k="descripcion" value="${esc(l.descripcion)}">
@@ -2252,7 +2297,8 @@ function renderLines() {
     ${l.modo === 'sinfolio' ? `<label class="f">¿Por qué no lleva folio? (obligatorio)</label><input type="text" data-k="motivo_sf" list="dlSF" placeholder="Ej. NÓMINA, PAGO DE SERVICIO, REPOSICIÓN DE CAJA…" value="${esc(l.motivo_sf)}">
       <datalist id="dlSF"><option value="NÓMINA"><option value="PAGO DE SERVICIO"><option value="REPOSICIÓN DE CAJA"><option value="ANTICIPO"><option value="IMPUESTOS"><option value="PAGO A PROVEEDOR CON FACTURA"></datalist>
       <div class="mut sm" style="margin-top:4px">Se identifica por el proveedor, la descripción y este motivo. Si no se carga a ningún lado deja SIN CARGO; si sí es de un cargo, cámbialo. Queda marcado como SIN FOLIO.</div>` : ''}
-    ${l.modo === 'archivo' ? `<div class="mut sm" style="margin-top:4px">El archivo del folio se adjunta una sola vez, abajo, en “Folio (archivo o foto)”.</div>` : `
+    ${l.modo === 'archivo' ? `<div class="mut sm" style="margin-top:4px">El archivo del folio se adjunta una sola vez, abajo, en “Folio (archivo o foto)”.</div>` : l.modo === 'sinfolio' ? `
+      <label class="f">Conceptos (un renglón por línea; se llena con la descripción, bórralo o cámbialo si hace falta)</label><textarea data-k="conceptos" rows="3" style="width:100%">${esc(l.conceptos)}</textarea>` : `
       ${esCancun(l.cargo_id) ? `<div><label class="f">Vencimiento (opcional)</label><input type="date" data-k="venc" value="${esc(l.venc)}"></div>
       <div class="mut sm">Formato Cancún: la hoja sale con el logo de Cancún, la villa (campo “Obra / villa”), el beneficiario (proveedor), la referencia (descripción) y el cheque. Todos los folios de Cancún de este cheque salen juntos en una sola hoja.</div>` : `
       <div class="grid2"><div><label class="f">Vencimiento (opcional)</label><input type="date" data-k="venc" value="${esc(l.venc)}"></div>
@@ -2265,6 +2311,7 @@ function renderLines() {
   $('#lines').oninput = $('#lines').onchange = ev => {
     const el = ev.target; const k = el.dataset.k; if (!k) return; const i = Number(el.closest('.line').dataset.i); const l = S.F.lines[i];
     l[k] = el.value; if (k === 'folio_numero') l.touched = true;
+    if (ev.isTrusted) { if (k === 'proveedor') l.provTouched = true; if (k === 'conceptos') l.conTouched = true; }
     if (k === 'cargo_id') { l.touched = false; if (esCancun(l.cargo_id) && l.modo === 'archivo') l.modo = 'sistema'; if (ev.type === 'change') { renderLines(); } }
     updateSum();
   };
@@ -2272,6 +2319,7 @@ function renderLines() {
 }
 function updateSum() {
   const F = S.F; if (!F) return;
+  syncAuto();
   const tot = cents(parseMoney(F.h.monto) || 0), sum = F.lines.reduce((a, l) => a + cents(parseMoney(l.monto) || 0), 0), diff = tot - sum;
   const ok = tot > 0 && diff === 0;
   const sb_ = $('#sumbar'); if (!sb_) return;
