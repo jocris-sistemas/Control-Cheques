@@ -431,7 +431,7 @@ async function cerrarSesion(msg) {
 const msgLogin = () => { let m = ''; try { m = sessionStorage.getItem('jocris_msg_login') || ''; sessionStorage.removeItem('jocris_msg_login'); } catch (e) { } return m; };
 
 /* ===================== ESTADO ===================== */
-const S = { perfil: null, cargos: [], chequeras: [], series: {}, tab: 'pend', filt: { q: '', ch: [], mes: [], st: [] },
+const S = { perfil: null, cargos: [], chequeras: [], series: {}, tab: 'pend', filt: { q: '', ch: [], mes: [], st: [], tr: false },
             list: [], count: 0, page: 0, pendCount: 0, F: null };
 const $ = (s, r = document) => r.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -1098,11 +1098,11 @@ function pintaFdd(k) {
   const d = document.querySelector(`details.fdd[data-fk="${k}"]`); if (!d) return;
   const abierto = d.open, tmp = document.createElement('div'); tmp.innerHTML = fddHtml(k);
   const n = tmp.firstElementChild; if (abierto) n.open = true; d.replaceWith(n);
-  const lb = $('#flimpia'); if (lb) lb.hidden = !(S.filt.ch.length || S.filt.mes.length || S.filt.st.length || S.filt.q);
+  const lb = $('#flimpia'); if (lb) lb.hidden = !(S.filt.ch.length || S.filt.mes.length || S.filt.st.length || S.filt.q || S.filt.tr);
 }
 function fddResumenes() {
   ['ch', 'mes', 'st'].forEach(k => { const d = document.querySelector(`details.fdd[data-fk="${k}"]`); if (!d) return; d.classList.toggle('on', !!S.filt[k].length); const t = d.querySelector('.ft'); if (t) t.textContent = fddResumen(k); const n = d.querySelector('.fn'); if (n) { n.textContent = S.filt[k].length; n.hidden = S.filt[k].length < 2; } const q = d.querySelector('[data-act=fddnada]'); if (q) q.hidden = !S.filt[k].length; });
-  const lb = $('#flimpia'); if (lb) lb.hidden = !(S.filt.ch.length || S.filt.mes.length || S.filt.st.length || S.filt.q);
+  const lb = $('#flimpia'); if (lb) lb.hidden = !(S.filt.ch.length || S.filt.mes.length || S.filt.st.length || S.filt.q || S.filt.tr);
 }
 function onFiltroCambio(k) {
   fddResumenes();
@@ -1114,7 +1114,7 @@ function viewCheques() {
   $('#view').innerHTML = `<div class="pagehead"><h2>Historial</h2><span class="sub" id="hcount"></span></div>
   <div class="card fbar"><div class="filters">
     <input type="text" id="fq" placeholder="Buscar beneficiario, cheque o folio" value="${esc(f.q)}">
-    <button class="btn ghost sm flimpia" id="flimpia" data-act="flimpia" title="Quitar todos los filtros" ${f.ch.length || f.mes.length || f.st.length || f.q ? '' : 'hidden'}><span class="lt">Limpiar</span><span class="lx">✕</span></button><div class="fdds">${fddHtml('ch')}${fddHtml('mes')}${fddHtml('st')}</div>
+    <button class="btn ghost sm flimpia" id="flimpia" data-act="flimpia" title="Quitar todos los filtros" ${f.ch.length || f.mes.length || f.st.length || f.q || f.tr ? '' : 'hidden'}><span class="lt">Limpiar</span><span class="lx">✕</span></button><div class="fdds">${fddHtml('ch')}${fddHtml('mes')}${fddHtml('st')}<button type="button" class="btn ${f.tr ? 'gold' : 'ghost'} sm" id="ftr" data-act="ftr" title="Cheques de traspaso entre cuentas propias o fondeo">Traspaso/fondeo</button></div>
   </div></div>
   <div class="row" style="margin-bottom:12px"><button class="btn ghost sm" data-act="huecos">Huecos de numeración</button>${puedeCapturar() ? '<button class="btn ghost sm" data-act="conciliar">Conciliar banco</button>' : ''}${puedeOperar() ? '<button class="btn ghost sm" data-act="cancelado">Registrar cancelado</button>' : ''}</div><div id="resumen"></div><div id="lst" class="spin">Cargando…</div><div id="more" class="r"></div>`;
   let t; $('#fq').oninput = e => { clearTimeout(t); t = setTimeout(() => { f.q = e.target.value.trim(); fddResumenes(); loadList(true); }, 350); };
@@ -1133,6 +1133,7 @@ function filtroGrupos(f, term, idsFolio) {
   const g = [];
   if (f.mes.length) g.push(f.mes.map(m => { const [yy, mm] = m.split('-').map(Number); const sig = mm === 12 ? `${yy + 1}-01-01` : `${yy}-${String(mm + 1).padStart(2, '0')}-01`; return `and(fecha.gte.${m}-01,fecha.lt.${sig})`; }));
   if (f.st.length) g.push(f.st.map(s => s === 'cobrado' ? 'and(estatus.eq.autorizado,cobrado.is.true)' : s === 'porcobrar' ? 'and(estatus.eq.autorizado,cobrado.is.false)' : `estatus.eq.${s}`));
+  if (f.tr) g.push(['concepto.ilike.TRASPASO*', 'sin_factura_motivo.ilike.TRASPASO*']);
   if (term) {
     const c = [`beneficiario.ilike.*${term}*`, `concepto.ilike.*${term}*`];
     if (/^\d+$/.test(term) && term.length < 10) c.push(`numero_cheque.eq.${term}`);
@@ -1167,7 +1168,7 @@ async function loadList(reset) {
   if (error) { $('#lst').innerHTML = `<div class="warnbox">${esc(errMsg(error))}</div>`; return; }
   S.count = count; S.list = S.list.concat(data); S.page++;
   const hc = $('#hcount'); if (hc) hc.textContent = (count || 0) + ' cheque(s)';
-  if (f.q || f.ch.length || f.mes.length || f.st.length) {
+  if (f.q || f.ch.length || f.mes.length || f.st.length || f.tr) {
     let fr = []; try { fr = await fetchAll(() => conFiltros(sb.from('cheques').select('id,monto,estatus,cobrado'))); } catch (e) { fr = []; }
     if (tok !== S.listTok || !$('#resumen')) return;
     const vals = fr.filter(x => x.estatus === 'autorizado' || x.estatus === 'pendiente');
@@ -2915,7 +2916,8 @@ document.addEventListener('click', async ev => {
       case 'enterar': { el.disabled = true; await rpc('enterar_cancelacion', { p_id: id }); toast('Cancelación confirmada.', 'ok'); refreshView(); break; }
       case 'mas': loadList(false); break;
       case 'fddnada': { const k = el.dataset.k; S.filt[k] = []; pintaFdd(k); onFiltroCambio(k); break; }
-      case 'flimpia': { S.filt.ch = []; S.filt.mes = []; S.filt.st = []; S.filt.q = ''; const fq = $('#fq'); if (fq) fq.value = ''; await cargarMeses(); ['ch', 'st'].forEach(pintaFdd); fddResumenes(); loadList(true); break; }
+      case 'ftr': { S.filt.tr = !S.filt.tr; const b = $('#ftr'); if (b) b.className = 'btn ' + (S.filt.tr ? 'gold' : 'ghost') + ' sm'; fddResumenes(); loadList(true); break; }
+      case 'flimpia': { S.filt.ch = []; S.filt.mes = []; S.filt.st = []; S.filt.q = ''; S.filt.tr = false; { const b = $('#ftr'); if (b) b.className = 'btn ghost sm'; } const fq = $('#fq'); if (fq) fq.value = ''; await cargarMeses(); ['ch', 'st'].forEach(pintaFdd); fddResumenes(); loadList(true); break; }
       case 'poliza': { const dd = el.closest('details.dd'); if (dd) dd.removeAttribute('open'); polizaPDF(id); break; }
       case 'verarch': { const c = await loadCheque(id); const a = archActivos(c, el.dataset.tipo)[0]; if (a) abrirPath(a.path); break; }
       case 'verpath': { const dd = el.closest('details.dd'); if (dd) dd.removeAttribute('open'); abrirPath(el.dataset.path); break; }
