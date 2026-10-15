@@ -992,12 +992,15 @@ function barrasHtml(items, nota) {
 async function viewRep() {
   const tok = S.repTok = (S.repTok || 0) + 1;
   $('#view').innerHTML = `<div class="pagehead"><h2>Indicadores</h2><span class="sub">Cheques autorizados</span></div>
+    <div class="filters" style="margin-bottom:10px"><select id="repCh" aria-label="Chequera"><option value="">Todas las chequeras</option>${S.chequeras.map(c => `<option value="${c.id}" ${String(S.repCh || '') === String(c.id) ? 'selected' : ''}>${esc(c.nombre)}</option>`).join('')}</select></div>
     <div id="repBody"><div class="sk"></div><div class="sk"></div></div>`;
   try {
     const hoy = new Date(); hoy.setHours(12, 0, 0, 0);
     const [d0m, d1m, nomPer] = rangoPeriodo('mes');
     const ini = isoD(new Date(hoy.getFullYear(), hoy.getMonth() - 11, 1, 12));
-    const aut = await fetchAll(() => sb.from('cheques').select('id,fecha,beneficiario,monto,cobrado').eq('estatus', 'autorizado').gte('fecha', ini).order('fecha', { ascending: false }));
+    const repSel = $('#repCh'); if (repSel) repSel.onchange = () => { S.repCh = repSel.value; viewRep(); };
+    const aut0 = await fetchAll(() => sb.from('cheques').select('id,fecha,beneficiario,monto,cobrado,chequera_id').eq('estatus', 'autorizado').gte('fecha', ini).order('fecha', { ascending: false }));
+    const aut = S.repCh ? aut0.filter(c => String(c.chequera_id) === String(S.repCh)) : aut0;
     // gasto por mes, últimos 12 meses
     const meses = [];
     for (let i = 11; i >= 0; i--) { const d = new Date(hoy.getFullYear(), hoy.getMonth() - i, 1, 12); meses.push({ k: isoD(d).slice(0, 7), v: 0, n: 0 }); }
@@ -1021,7 +1024,7 @@ async function viewRep() {
     const totPC = porCobrar.reduce((a, c) => a + cents(c.monto), 0);
     const kp = (t, v, n) => `<div class="kpi"><div class="mut sm">${t}</div><div class="big">${v}</div>${n ? `<div class="mut sm">${n}</div>` : ''}</div>`;
     const kpisHtml = `<div class="kpis k6">
-      ${kp('Total autorizado', fmt(totAll / 100), `${nAll} cheques`)}
+      ${kp('Total autorizado', fmt(totAll / 100), `${nAll} cheque${nAll === 1 ? '' : 's'}`)}
       ${kp('Promedio mensual', fmt(prom / 100), comp.length ? `${comp.length} mes${comp.length === 1 ? '' : 'es'} completo${comp.length === 1 ? '' : 's'}` : '')}
       ${kp('Mes en curso', fmt(cur.v / 100), `${cur.n} cheque${cur.n === 1 ? '' : 's'} · parcial`)}
       ${kp('Mes más alto', fmt(mxM.v / 100), mxTxt)}
