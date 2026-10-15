@@ -285,7 +285,7 @@ button.lnk[data-act=quitaradj]{background:none;border:0;padding:2px 4px;color:va
 .rrow{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:7px 0;border-top:1px solid var(--line);font-size:13.5px}
 .rrow .lnk{text-align:left;overflow-wrap:anywhere}.rtags{display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
 .rtags .chip{font-size:11px;padding:2px 8px}
-@media(min-width:760px){.kpis{grid-template-columns:repeat(4,minmax(0,1fr))}.repgrid{grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}.repgrid .wide{grid-column:1/-1}}
+@media(min-width:760px){.kpis{grid-template-columns:repeat(4,minmax(0,1fr))}.kpis.k6{grid-template-columns:repeat(3,minmax(0,1fr))}.repgrid{grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}.repgrid .wide{grid-column:1/-1}}
 /* ---- Lote y deshacer ---- */
 #undo{position:fixed;left:50%;transform:translateX(-50%);bottom:96px;background:#1f2a3a;color:#fff;padding:10px 6px 12px 16px;border-radius:12px;z-index:99;max-width:92%;font-size:14px;box-shadow:0 6px 20px rgba(0,0,0,.3);display:flex;gap:10px;align-items:center;overflow:hidden}
 #undo button{background:transparent;color:#ffd27a;border:0;font-weight:700;font-size:14px;cursor:pointer;padding:6px 10px;border-radius:8px}
@@ -997,11 +997,13 @@ async function viewRep() {
     const hoy = new Date(); hoy.setHours(12, 0, 0, 0);
     const [d0m, d1m, nomPer] = rangoPeriodo('mes');
     const ini = isoD(new Date(hoy.getFullYear(), hoy.getMonth() - 11, 1, 12));
-    const aut = await fetchAll(() => sb.from('cheques').select('id,fecha,beneficiario,monto').eq('estatus', 'autorizado').gte('fecha', ini).order('fecha', { ascending: false }));
+    const aut = await fetchAll(() => sb.from('cheques').select('id,fecha,beneficiario,monto,cobrado').eq('estatus', 'autorizado').gte('fecha', ini).order('fecha', { ascending: false }));
     // gasto por mes, últimos 12 meses
     const meses = [];
     for (let i = 11; i >= 0; i--) { const d = new Date(hoy.getFullYear(), hoy.getMonth() - i, 1, 12); meses.push({ k: isoD(d).slice(0, 7), v: 0, n: 0 }); }
     aut.forEach(c => { if (cents(c.monto) <= 0) return; const m = meses.find(x => x.k === String(c.fecha).slice(0, 7)); if (m) { m.v += cents(c.monto); m.n++; } });
+    const i0 = meses.findIndex(x => x.v > 0); // quita meses vacíos al inicio (sin datos)
+    if (i0 > 0) meses.splice(0, i0);
     const mItems = meses.slice().reverse().map(m => { const [y, mm] = m.k.split('-'); return { l: `${MESES_N[Number(mm) - 1].charAt(0).toUpperCase()}${MESES_N[Number(mm) - 1].slice(1)} ${y}`, v: m.v, n: m.n ? `${m.n} cheque${m.n === 1 ? '' : 's'}` : '' }; });
     // principales beneficiarios del mes en curso
     const enMes = aut.filter(c => c.fecha >= d0m && c.fecha <= d1m && cents(c.monto) > 0);
@@ -1009,8 +1011,25 @@ async function viewRep() {
     const pb = new Map();
     enMes.forEach(c => { const k = String(c.beneficiario || '').trim().toUpperCase(); const o = pb.get(k) || { v: 0, n: 0 }; o.v += cents(c.monto); o.n++; pb.set(k, o); });
     const benArr = [...pb.entries()].map(([k, o]) => ({ l: k, v: o.v, n: `${o.n} cheque${o.n === 1 ? '' : 's'}` })).sort((a, b) => b.v - a.v).slice(0, 10);
+    // indicadores
+    const totAll = meses.reduce((a, m) => a + m.v, 0), nAll = meses.reduce((a, m) => a + m.n, 0);
+    const cur = meses[meses.length - 1] || { v: 0, n: 0 }, comp = meses.slice(0, -1).filter(m => m.v > 0);
+    const prom = comp.length ? Math.round(comp.reduce((a, m) => a + m.v, 0) / comp.length) : 0;
+    const mxM = meses.reduce((b, m) => (m.v > b.v ? m : b), { v: 0, k: '' });
+    const mxTxt = mxM.k ? `${MESES_N[Number(mxM.k.slice(5)) - 1]} ${mxM.k.slice(0, 4)}` : '';
+    const porCobrar = aut.filter(c => !c.cobrado && cents(c.monto) > 0);
+    const totPC = porCobrar.reduce((a, c) => a + cents(c.monto), 0);
+    const kp = (t, v, n) => `<div class="kpi"><div class="mut sm">${t}</div><div class="big">${v}</div>${n ? `<div class="mut sm">${n}</div>` : ''}</div>`;
+    const kpisHtml = `<div class="kpis k6">
+      ${kp('Total autorizado', fmt(totAll / 100), `${nAll} cheques`)}
+      ${kp('Promedio mensual', fmt(prom / 100), comp.length ? `${comp.length} mes${comp.length === 1 ? '' : 'es'} completo${comp.length === 1 ? '' : 's'}` : '')}
+      ${kp('Mes en curso', fmt(cur.v / 100), `${cur.n} cheque${cur.n === 1 ? '' : 's'} · parcial`)}
+      ${kp('Mes más alto', fmt(mxM.v / 100), mxTxt)}
+      ${kp('Cheque promedio', fmt((nAll ? Math.round(totAll / nAll) : 0) / 100), 'monto por cheque')}
+      ${kp('Autorizados sin cobrar', fmt(totPC / 100), `${porCobrar.length} cheque${porCobrar.length === 1 ? '' : 's'}`)}
+    </div>`;
     if (S.tab !== 'rep' || !$('#repBody') || tok !== S.repTok) return;
-    $('#repBody').innerHTML = `
+    $('#repBody').innerHTML = kpisHtml + `
       <div class="repgrid">
         <div class="card"><h3 class="rh">Gasto por mes</h3>${barrasHtml(mItems, 'Cheques autorizados por mes, últimos 12 meses.')}</div>
         <div class="card"><h3 class="rh">Principales beneficiarios · ${nomPer}</h3>${barrasHtml(benArr, enMes.length ? `Total del mes: ${fmt(totMes / 100)} en ${enMes.length} cheque${enMes.length === 1 ? '' : 's'}.` : '')}</div>
