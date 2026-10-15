@@ -619,7 +619,7 @@ const ICON = {
 const rolTxt = r => ({ capturista: 'Administración', administrador: 'Administrador', contador: 'Contador', lector: 'Solo consulta' }[r] || r);
 const iniciales = n => String(n || '?').replace(/^ING\.\s*/i, '').split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase();
 const fdia = d => { const [y, m, dd] = d.split('-'); const M = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre']; return `${Number(dd)} de ${M[Number(m) - 1]} de ${y}`; };
-const detLin = (c, f) => { const L = (c.cheque_lineas || []).filter(x => x.folio_id === f.id).sort((a, b) => (a.orden || 0) - (b.orden || 0)); return L.length ? `<div class="mut sm">${L.length} línea${L.length > 1 ? 's' : ''}: ${esc(L.map(x => x.nombre).join(' · '))}</div>` : ''; };
+const detLin = (c, f) => { const L = (c.cheque_lineas || []).filter(x => x.folio_id === f.id).sort((a, b) => (a.orden || 0) - (b.orden || 0)); return L.length ? `<button class="lnk sm" style="text-align:left;display:block;margin-top:2px" data-act="verlineas" data-id="${c.id}">${L.length} línea${L.length > 1 ? 's' : ''}: ${esc(L.map(x => x.nombre).join(' · '))} ›</button>` : ''; };
 const folioTxt = f => f.es_ajuste ? 'AJUSTE' : f.sin_folio ? 'SIN FOLIO' : f.folio_numero;
 // Folios que tenía un cheque justo antes de cancelarse (al cancelar se desactivan todos de golpe).
 const foliosDeCancelado = c => { const all = c.cheque_folios || []; if (!all.length) return []; const t = f => Date.parse(f.creado_en) || 0; const mx = Math.max(...all.map(t)); return all.filter(f => !f.activo && Math.abs(t(f) - mx) < 5000); };
@@ -1381,7 +1381,7 @@ async function openDetail(id) {
         const per = lins[0].periodo ? fdia(lins[0].periodo).replace(/^\d+ de /, '') : '';
         const grupos = []; lins.forEach(l => { let g = grupos.find(x => x.k === (l.folio_id || l.grupo)); if (!g) { g = { k: l.folio_id || l.grupo, grupo: l.grupo, folio: (c.cheque_folios || []).find(f => f.id === l.folio_id), rows: [] }; grupos.push(g); } g.rows.push(l); });
         const sm = (rows, k) => rows.reduce((a, r) => a + cents(r[k]), 0) / 100;
-        lineasHtml = `<details class="card" style="padding:8px 10px;margin-top:8px"><summary><b>Detalle de líneas</b> · ${esc(lins[0].concepto || '')} ${esc(per)} · ${lins.length} líneas · ${fmt(sm(lins, 'total'))}</summary>
+        lineasHtml = `<details class="card" data-lin="1" style="padding:8px 10px;margin-top:8px"><summary><b>Detalle de líneas</b> · ${esc(lins[0].concepto || '')} ${esc(per)} · ${lins.length} líneas · ${fmt(sm(lins, 'total'))}</summary>
           ${grupos.map(g => { const t = sm(g.rows, 'total'); const dif = g.folio ? cents(t) - cents(g.folio.monto) : 0; return `<div style="margin-top:10px"><div class="row"><b class="grow">${esc(g.grupo || '')}${g.folio ? ' · folio ' + esc(g.folio.folio_numero) : ''}</b><span class="money">${fmt(t)}</span></div>
             ${dif ? `<div class="mut sm">El folio es por ${fmt(g.folio.monto)}: diferencia de ${fmt(dif / 100)} por redondeo de la factura.</div>` : ''}
             <table><thead><tr><th>Línea</th><th>Nombre</th><th class="r">Monto</th><th class="r">IVA</th><th class="r">Total</th></tr></thead><tbody>${g.rows.map(r => `<tr><td>${esc(r.linea || '')}<div class="mut sm">${esc(r.celular || '')}</div></td><td>${esc(r.nombre || '')}</td><td class="r money">${fmt(r.monto)}</td><td class="r money">${fmt(r.iva)}</td><td class="r money">${fmt(r.total)}</td></tr>`).join('')}</tbody></table></div>`; }).join('')}</details>`;
@@ -3171,6 +3171,7 @@ document.addEventListener('click', async ev => {
       case 'firmaguardar': { await guardarFirma(normalizarFirma($('#firmaPad'))); break; }
       case 'firmafoto': { const fs = await pickFiles(false); if (!fs.length) break; if (!/^image\//.test(fs[0].type)) return toast('Elige una imagen (foto o PNG).', 'err'); await guardarFirma(await firmaDesdeImagen(fs[0])); break; }
       case 'addline': S.F.lines.push(newLine()); renderLines(); break;
+      case 'verlineas': { const abre = () => { const d = document.querySelector('.sheet details[data-lin]'); if (d) { d.open = true; d.scrollIntoView({ block: 'start', behavior: 'smooth' }); } }; if (document.querySelector('.sheet details[data-lin]')) { abre(); break; } await openDetail(el.dataset.id); abre(); break; }
       case 'addajuste': { const F = S.F; if (F.lines.some(l => l.modo === 'ajuste')) { toast('Ya agregaste el ajuste.', 'err'); break; } const base = F.lines.find(l => l.modo !== 'ajuste' && l.cargo_id); const sum = F.lines.reduce((a, l) => a + lineCents(l), 0), tot = cents(parseMoney(F.h.monto) || 0); const dif = sum - tot; const n = newLine(); n.modo = 'ajuste'; n.cargo_id = (S.cargos.find(esSinCargo) || {}).id || ''; n.motivo_sf = 'SALDO A FAVOR'; if (dif > 0) n.monto = (dif / 100).toFixed(2); F.lines.push(n); renderLines(); break; }
       case 'rmline': S.F.lines.splice(Number(el.dataset.i), 1); renderLines(); break;
       case 'resto': {
