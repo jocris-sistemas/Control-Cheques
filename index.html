@@ -283,7 +283,7 @@ button.lnk[data-act=quitaradj]{background:none;border:0;padding:2px 4px;color:va
 .brow .bt{height:8px;border-radius:4px;background:rgba(120,140,170,.16);margin-top:4px;overflow:hidden}
 .brow .bt i{display:block;height:100%;background:var(--navy);border-radius:0 4px 4px 0}
 .brow .bn{font-size:12px;color:var(--mut)}
-.kpi[data-drill],.brow[data-drill]{cursor:pointer}.kpi[data-drill]:hover,.brow[data-drill]:hover .bl{color:var(--navy);text-decoration:underline}
+.kpi[data-drill],.brow[data-drill],.brow[data-bn]{cursor:pointer}.kpi[data-drill]:hover,.brow[data-drill]:hover .bl{color:var(--navy);text-decoration:underline}
 .kpi[data-drill]::after{content:'Ver cheques ›';display:block;font-size:11.5px;color:var(--mut);margin-top:4px}
 .rrow .lnk{background:none;border:0;padding:0;font:inherit;color:var(--navy);text-decoration:underline;text-underline-offset:2px;cursor:pointer;box-shadow:none}
 :root[data-theme="dark"] .rrow .lnk{color:#8fb4e8}
@@ -728,7 +728,7 @@ window.addEventListener('resize', altoHeader);
 function renderShell() {
   const tabs = [['pend', esAdmin() ? 'Autorizar' : 'Pendientes'], ['cheques', 'Historial']];
   if (puedeCapturar()) tabs.push(['nuevo', 'Nuevo']);
-  tabs.push(['rep', 'Indicadores']);
+  tabs.push(['rep', 'Resumen']);
   if (veIngresos()) tabs.push(['ing', 'Ingresos']);
   $('#app').innerHTML = `
   <header class="top">
@@ -1010,67 +1010,44 @@ function barrasHtml(items, nota) {
 }
 async function viewRep() {
   const tok = S.repTok = (S.repTok || 0) + 1;
-  $('#view').innerHTML = `<div class="pagehead"><h2>Indicadores</h2><span class="sub">Cheques autorizados</span></div>
-    <div class="filters" style="margin-bottom:10px"><select id="repCh" aria-label="Chequera"><option value="">Todas las chequeras</option>${S.chequeras.map(c => `<option value="${c.id}" ${String(S.repCh || '') === String(c.id) ? 'selected' : ''}>${esc(c.nombre)}</option>`).join('')}</select></div>
+  S.res = S.res || { mes: '', q: '', lim: 60 };
+  $('#view').innerHTML = `<div class="pagehead"><h2>Resumen</h2><span class="sub">Cuánto lleva cada beneficiario · cheques autorizados</span></div>
+    <div class="filters" style="margin-bottom:10px"><select id="repCh" aria-label="Chequera"><option value="">Todas las chequeras</option>${S.chequeras.map(c => `<option value="${c.id}" ${String(S.repCh || '') === String(c.id) ? 'selected' : ''}>${esc(c.nombre)}</option>`).join('')}</select><select id="resMes" aria-label="Mes"></select><input id="resQ" type="text" placeholder="Buscar beneficiario" value="${esc(S.res.q)}"></div>
     <div id="repBody"><div class="sk"></div><div class="sk"></div></div>`;
   try {
-    const hoy = new Date(); hoy.setHours(12, 0, 0, 0);
-    const [d0m, d1m, nomPer] = rangoPeriodo('mes');
-    const ini = [isoD(new Date(hoy.getFullYear(), hoy.getMonth() - 11, 1, 12)), '2026-01-01'].sort().pop(); // últimos 12 meses, pero nunca antes de 2026
-    const repSel = $('#repCh'); if (repSel) repSel.onchange = () => { S.repCh = repSel.value; viewRep(); };
-    const aut0 = await fetchAll(() => sb.from('cheques').select('id,fecha,beneficiario,monto,cobrado,chequera_id,numero_cheque').eq('estatus', 'autorizado').gte('fecha', ini).order('fecha', { ascending: false }));
-    const aut = S.repCh ? aut0.filter(c => String(c.chequera_id) === String(S.repCh)) : aut0;
-    // gasto por mes, últimos 12 meses
-    const meses = [];
-    for (let i = 11; i >= 0; i--) { const d = new Date(hoy.getFullYear(), hoy.getMonth() - i, 1, 12); meses.push({ k: isoD(d).slice(0, 7), v: 0, n: 0 }); }
-    aut.forEach(c => { if (cents(c.monto) <= 0) return; const m = meses.find(x => x.k === String(c.fecha).slice(0, 7)); if (m) { m.v += cents(c.monto); m.n++; } });
-    const i0 = meses.findIndex(x => x.v > 0); // quita meses vacíos al inicio (sin datos)
-    if (i0 > 0) meses.splice(0, i0);
-    const mItems = meses.slice().reverse().map(m => { const [y, mm] = m.k.split('-'); return { d: 'm:' + m.k, l: `${MESES_N[Number(mm) - 1].charAt(0).toUpperCase()}${MESES_N[Number(mm) - 1].slice(1)} ${y}`, v: m.v, n: m.n ? `${m.n} cheque${m.n === 1 ? '' : 's'}` : '' }; });
-    // principales beneficiarios del mes en curso
-    const enMes = aut.filter(c => c.fecha >= d0m && c.fecha <= d1m && cents(c.monto) > 0);
-    const totMes = enMes.reduce((a, c) => a + cents(c.monto), 0);
-    const pb = new Map();
-    enMes.forEach(c => { const k = String(c.beneficiario || '').trim().toUpperCase(); const o = pb.get(k) || { v: 0, n: 0 }; o.v += cents(c.monto); o.n++; pb.set(k, o); });
-    const benArr = [...pb.entries()].map(([k, o]) => ({ d: 'b:' + k, l: k, v: o.v, n: `${o.n} cheque${o.n === 1 ? '' : 's'}` })).sort((a, b) => b.v - a.v).slice(0, 10);
-    // indicadores
-    const totAll = meses.reduce((a, m) => a + m.v, 0), nAll = meses.reduce((a, m) => a + m.n, 0);
-    const cur = meses[meses.length - 1] || { v: 0, n: 0 }, comp = meses.slice(0, -1).filter(m => m.v > 0);
-    const prom = comp.length ? Math.round(comp.reduce((a, m) => a + m.v, 0) / comp.length) : 0;
-    const mxM = meses.reduce((b, m) => (m.v > b.v ? m : b), { v: 0, k: '' });
-    const mxTxt = mxM.k ? `${MESES_N[Number(mxM.k.slice(5)) - 1]} ${mxM.k.slice(0, 4)}` : '';
-    const porCobrar = aut.filter(c => !c.cobrado && cents(c.monto) > 0);
-    const totPC = porCobrar.reduce((a, c) => a + cents(c.monto), 0);
-    const kp = (t, v, n, d) => `<div class="kpi"${d ? ` data-drill="${d}" role="button" tabindex="0"` : ''}><div class="mut sm">${t}</div><div class="big">${v}</div>${n ? `<div class="mut sm">${n}</div>` : ''}</div>`;
-    const kpisHtml = `<div class="kpis k6">
-      ${kp('Total autorizado', fmt(totAll / 100), `${nAll} cheque${nAll === 1 ? '' : 's'}`, 'total')}
-      ${kp('Promedio mensual', fmt(prom / 100), comp.length ? `${comp.length} mes${comp.length === 1 ? '' : 'es'} completo${comp.length === 1 ? '' : 's'}` : '')}
-      ${kp('Mes en curso', fmt(cur.v / 100), `${cur.n} cheque${cur.n === 1 ? '' : 's'} · parcial`, 'm:' + (meses[meses.length - 1] || {}).k)}
-      ${kp('Mes más alto', fmt(mxM.v / 100), mxTxt, mxM.k ? 'm:' + mxM.k : '')}
-      ${kp('Cheque promedio', fmt((nAll ? Math.round(totAll / nAll) : 0) / 100), 'monto por cheque')}
-      ${kp('Autorizados sin cobrar', fmt(totPC / 100), `${porCobrar.length} cheque${porCobrar.length === 1 ? '' : 's'}`, 'pc')}
-    </div>`;
-    const drillRep = key => {
-      const ok = c => cents(c.monto) > 0;
-      let arr = [], tit = '';
-      if (key === 'total') { arr = aut.filter(ok); tit = 'Total autorizado'; }
-      else if (key === 'pc') { arr = porCobrar; tit = 'Autorizados sin cobrar'; }
-      else if (key.startsWith('m:')) { const mk = key.slice(2); arr = aut.filter(c => ok(c) && String(c.fecha).slice(0, 7) === mk); tit = mesTxt(mk); }
-      else if (key.startsWith('b:')) { const b = key.slice(2); arr = enMes.filter(c => String(c.beneficiario || '').trim().toUpperCase() === b); tit = b + ' · ' + nomPer; }
-      arr = arr.slice().sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)) || b.numero_cheque - a.numero_cheque);
+    const repSel = $('#repCh'); if (repSel) repSel.onchange = () => { S.repCh = repSel.value; S.res.lim = 60; viewRep(); };
+    const aut0 = await fetchAll(() => sb.from('cheques').select('id,fecha,beneficiario,monto,cobrado,chequera_id,numero_cheque').eq('estatus', 'autorizado').gte('fecha', '2026-01-01').order('fecha', { ascending: false }));
+    if (S.tab !== 'rep' || !$('#repBody') || tok !== S.repTok) return;
+    const base = (S.repCh ? aut0.filter(c => String(c.chequera_id) === String(S.repCh)) : aut0).filter(c => cents(c.monto) > 0);
+    const meses = [...new Set(base.map(c => String(c.fecha).slice(0, 7)))].sort().reverse();
+    if (S.res.mes && !meses.includes(S.res.mes)) S.res.mes = '';
+    $('#resMes').innerHTML = `<option value="">Todo 2026</option>` + meses.map(m => `<option value="${m}" ${S.res.mes === m ? 'selected' : ''}>${mesTxt(m)}</option>`).join('');
+    const enPer = () => base.filter(c => !S.res.mes || String(c.fecha).slice(0, 7) === S.res.mes);
+    const nom = c => String(c.beneficiario || '').trim().toUpperCase() || 'SIN BENEFICIARIO';
+    const drill = b => {
+      const arr = enPer().filter(c => nom(c) === b).sort((x, y) => String(y.fecha).localeCompare(String(x.fecha)) || y.numero_cheque - x.numero_cheque);
       const tot = arr.reduce((a, c) => a + cents(c.monto), 0);
-      openModal(`<h2 style="margin-top:0">${esc(tit)}</h2><div class="mut sm" style="margin-bottom:8px">${arr.length} cheque${arr.length === 1 ? '' : 's'} · <b>${fmt(tot / 100)}</b></div>
-        <div style="max-height:62vh;overflow:auto;border-top:1px solid var(--line)">${arr.map(c => `<div style="display:flex;justify-content:space-between;gap:10px;padding:8px 2px;border-bottom:1px solid var(--line)"><div style="min-width:0"><div style="font-weight:600;overflow-wrap:anywhere">${esc(c.beneficiario)}</div><div class="mut sm">Cheque ${c.numero_cheque} · ${esc(chequeraNombre(c.chequera_id))} · ${fdate(c.fecha)}${c.cobrado ? '' : ' · <b>sin cobrar</b>'}</div></div><div class="money" style="white-space:nowrap;font-weight:700">${fmt(cents(c.monto) / 100)}</div></div>`).join('') || '<div class="mut sm" style="padding:10px">Sin cheques.</div>'}</div>
+      openModal(`<h2 style="margin-top:0">${esc(b)}</h2><div class="mut sm" style="margin-bottom:8px">${S.res.mes ? mesTxt(S.res.mes) + ' · ' : 'Todo 2026 · '}${arr.length} cheque${arr.length === 1 ? '' : 's'} · <b>${fmt(tot / 100)}</b></div>
+        <div style="max-height:62vh;overflow:auto;border-top:1px solid var(--line)">${arr.map(c => `<div style="display:flex;justify-content:space-between;gap:10px;padding:8px 2px;border-bottom:1px solid var(--line)"><div style="min-width:0"><div class="mut sm">Cheque ${c.numero_cheque} · ${esc(chequeraNombre(c.chequera_id))} · ${fdate(c.fecha)}${c.cobrado ? '' : ' · <b>sin cobrar</b>'}</div></div><div class="money" style="white-space:nowrap;font-weight:700">${fmt(cents(c.monto) / 100)}</div></div>`).join('') || '<div class="mut sm" style="padding:10px">Sin cheques.</div>'}</div>
         <div class="row" style="margin-top:12px"><button class="btn ghost grow" data-act="close">Cerrar</button></div>`);
     };
-    if (S.tab !== 'rep' || !$('#repBody') || tok !== S.repTok) return;
-    $('#repBody').onclick = ev => { const e = ev.target.closest('[data-drill]'); if (e && e.dataset.drill) drillRep(e.dataset.drill); };
-    $('#repBody').onkeydown = ev => { if (ev.key !== 'Enter') return; const e = ev.target.closest('[data-drill]'); if (e && e.dataset.drill) drillRep(e.dataset.drill); };
-    $('#repBody').innerHTML = kpisHtml + `
-      <div class="repgrid">
-        <div class="card"><h3 class="rh">Gasto por mes</h3>${barrasHtml(mItems, 'Cheques autorizados por mes, últimos 12 meses.')}</div>
-        <div class="card"><h3 class="rh">Principales beneficiarios · ${nomPer}</h3>${barrasHtml(benArr, enMes.length ? `Total del mes: ${fmt(totMes / 100)} en ${enMes.length} cheque${enMes.length === 1 ? '' : 's'}.` : '')}</div>
-      </div>`;
+    const pinta = () => {
+      const per = enPer(), q = S.res.q.trim().toLowerCase();
+      const pb = new Map(); per.forEach(c => { const k = nom(c); const o = pb.get(k) || { v: 0, n: 0 }; o.v += cents(c.monto); o.n++; pb.set(k, o); });
+      let arr = [...pb.entries()].map(([k, o]) => ({ d: k, l: k, v: o.v, n: `${o.n} cheque${o.n === 1 ? '' : 's'}` })).sort((a, b) => b.v - a.v);
+      if (q) arr = arr.filter(x => x.l.toLowerCase().includes(q));
+      const tot = arr.reduce((a, x) => a + x.v, 0), nch = per.length;
+      const mx = Math.max(1, ...arr.map(i => i.v));
+      $('#repBody').innerHTML = `<div class="card"><h3 class="rh">Beneficiarios <span class="mut sm">· ${arr.length} · ${fmt(tot / 100)}${q ? '' : ` en ${nch} cheque${nch === 1 ? '' : 's'}`}</span></h3>
+        ${arr.length ? `<div class="bars">${arr.slice(0, S.res.lim).map(i => `<div class="brow" data-bn="${esc(i.d)}" role="button" tabindex="0"><div class="bhead"><span class="bl">${esc(i.l)} <span class="bn">· ${esc(i.n)}</span></span><span class="bv money">${fmt(i.v / 100)}</span></div><div class="bt"><i style="width:${Math.max(1.5, i.v / mx * 100).toFixed(1)}%"></i></div></div>`).join('')}</div>` : '<div class="mut sm">Sin datos.</div>'}
+        ${arr.length > S.res.lim ? `<div style="text-align:center;margin-top:10px"><button class="btn ghost sm" id="resMas">Ver más (${arr.length - S.res.lim})</button></div>` : ''}</div>`;
+      const mas = $('#resMas'); if (mas) mas.onclick = () => { S.res.lim += 60; pinta(); };
+    };
+    $('#resMes').onchange = e => { S.res.mes = e.target.value; S.res.lim = 60; pinta(); };
+    $('#resQ').oninput = e => { S.res.q = e.target.value; S.res.lim = 60; pinta(); };
+    $('#repBody').onclick = ev => { const e = ev.target.closest('[data-bn]'); if (e) drill(e.dataset.bn); };
+    $('#repBody').onkeydown = ev => { if (ev.key !== 'Enter') return; const e = ev.target.closest('[data-bn]'); if (e) drill(e.dataset.bn); };
+    pinta();
   } catch (e) { if (tok === S.repTok && $('#repBody')) $('#repBody').innerHTML = `<div class="warnbox">${esc(errMsg(e))}</div>`; }
 }
 
