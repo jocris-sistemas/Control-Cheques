@@ -2589,7 +2589,7 @@ function imprimirPrev() {
 async function polizaPDF(id) {
   let c; try { c = await loadCheque(id); } catch (e) { return toast(errMsg(e), 'err'); }
   const { jsPDF } = window.jspdf; const doc = new jsPDF({ unit: 'mm', format: 'letter' });
-  const LIL = [241, 208, 236], PW = 215.9, FX = 5.5, FW = PW - 2 * 5.5, BX = 13.6, BW = PW - 2 * 13.6, RH = 4.8, FONT = 'times';
+  const LIL = [241, 208, 236], PW = 215.9, FX = 5.5, FW = PW - 2 * 5.5, BX = 13.6, BW = PW - 2 * 13.6, RH = 7.6, FONT = 'times';
   const fechaLarga = (() => { const [y, m, d] = String(c.fecha).slice(0, 10).split('-'); const M = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']; return `${Number(d)} de ${M[Number(m) - 1]} de ${y}`; })();
   const letra = montoLetra(c.monto);
   const importe = Number(c.monto || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -2604,17 +2604,17 @@ async function polizaPDF(id) {
   const frame = (bottom) => { doc.setDrawColor(0); doc.setLineWidth(0.5); doc.rect(FX, pageTop, FW, bottom - pageTop + 4.2); };
   // --- Recuadro 1: datos de la póliza ---
   box(Array(10).fill(RH), (i, yy, h) => {
-    if (i === 0) txt('CHEQUE POLIZA', BX + 8, yy, h, 11, true);
-    if (i === 1) { txt('FECHA', 126.5, yy, h, 10, true); txt(fechaLarga, 150.6, yy, h, 9.5, true); }
-    if (i === 3) { txt(c.beneficiario, BX + 0.8, yy, h, c.beneficiario.length > 55 ? 7.5 : 9, true); txt('$', 148.5, yy, h, 9, true); txt(importe, 190, yy, h, 9, true, { align: 'right' }); }
-    if (i === 5) { doc.setFont(FONT, 'bold'); doc.setFontSize(8.5); const w = doc.getTextWidth('(' + letra + ')'); txt('(' + letra + ')', BX + 0.8, yy, h, w > BW - 2 ? 8.5 * (BW - 2) / w : 8.5, true); }
+    if (i === 0) txt('CHEQUE POLIZA', BX + 8, yy, h, 16, true);
+    if (i === 1) { txt('FECHA', 112, yy, h, 13, true); txt(fechaLarga, 136, yy, h, 13, true); }
+    if (i === 3) { doc.setFont(FONT, 'bold'); doc.setFontSize(14); const wb = doc.getTextWidth(String(c.beneficiario)); const sb2 = wb > 128 ? 14 * 128 / wb : 14; txt(c.beneficiario, BX + 0.8, yy, h, sb2, true); txt('$', 146, yy, h, 14, true); txt(importe, 200, yy, h, 14, true, { align: 'right' }); }
+    if (i === 5) { doc.setFont(FONT, 'bold'); doc.setFontSize(12); const w = doc.getTextWidth('(' + letra + ')'); txt('(' + letra + ')', BX + 0.8, yy, h, w > BW - 2 ? 12 * (BW - 2) / w : 12, true); }
   });
   // --- Recuadro 2: cheque y chequera ---
   y += 4.6;
-  box([4.4, 4.6, 6.2, 6, 4.7], (i, yy, h) => {
-    if (i === 1) { txt('CHEQUE', BX + 0.8, yy, h, 12, true); txt(c.numero_cheque, BX + 25, yy, h, 12, false); }
-    if (i === 2) txt(empresa || banco, BX + 0.8, yy, h, 12, true);
-    if (i === 3 && empresa) txt(banco, BX + 0.8, yy, h, 12, true);
+  box([6.5, 8.5, 9.5, 9, 6.5], (i, yy, h) => {
+    if (i === 1) { txt('CHEQUE', BX + 0.8, yy, h, 18, true); txt(c.numero_cheque, BX + 36, yy, h, 18, false); }
+    if (i === 2) txt(empresa || banco, BX + 0.8, yy, h, 18, true);
+    if (i === 3 && empresa) txt(banco, BX + 0.8, yy, h, 18, true);
   });
   // --- Recuadro 3: vacío, como en el formato ---
   y += 4.6;
