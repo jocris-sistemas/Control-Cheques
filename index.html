@@ -196,7 +196,11 @@ details.fol>summary b{font-weight:700}
 details.fol>summary::after{content:"▾";margin-left:auto;color:var(--mut);transition:transform .15s}
 details.fol[open]>summary::after{transform:rotate(180deg)}
 details.fol table{margin:0 0 4px}
-details.fol td,details.fol th{padding-left:12px;padding-right:12px}
+details.fol{overflow:hidden}
+details.fol td,details.fol th{padding-left:8px;padding-right:8px}
+details.fol td:first-child,details.fol th:first-child{padding-left:12px}
+details.fol td:last-child,details.fol th:last-child{padding-right:12px;white-space:nowrap}
+details.fol td:nth-child(2){word-break:break-word}
 .cd-tools{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px}
 .cd-act{display:flex;gap:10px;margin-top:12px}
 .cd-act .btn{padding:12px 16px}
@@ -619,7 +623,7 @@ const ICON = {
 const rolTxt = r => ({ capturista: 'Administración', administrador: 'Administrador', contador: 'Contador', lector: 'Solo consulta' }[r] || r);
 const iniciales = n => String(n || '?').replace(/^ING\.\s*/i, '').split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase();
 const fdia = d => { const [y, m, dd] = d.split('-'); const M = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre']; return `${Number(dd)} de ${M[Number(m) - 1]} de ${y}`; };
-const detLin = (c, f) => { const L = (c.cheque_lineas || []).filter(x => x.folio_id === f.id).sort((a, b) => (a.orden || 0) - (b.orden || 0)); return L.length ? `<button class="lnk sm" style="text-align:left;display:block;margin-top:2px" data-act="verlineas" data-id="${c.id}">${L.length} línea${L.length > 1 ? 's' : ''}: ${esc(L.map(x => x.nombre).join(' · '))} ›</button>` : ''; };
+const detLin = (c, f) => { const L = (c.cheque_lineas || []).filter(x => x.folio_id === f.id).sort((a, b) => (a.orden || 0) - (b.orden || 0)); return L.length ? `<button class="lnk sm" style="text-align:left;display:block;margin-top:2px;font-size:12px;border:0;background:none;padding:2px 0;color:var(--info);text-decoration:underline;white-space:nowrap" data-act="verlineas" data-id="${c.id}">Ver detalle ›</button>` : ''; };
 const folioTxt = f => f.es_ajuste ? 'AJUSTE' : f.sin_folio ? 'SIN FOLIO' : f.folio_numero;
 // Folios que tenía un cheque justo antes de cancelarse (al cancelar se desactivan todos de golpe).
 const foliosDeCancelado = c => { const all = c.cheque_folios || []; if (!all.length) return []; const t = f => Date.parse(f.creado_en) || 0; const mx = Math.max(...all.map(t)); return all.filter(f => !f.activo && Math.abs(t(f) - mx) < 5000); };
@@ -940,12 +944,12 @@ function cardPend(c, rechazado = false) {
     <div class="cd-tools">
       ${docsMenu(c)}
       <button class="btn ghost sm" data-act="detalle" data-id="${c.id}">Detalle</button>
-      ${puedeCancelar(c) ? `<button class="btn ghost sm" data-act="cancelar" data-id="${c.id}">Cancelar cheque</button>` : ''}
+      ${puedeCancelar(c) && !(esAdmin() && !rechazado) ? `<button class="btn ghost sm" data-act="cancelar" data-id="${c.id}">Cancelar cheque</button>` : ''}
       ${!okFoto && !rechazado && puedeTocar(c) ? `<button class="btn ghost sm" data-act="sinfoto" data-id="${c.id}">No hay foto</button>` : ''}
     </div>
     ${esAdmin() && !rechazado ? `<div class="cd-act">
       <button class="btn ok grow" data-act="autorizar" data-id="${c.id}" ${sinFac || !cuadra || !okFoto ? 'disabled' : ''}>Autorizar</button>
-      <button class="btn outbad" data-act="rechazar" data-id="${c.id}">Rechazar</button></div>
+      <button class="btn outbad" data-act="rechazar" data-id="${c.id}">Cancelar</button></div>
       ${!okFoto || !cuadra ? `<div class="cd-why">No se puede autorizar: ${[!okFoto ? 'falta la foto del cheque' : '', !cuadra ? 'los folios no cuadran con el monto' : ''].filter(Boolean).join(' y ')}.</div>` : ''}
 ` : ''}
     ${!esAdmin() && !rechazado ? '<div class="chip warn cd-wait">PDTE. DE AUTORIZAR</div>' : ''}
@@ -1397,11 +1401,11 @@ async function openDetail(id) {
     let acciones = '';
     if (!hist) {
       const sinFoto = !c.es_historial && c.estatus !== 'cancelado' && !archActivos(c, 'foto_cheque').length && !c.sin_foto_motivo;
-      if (esAdmin() && c.estatus === 'pendiente') acciones += `<button class="btn ok" data-act="autorizar" data-id="${id}" ${sinFoto ? 'disabled title="Falta la foto del cheque"' : (!cuadra ? 'disabled title="Los folios no cuadran con el monto del cheque"' : '')}>Autorizar</button><button class="btn bad" data-act="rechazar" data-id="${id}">Rechazar</button>`;
+      if (esAdmin() && c.estatus === 'pendiente') acciones += `<button class="btn ok" data-act="autorizar" data-id="${id}" ${sinFoto ? 'disabled title="Falta la foto del cheque"' : (!cuadra ? 'disabled title="Los folios no cuadran con el monto del cheque"' : '')}>Autorizar</button><button class="btn bad" data-act="rechazar" data-id="${id}">Cancelar</button>`;
       if (puedeTocar(c) && ['pendiente', 'rechazado'].includes(c.estatus)) acciones += `<button class="btn gold" data-act="editar" data-id="${id}">Editar</button>`;
       if (c.estatus === 'autorizado' && !c.cobrado && ['administrador', 'capturista', 'contador'].includes(rol())) acciones += `<button class="btn" data-act="cobrar" data-id="${id}">Marcar cobrado</button>`;
       if (esAdmin() && c.cobrado) acciones += `<button class="btn ghost" data-act="descobrar" data-id="${id}">Desmarcar cobro</button>`;
-      if (puedeCancelar(c)) acciones += `<button class="btn ghost" data-act="cancelar" data-id="${id}">Cancelar cheque</button>`;
+      if (puedeCancelar(c) && !(esAdmin() && c.estatus === 'pendiente')) acciones += `<button class="btn ghost" data-act="cancelar" data-id="${id}">Cancelar cheque</button>`;
       if (c.estatus !== 'cancelado') acciones += `<button class="btn ghost" data-act="poliza" data-id="${id}">Ver póliza</button>`;
       if (puedeReexpedir(c)) acciones += `<button class="btn gold" data-act="reexpedir" data-id="${id}">Crear nuevo cheque igual</button>`;
     }
@@ -3085,7 +3089,7 @@ document.addEventListener('click', async ev => {
       case 'sinfoto': dlgMotivo('Cheque sin foto', 'oksinfoto', id, 'gold', 'Marcar sin foto'); break;
       case 'oksinfoto': { const m = $('#mot').value.trim(); if (m.length < 5) return toast('Escribe el motivo (por qué no hay foto).', 'err'); await rpc('marcar_sin_foto', { p_id: id, p_motivo: m }); closeModal(); toast('Marcado sin foto; el Ing. ya puede autorizarlo.', 'ok'); refreshView(true); break; }
       case 'quitarsf': { await rpc('quitar_sin_foto', { p_id: id }); toast('Marca quitada.', 'ok'); openDetail(id); refreshView(true); break; }
-      case 'rechazar': dlgMotivo('Rechazar cheque', 'okrechazar', id, 'bad', 'Rechazar'); break;
+      case 'rechazar': dlgMotivo('Cancelar cheque', 'okrechazar', id, 'bad', 'Cancelar'); break;
       case 'okrechazar': { const m = $('#mot').value.trim(); if (!m) return toast('Escribe el motivo.', 'err'); await rpc('rechazar_cheque', { p_id: id, p_motivo: m }); closeModal(); toast('Cheque rechazado.', 'ok'); refreshView(); break; }
       case 'cancelar': dlgMotivo('Cancelar cheque', 'okcancelar', id, 'bad', 'Cancelar cheque'); break;
       case 'okcancelar': { const m = $('#mot').value.trim(); if (!m) return toast('Escribe el motivo.', 'err'); await rpc('cancelar_cheque', { p_id: id, p_motivo: m }); closeModal(); toast('Cheque cancelado; sus folios quedaron libres.', 'ok'); refreshView(); break; }
