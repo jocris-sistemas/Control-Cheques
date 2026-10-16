@@ -860,7 +860,7 @@ function docsMenu(c) {
   const orden = ['foto_cheque', 'folio', 'factura', 'comprobante_cobro', 'otro'];
   const items = [];
   orden.forEach(t => { const l = archActivos(c, t); l.forEach((a, i) => items.push(`<button data-act="verpath" data-path="${esc(a.path)}">${DOCICO[t] || ''}${docLabel(c, t)}${l.length > 1 ? ' ' + (i + 1) : ''}</button>`)); });
-  const poliza = c.estatus === 'cancelado' || c.es_historial ? '' : `${items.length ? '<div class="sep"></div>' : ''}<button data-act="poliza" data-id="${c.id}">${DOCICO.poliza}Póliza</button>`;
+  const poliza = c.estatus !== 'cancelado' && c.es_historial ? '' : `${items.length ? '<div class="sep"></div>' : ''}<button data-act="poliza" data-id="${c.id}">${DOCICO.poliza}Póliza</button>`;
   if (!items.length && !poliza) return '';
   return `<details class="dd"><summary class="btn ghost sm">Ver documentos</summary><div class="ddm">${items.join('') || '<div class="mut sm" style="padding:8px 12px">Aún no hay documentos</div>'}${poliza}</div></details>`;
 }
@@ -1055,6 +1055,7 @@ async function viewRep() {
 const veIngresos = () => esAdmin() || !!S.perfil?.puede_archivos;
 const ING_CATS = [['RENE', 'Rene'], ['EGBERT', 'Egbert'], ['OMAR', 'Omar'], ['CANCUN', 'Cancún'], ['OTROS', 'Otros']];
 const ingCatTxt = c => (ING_CATS.find(x => x[0] === c) || [0, 'Por clasificar'])[1];
+const esExcer = r => !r.cuenta || r.cuenta === 'Excer Afirme';
 const ingNorm = p => String(p || '').toUpperCase().replace(/^\d+-.*? DE /, '').trim();
 const ingNombre = r => r.pagador ? ingNorm(r.pagador) : (r.concepto || 'SIN NOMBRE');
 const mesLbl = m => { const [y, mm] = m.split('-'); const n = MESES_N[Number(mm) - 1]; return n.charAt(0).toUpperCase() + n.slice(1) + ' ' + y; };
@@ -1064,7 +1065,7 @@ async function viewIng() {
   S.ing = S.ing || { mes: '', cat: '', q: '', lim: 120 };
   $('#view').innerHTML = `<div class="pagehead"><h2>Ingresos</h2><span class="sub">Cuenta Excer Afirme</span></div><div id="ingBody"><div class="sk"></div><div class="sk"></div></div>`;
   try {
-    const rows = await fetchAll(() => sb.from('ingresos').select('id,fecha,monto,pagador,rfc,concepto,categoria,origen,nota').order('fecha', { ascending: false }));
+    const rows = await fetchAll(() => sb.from('ingresos').select('id,fecha,monto,pagador,rfc,concepto,categoria,origen,nota,cuenta').order('fecha', { ascending: false }));
     if (S.tab !== 'ing' || tok !== S.ingTok) return;
     S.ingRows = rows; pintaIng();
   } catch (e) { if (tok === S.ingTok && $('#ingBody')) $('#ingBody').innerHTML = `<div class="warnbox">${esc(errMsg(e))}</div>`; }
@@ -1075,13 +1076,15 @@ function pintaIng() {
   if (f.mes && !meses.includes(f.mes)) f.mes = '';
   const enMes = all.filter(r => !f.mes || String(r.fecha).slice(0, 7) === f.mes);
   const sum = a => a.reduce((s, r) => s + cents(r.monto), 0);
+  const hayOtras = all.some(r => !esExcer(r));
   const sinC = all.filter(r => !r.categoria);
   const kp = (t, v, n, k) => `<div class="kpi ingk${f.cat === k ? ' on' : ''}" data-ingcat="${k}" role="button" tabindex="0"><div class="mut sm">${t}</div><div class="big">${v}</div><div class="mut sm">${n}</div></div>`;
-  const kpis = kp('Total', fmt(sum(enMes) / 100), `${enMes.length} depósito${enMes.length === 1 ? '' : 's'}`, '') +
-    ING_CATS.map(([k, l]) => { const a = enMes.filter(r => r.categoria === k); return kp(l, fmt(sum(a) / 100), `${a.length} depósito${a.length === 1 ? '' : 's'}`, k); }).join('');
+  const enMesEx = enMes.filter(esExcer);
+  const kpis = kp('Total Excer', fmt(sum(enMesEx) / 100), `${enMesEx.length} depósito${enMesEx.length === 1 ? '' : 's'}`, '') +
+    ING_CATS.map(([k, l]) => { const a = enMes.filter(r => r.categoria === k), o = a.filter(r => !esExcer(r)); return kp(l, fmt(sum(a) / 100), `${a.length} depósito${a.length === 1 ? '' : 's'}${o.length ? ` · ${o.length} de otras cuentas` : ''}`, k); }).join('');
   const tr = meses.map(m => {
     const a = all.filter(r => String(r.fecha).slice(0, 7) === m);
-    return `<tr data-ingmes="${m}" class="${f.mes === m ? 'on' : ''}"><td>${mesLbl(m)}</td>${ING_CATS.map(([k]) => `<td class="r">${fmtK(sum(a.filter(r => r.categoria === k)) / 100)}</td>`).join('')}<td class="r"><b>${fmtK(sum(a) / 100)}</b></td></tr>`;
+    return `<tr data-ingmes="${m}" class="${f.mes === m ? 'on' : ''}"><td>${mesLbl(m)}</td>${ING_CATS.map(([k]) => `<td class="r">${fmtK(sum(a.filter(r => r.categoria === k)) / 100)}</td>`).join('')}<td class="r"><b>${fmtK(sum(a.filter(esExcer)) / 100)}</b></td></tr>`;
   }).join('');
   const tot = ING_CATS.map(([k]) => `<td class="r"><b>${fmtK(sum(all.filter(r => r.categoria === k)) / 100)}</b></td>`).join('');
   $('#ingBody').innerHTML = `
@@ -1089,7 +1092,7 @@ function pintaIng() {
     ${sinC.length ? `<div class="warnbox" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><div class="grow"><b>${sinC.length} depósito${sinC.length === 1 ? '' : 's'} por clasificar</b> · ${fmt(sum(sinC) / 100)}</div><button class="btn gold sm" data-ingcat="NULL">Verlos</button></div>` : ''}
     <div class="filters" style="margin:10px 0"><select id="ingMes" aria-label="Mes"><option value="">Todo 2026</option>${meses.map(m => `<option value="${m}" ${f.mes === m ? 'selected' : ''}>${mesLbl(m)}</option>`).join('')}</select><input id="ingQ" type="text" placeholder="Buscar pagador, concepto o monto" value="${esc(f.q)}"></div>
     <div class="kpis k6">${kpis}</div>
-    <div class="card" style="overflow:auto"><h3 class="rh">Por mes</h3><table class="ingtbl"><thead><tr><th>Mes</th>${ING_CATS.map(([, l]) => `<th class="r">${l}</th>`).join('')}<th class="r">Total</th></tr></thead><tbody>${tr}</tbody><tfoot><tr><td><b>Total</b></td>${tot}<td class="r"><b>${fmtK(sum(all) / 100)}</b></td></tr></tfoot></table></div>
+    <div class="card" style="overflow:auto"><h3 class="rh">Por mes</h3><table class="ingtbl"><thead><tr><th>Mes</th>${ING_CATS.map(([, l]) => `<th class="r">${l}</th>`).join('')}<th class="r">Total</th></tr></thead><tbody>${tr}</tbody><tfoot><tr><td><b>Total</b></td>${tot}<td class="r"><b>${fmtK(sum(all.filter(esExcer)) / 100)}</b></td></tr></tfoot></table>${hayOtras ? '<div class="mut sm" style="margin-top:6px">El Total es solo de la cuenta Excer. Rene, Egbert y Omar suman además sus depósitos de otras cuentas (ITE), que no entran al Total.</div>' : ''}</div>
     <div id="ingLista"></div>`;
   const B = $('#ingBody');
   $('#ingImp').onclick = () => $('#ingFile').click();
@@ -1111,11 +1114,11 @@ function pintaIngLista() {
   let a = all.filter(r => !f.mes || String(r.fecha).slice(0, 7) === f.mes);
   if (f.cat === 'NULL') a = a.filter(r => !r.categoria); else if (f.cat) a = a.filter(r => r.categoria === f.cat);
   if (q) a = a.filter(r => (ingNombre(r) + ' ' + (r.concepto || '') + ' ' + Number(r.monto).toFixed(2) + ' ' + fmt(r.monto)).toLowerCase().includes(q));
-  const tot = a.reduce((s, r) => s + cents(r.monto), 0);
+  const tot = (f.cat ? a : a.filter(esExcer)).reduce((s, r) => s + cents(r.monto), 0);
   const opts = c => `<option value="">Por clasificar</option>` + ING_CATS.map(([k, l]) => `<option value="${k}" ${c === k ? 'selected' : ''}>${l}</option>`).join('');
   const titulo = f.cat === 'NULL' ? 'Por clasificar' : f.cat ? ingCatTxt(f.cat) : 'Todos los depósitos';
   box.innerHTML = `<div class="card"><h3 class="rh">${titulo}${f.mes ? ' · ' + mesLbl(f.mes) : ''} <span class="mut sm">· ${a.length} depósito${a.length === 1 ? '' : 's'} · ${fmt(tot / 100)}</span></h3>
-    ${a.slice(0, f.lim).map(r => `<div class="ingrow"><div class="grow" style="min-width:0"><div style="font-weight:600;overflow-wrap:anywhere">${esc(ingNombre(r))}</div><div class="mut sm">${fdate(r.fecha)}${r.concepto && r.pagador ? ' · ' + esc(String(r.concepto).slice(0, 40)) : ''}${r.nota ? ' · ' + esc(r.nota) : ''}</div></div><div class="money" style="white-space:nowrap;font-weight:700">${fmt(r.monto)}</div><select class="ingsel c-${r.categoria || 'NULL'}" data-ingsel="${r.id}" aria-label="Clasificar">${opts(r.categoria)}</select></div>`).join('') || '<div class="mut sm">Sin depósitos.</div>'}
+    ${a.slice(0, f.lim).map(r => `<div class="ingrow"><div class="grow" style="min-width:0"><div style="font-weight:600;overflow-wrap:anywhere">${esc(ingNombre(r))}</div><div class="mut sm">${fdate(r.fecha)}${r.concepto && r.pagador ? ' · ' + esc(String(r.concepto).slice(0, 40)) : ''}${r.nota ? ' · ' + esc(r.nota) : ''}${esExcer(r) ? '' : ' · <b>' + esc(r.cuenta) + '</b> (fuera del Total)'}</div></div><div class="money" style="white-space:nowrap;font-weight:700">${fmt(r.monto)}</div><select class="ingsel c-${r.categoria || 'NULL'}" data-ingsel="${r.id}" aria-label="Clasificar">${opts(r.categoria)}</select></div>`).join('') || '<div class="mut sm">Sin depósitos.</div>'}
     ${a.length > f.lim ? `<div style="text-align:center;margin-top:10px"><button class="btn ghost sm" data-ingmas="1">Ver más (${a.length - f.lim})</button></div>` : ''}</div>`;
 }
 async function ingClasificar(id, cat) {
