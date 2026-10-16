@@ -443,6 +443,8 @@ async function cerrarSesion(msg) {
 const msgLogin = () => { let m = ''; try { m = sessionStorage.getItem('jocris_msg_login') || ''; sessionStorage.removeItem('jocris_msg_login'); } catch (e) { } return m; };
 
 /* ===================== ESTADO ===================== */
+const navGet = k => { try { const o = JSON.parse(localStorage.getItem(k) || 'null'); return o && Date.now() - o.t < 43200000 ? o.v : null; } catch (e) { return null; } };
+const navSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify({ v, t: Date.now() })); } catch (e) { } };
 const S = { perfil: null, cargos: [], chequeras: [], series: {}, tab: 'pend', filt: { q: '', ch: [], mes: [], st: [], tr: false },
             list: [], count: 0, page: 0, pendCount: 0, F: null };
 const $ = (s, r = document) => r.querySelector(s);
@@ -700,7 +702,7 @@ async function boot() {
   $('#app').innerHTML = '<div class="spin">Cargando…</div>';
   await loadCatalogs();
   try { const { data: fr } = await sb.from('firmas').select('imagen').maybeSingle(); S.firma = fr ? fr.imagen : null; } catch (e) { S.firma = null; }
-  S.tab = 'pend'; // todos entran a Pendientes
+  S.tab = ['pend', 'cheques', 'rep', 'ing'].includes(navGet('jc_tab')) ? navGet('jc_tab') : 'pend'; // al recargar vuelve a la última pestaña (si no, Pendientes)
   renderShell();
   refreshPendCount(); cargarAlertas(true); resincronizarPush();
   if (!boot._iv) boot._iv = setInterval(() => { if (S.perfil) refreshPendCount(); }, 60000);
@@ -742,6 +744,7 @@ function renderShell() {
   <div id="cajaWrap" class="hidden"></div>`;
   document.body.classList.remove('modo-caja');
   altoHeader();
+  if (!tabs.some(t => t[0] === S.tab)) S.tab = 'pend';
   go(S.tab);
   // Historial del navegador: una entrada para Cheques y otra para Acumulado, así el botón "atrás" no saca de la app.
   const aCaja = veCaja() && location.hash === '#caja';
@@ -798,7 +801,7 @@ window.addEventListener('message', ev => {
   if (d.caja === 'sesion') sb.auth.getSession().then(({ data }) => { if (!data.session && S.perfil) { S.perfil = null; location.reload(); } });
 });
 function go(tab) {
-  S.tab = tab;
+  S.tab = tab; navSet('jc_tab', tab);
   document.querySelectorAll('nav.tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
   if (tab !== 'nuevo') S.F = null;
   { const b = $('#selbar'); if (b) b.classList.add('hidden'); }
@@ -1011,14 +1014,14 @@ function barrasHtml(items, nota) {
 async function viewRep() {
   const tok = S.repTok = (S.repTok || 0) + 1;
   S.res = S.res || { mes: '', q: '', lim: 60 };
-  $('#view').innerHTML = `<div class="pagehead"><h2>Resumen</h2><span class="sub">Cuánto lleva cada beneficiario · cheques autorizados</span></div>
+  $('#view').innerHTML = `<div class="pagehead"><h2>Resumen</h2><span class="sub">Cuánto ha recibido cada beneficiario · solo cheques cobrados</span></div>
     <div class="filters" style="margin-bottom:10px"><select id="repCh" aria-label="Chequera"><option value="">Todas las chequeras</option>${S.chequeras.map(c => `<option value="${c.id}" ${String(S.repCh || '') === String(c.id) ? 'selected' : ''}>${esc(c.nombre)}</option>`).join('')}</select><select id="resMes" aria-label="Mes"></select><input id="resQ" type="text" placeholder="Buscar beneficiario" value="${esc(S.res.q)}"></div>
     <div id="repBody"><div class="sk"></div><div class="sk"></div></div>`;
   try {
     const repSel = $('#repCh'); if (repSel) repSel.onchange = () => { S.repCh = repSel.value; S.res.lim = 60; viewRep(); };
     const aut0 = await fetchAll(() => sb.from('cheques').select('id,fecha,beneficiario,monto,cobrado,chequera_id,numero_cheque').eq('estatus', 'autorizado').gte('fecha', '2026-01-01').order('fecha', { ascending: false }));
     if (S.tab !== 'rep' || !$('#repBody') || tok !== S.repTok) return;
-    const base = (S.repCh ? aut0.filter(c => String(c.chequera_id) === String(S.repCh)) : aut0).filter(c => cents(c.monto) > 0);
+    const base = (S.repCh ? aut0.filter(c => String(c.chequera_id) === String(S.repCh)) : aut0).filter(c => cents(c.monto) > 0 && c.cobrado);
     const meses = [...new Set(base.map(c => String(c.fecha).slice(0, 7)))].sort().reverse();
     if (S.res.mes && !meses.includes(S.res.mes)) S.res.mes = '';
     $('#resMes').innerHTML = `<option value="">Todo 2026</option>` + meses.map(m => `<option value="${m}" ${S.res.mes === m ? 'selected' : ''}>${mesTxt(m)}</option>`).join('');
@@ -1038,7 +1041,10 @@ async function viewRep() {
       if (q) arr = arr.filter(x => x.l.toLowerCase().includes(q));
       const tot = arr.reduce((a, x) => a + x.v, 0), nch = per.length;
       const mx = Math.max(1, ...arr.map(i => i.v));
-      $('#repBody').innerHTML = `<div class="card"><h3 class="rh">Beneficiarios <span class="mut sm">· ${arr.length} · ${fmt(tot / 100)}${q ? '' : ` en ${nch} cheque${nch === 1 ? '' : 's'}`}</span></h3>
+      const totA = base.reduce((x, c) => x + cents(c.monto), 0), nM = meses.length, prom = nM ? Math.round(totA / nM) : 0, totP = per.reduce((x, c) => x + cents(c.monto), 0);
+      const kp = (t, v, n) => `<div class="kpi"><div class="mut sm">${t}</div><div class="big">${v}</div><div class="mut sm">${n}</div></div>`;
+      const kpisR = `<div class="kpis" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr))">${kp('Total del año', fmt(totA / 100), `${base.length} cheque${base.length === 1 ? '' : 's'} cobrado${base.length === 1 ? '' : 's'}`)}${kp('Promedio por mes', fmt(prom / 100), `${nM} mes${nM === 1 ? '' : 'es'} con cobros`)}${S.res.mes ? kp(mesLbl(S.res.mes), fmt(totP / 100), `${per.length} cheque${per.length === 1 ? '' : 's'}`) : ''}</div>`;
+      $('#repBody').innerHTML = kpisR + `<div class="card"><h3 class="rh">Beneficiarios <span class="mut sm">· ${arr.length} · ${fmt(tot / 100)}${q ? '' : ` en ${nch} cheque${nch === 1 ? '' : 's'}`}</span></h3>
         ${arr.length ? `<div class="bars">${arr.slice(0, S.res.lim).map(i => `<div class="brow" data-bn="${esc(i.d)}" role="button" tabindex="0"><div class="bhead"><span class="bl">${esc(i.l)} <span class="bn">· ${esc(i.n)}</span></span><span class="bv money">${fmt(i.v / 100)}</span></div><div class="bt"><i style="width:${Math.max(1.5, i.v / mx * 100).toFixed(1)}%"></i></div></div>`).join('')}</div>` : '<div class="mut sm">Sin datos.</div>'}
         ${arr.length > S.res.lim ? `<div style="text-align:center;margin-top:10px"><button class="btn ghost sm" id="resMas">Ver más (${arr.length - S.res.lim})</button></div>` : ''}</div>`;
       const mas = $('#resMas'); if (mas) mas.onclick = () => { S.res.lim += 60; pinta(); };
@@ -2592,7 +2598,7 @@ function imprimirPrev() {
 async function polizaPDF(id) {
   let c; try { c = await loadCheque(id); } catch (e) { return toast(errMsg(e), 'err'); }
   const { jsPDF } = window.jspdf; const doc = new jsPDF({ unit: 'mm', format: 'letter' });
-  const LIL = [241, 208, 236], PW = 215.9, FX = 5.5, FW = PW - 2 * 5.5, BX = 13.6, BW = PW - 2 * 13.6, RH = 7.6, FONT = 'times';
+  const LIL = [241, 208, 236], PW = 215.9, FX = 5.5, FW = PW - 2 * 5.5, BX = 13.6, BW = PW - 2 * 13.6, RH = 4.8, FONT = 'times';
   const fechaLarga = (() => { const [y, m, d] = String(c.fecha).slice(0, 10).split('-'); const M = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']; return `${Number(d)} de ${M[Number(m) - 1]} de ${y}`; })();
   const letra = montoLetra(c.monto);
   const importe = Number(c.monto || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -2607,17 +2613,17 @@ async function polizaPDF(id) {
   const frame = (bottom) => { doc.setDrawColor(0); doc.setLineWidth(0.5); doc.rect(FX, pageTop, FW, bottom - pageTop + 4.2); };
   // --- Recuadro 1: datos de la póliza ---
   box(Array(10).fill(RH), (i, yy, h) => {
-    if (i === 0) txt('CHEQUE POLIZA', BX + 8, yy, h, 16, true);
-    if (i === 1) { txt('FECHA', 112, yy, h, 13, true); txt(fechaLarga, 136, yy, h, 13, true); }
-    if (i === 3) { doc.setFont(FONT, 'bold'); doc.setFontSize(14); const wb = doc.getTextWidth(String(c.beneficiario)); const sb2 = wb > 128 ? 14 * 128 / wb : 14; txt(c.beneficiario, BX + 0.8, yy, h, sb2, true); txt('$', 146, yy, h, 14, true); txt(importe, 200, yy, h, 14, true, { align: 'right' }); }
-    if (i === 5) { doc.setFont(FONT, 'bold'); doc.setFontSize(12); const w = doc.getTextWidth('(' + letra + ')'); txt('(' + letra + ')', BX + 0.8, yy, h, w > BW - 2 ? 12 * (BW - 2) / w : 12, true); }
+    if (i === 0) txt('CHEQUE POLIZA', BX + 8, yy, h, 11, true);
+    if (i === 1) { txt('FECHA', 126.5, yy, h, 10, true); txt(fechaLarga, 150.6, yy, h, 9.5, true); }
+    if (i === 3) { txt(c.beneficiario, BX + 0.8, yy, h, c.beneficiario.length > 55 ? 7.5 : 9, true); txt('$', 148.5, yy, h, 9, true); txt(importe, 190, yy, h, 9, true, { align: 'right' }); }
+    if (i === 5) { doc.setFont(FONT, 'bold'); doc.setFontSize(8.5); const w = doc.getTextWidth('(' + letra + ')'); txt('(' + letra + ')', BX + 0.8, yy, h, w > BW - 2 ? 8.5 * (BW - 2) / w : 8.5, true); }
   });
   // --- Recuadro 2: cheque y chequera ---
   y += 4.6;
-  box([6.5, 8.5, 9.5, 9, 6.5], (i, yy, h) => {
-    if (i === 1) { txt('CHEQUE', BX + 0.8, yy, h, 18, true); txt(c.numero_cheque, BX + 36, yy, h, 18, false); }
-    if (i === 2) txt(empresa || banco, BX + 0.8, yy, h, 18, true);
-    if (i === 3 && empresa) txt(banco, BX + 0.8, yy, h, 18, true);
+  box([4.4, 4.6, 6.2, 6, 4.7], (i, yy, h) => {
+    if (i === 1) { txt('CHEQUE', BX + 0.8, yy, h, 12, true); txt(c.numero_cheque, BX + 25, yy, h, 12, false); }
+    if (i === 2) txt(empresa || banco, BX + 0.8, yy, h, 12, true);
+    if (i === 3 && empresa) txt(banco, BX + 0.8, yy, h, 12, true);
   });
   // --- Recuadro 3: vacío, como en el formato ---
   y += 4.6;
