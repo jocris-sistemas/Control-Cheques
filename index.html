@@ -32,6 +32,7 @@ header.top .modsw button.on{background:#fff;color:var(--navy)}
 #cajaWrap iframe{display:block;width:100%;height:100%;border:0;background:#f3f5f9}
 body.modo-caja nav.tabs,body.modo-caja main#view,body.modo-caja #alertaHuecos,body.modo-caja #selbar,body.modo-caja #undo{display:none!important}
 body.modo-caja{overflow:hidden}
+body.modo-cancun nav.tabs,body.modo-cancun #alertaHuecos{display:none!important}
 @media(max-width:420px){header.top .modsw button{padding:7px 9px;font-size:13px}}
 header.top{background:var(--navy);color:#fff;padding:calc(10px + env(safe-area-inset-top)) 16px 10px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:20;border-bottom:3px solid var(--gold)}
 header.top .brand{font-weight:700;letter-spacing:.3px;flex:1}
@@ -704,7 +705,7 @@ async function boot() {
   $('#app').innerHTML = '<div class="spin">Cargando…</div>';
   await loadCatalogs();
   try { const { data: fr } = await sb.from('firmas').select('imagen').maybeSingle(); S.firma = fr ? fr.imagen : null; } catch (e) { S.firma = null; }
-  S.tab = ['pend', 'cheques', 'rep', 'ing', 'cancun'].includes(navGet('jc_tab')) ? navGet('jc_tab') : 'pend'; // al recargar vuelve a la última pestaña (si no, Pendientes)
+  S.tab = ['pend', 'cheques', 'rep', 'ing'].includes(navGet('jc_tab')) ? navGet('jc_tab') : 'pend'; // al recargar vuelve a la última pestaña (si no, Pendientes)
   renderShell();
   refreshPendCount(); cargarAlertas(true); resincronizarPush();
   if (!boot._iv) boot._iv = setInterval(() => { if (S.perfil) refreshPendCount(); }, 60000);
@@ -734,11 +735,10 @@ function renderShell() {
   if (puedeCapturar()) tabs.push(['nuevo', 'Nuevo']);
   tabs.push(['rep', 'Resumen']);
   if (veIngresos()) tabs.push(['ing', 'Ingresos']);
-  if (veCancun()) tabs.push(['cancun', 'Cancún']);
   $('#app').innerHTML = `
   <header class="top">
     <div class="brand"><span class="mark">J</span><div>${veCaja() ? 'JOCRIS' : 'JOCRIS · <span class="tl">Control de </span>Cheques'}<small>${esc(S.perfil.nombre)} · ${esc(rolTxt(S.perfil.rol))}</small></div></div>
-    ${veCaja() ? `<div class="modsw" role="tablist"><button data-act="modulo" data-mod="cheques" class="on">Cheques</button><button data-act="modulo" data-mod="caja">Acumulado</button></div>` : ''}
+    ${veCaja() || veCancun() ? `<div class="modsw" role="tablist"><button data-act="modulo" data-mod="cheques" class="on">Cheques</button>${veCaja() ? '<button data-act="modulo" data-mod="caja">Acumulado</button>' : ''}${veCancun() ? '<button data-act="modulo" data-mod="cancun">Cancún</button>' : ''}</div>` : ''}
     <button class="acct" data-act="menu" title="Mi cuenta" aria-label="Mi cuenta">${esc(iniciales(S.perfil.nombre))}</button>
   </header>
   <nav class="tabs">${tabs.map(([k, l]) => `<button data-tab="${k}" class="${S.tab === k ? 'on' : ''}">${ICON[k] || ''}<span>${l}</span>${k === 'pend' ? `<span class="badge hidden" id="bPend">0</span>` : ''}</button>`).join('')}</nav>
@@ -768,6 +768,19 @@ function cajaFrame() {
 }
 let guardia = false;   // entrada extra en el historial mientras se navega dentro de Acumulado
 function abrirModulo(m, desdeHist) {
+  const B = document.body;
+  if (m === 'cancun' && veCancun()) {   // Cancún: tercer módulo del selector de arriba (usa la misma pantalla de Cheques, sin pestañas)
+    if (B.classList.contains('modo-caja')) abrirModulo('cheques');
+    if (S.tab !== 'cancun') S.tabPrev = S.tab;
+    B.classList.add('modo-cancun');
+    document.querySelectorAll('header.top .modsw button').forEach(b => b.classList.toggle('on', b.dataset.mod === 'cancun'));
+    altoHeader(); go('cancun'); return;
+  }
+  if (B.classList.contains('modo-cancun')) {
+    B.classList.remove('modo-cancun');
+    const t = ['pend', 'cheques', 'rep', 'ing'].includes(S.tabPrev) ? S.tabPrev : 'pend';
+    if (m === 'caja') { S.tab = t; } else { document.querySelectorAll('header.top .modsw button').forEach(b => b.classList.toggle('on', b.dataset.mod === 'cheques')); altoHeader(); go(t); return; }
+  }
   const caja = m === 'caja' && veCaja();
   if (!desdeHist) { try { if (caja && !document.body.classList.contains('modo-caja')) history.pushState({ m: 'caja' }, '', '#caja'); else if (document.body.classList.contains('modo-caja')) history.pushState({ m: 'cheques' }, '', location.pathname + location.search); } catch (e) { } if (!caja) guardia = false; }
   document.querySelectorAll('header.top .modsw button').forEach(b => b.classList.toggle('on', b.dataset.mod === (caja ? 'caja' : 'cheques')));
