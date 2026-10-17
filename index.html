@@ -401,6 +401,7 @@ button.lnk[data-act=quitaradj]{background:none;border:0;padding:2px 4px;color:va
 input.autollenado{background:rgba(224,180,74,.16)!important;border-color:#e0b44a!important}
 .ingk{cursor:pointer}.ingk.on{outline:2px solid var(--navy);outline-offset:-2px}
 .ingtbl{width:100%;border-collapse:collapse;font-size:13px;white-space:nowrap}.ingtbl th,.ingtbl td{padding:6px 8px;border-bottom:1px solid var(--line)}.ingtbl th{text-align:left;color:var(--mut);font-weight:600}.ingtbl th.r,.ingtbl td.r{text-align:right}
+.cnseg{display:flex;gap:2px;padding:3px;border-radius:11px;background:var(--line);width:fit-content;margin:0 0 10px}.cnseg button{background:transparent;color:var(--navy);padding:7px 12px;border-radius:8px;font-weight:700;font-size:13.5px}.cnseg button.on{background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.15)}
 .ingtbl.cn{font-size:12.5px;white-space:normal}.ingtbl.cn th,.ingtbl.cn td{padding:6px 4px}.ingtbl.cn td.r,.ingtbl.cn th.r{white-space:nowrap}
 .ingtbl tbody tr{cursor:pointer}.ingtbl tbody tr:hover,.ingtbl tbody tr.on{background:var(--infobg)}.ingtbl tfoot td{border-top:2px solid var(--line);border-bottom:0}
 .ingrow{display:flex;align-items:center;gap:10px;padding:9px 2px;border-bottom:1px solid var(--line)}
@@ -819,10 +820,43 @@ window.addEventListener('message', ev => {
 /* ===================== CANCÚN (copia del Google Sheet REPORTE CANCUN 2026) ===================== */
 const veCancun = () => !!S.perfil?.puede_cancun;   // solo quien tenga perfiles.puede_cancun (hoy: Pedro)
 const CN_COMP = 'VARIAS / COMPARTIDO';
+/* Cuadre de folios: Caja Efectivo (historial) contra los gastos en efectivo de Cancún, por mes y proveedor unificado */
+const CQ_EST = { 'CUADRA': 'Cuadra', 'MONTO DISTINTO': 'Monto distinto', 'SOLO CAJA': 'Solo en Caja', 'SOLO APP': 'Solo en la app', 'POSTERIOR AL CORTE DE CAJA': 'Después del corte de Caja', 'ENE-ABR (CAJA SIN FOLIO)': 'Ene-abr (Caja sin folio)' };
+async function viewCnCuadre() {
+  const tok = S.cnTok = (S.cnTok || 0) + 1; S.cq = S.cq || { mes: '', est: '', serv: '' };
+  $('#cnBody').innerHTML = '<div class="sk"></div><div class="sk"></div>';
+  try {
+    const rows = await fetchAll(() => sb.from('cancun_folios_cuadre').select('folio,mes,fecha_app,semana_caja,proveedor,servicio,villa,monto_caja,monto_app,diferencia,estado'));
+    if (S.tab !== 'cancun' || tok !== S.cnTok || S.cnVista !== 'cuadre') return;
+    S.cqD = rows; pintaCnCuadre();
+  } catch (e) { if (tok === S.cnTok && $('#cnBody')) $('#cnBody').innerHTML = `<div class="warnbox">${esc(errMsg(e))}</div>`; }
+}
+function pintaCnCuadre() {
+  const f = S.cq, D = S.cqD, B = $('#cnBody'); if (!D || !B) return;
+  const meses = [...new Set(D.filter(r => r.estado !== 'ENE-ABR (CAJA SIN FOLIO)').map(r => r.mes))].sort();
+  const servs = [...new Set(D.map(r => r.servicio))].sort();
+  const vis = r => (f.est ? r.estado === f.est : r.estado !== 'ENE-ABR (CAJA SIN FOLIO)') && (!f.mes || r.mes === f.mes) && (!f.serv || r.servicio === f.serv);
+  const L = D.filter(vis).sort((a, b) => (a.estado === 'CUADRA') - (b.estado === 'CUADRA') || String(b.mes).localeCompare(String(a.mes)) || String(a.proveedor).localeCompare(String(b.proveedor)));
+  const cnt = {}; D.filter(r => (!f.mes || r.mes === f.mes) && (!f.serv || r.servicio === f.serv)).forEach(r => { cnt[r.estado] = (cnt[r.estado] || 0) + 1; });
+  const chip = k => `<div class="kpi" data-cqest="${esc(k)}" style="cursor:pointer;${f.est === k ? 'outline:2px solid var(--navy)' : ''}"><div class="mut sm">${CQ_EST[k]}</div><div class="big">${cnt[k] || 0}</div></div>`;
+  const provs = [...new Set(D.filter(r => r.estado !== 'ENE-ABR (CAJA SIN FOLIO)' && (!f.serv || r.servicio === f.serv)).map(r => r.servicio + '|' + r.proveedor))].sort();
+  const celda = (p, m) => { const a = D.filter(r => r.estado !== 'ENE-ABR (CAJA SIN FOLIO)' && r.servicio + '|' + r.proveedor === p && r.mes === m); if (!a.length) return '<td class="r mut">·</td>'; const ok = a.filter(r => r.estado === 'CUADRA').length, mal = a.length - ok; return `<td class="r">${ok ? `<span style="color:var(--ok)">${ok}✓</span>` : ''}${mal ? ` <span style="color:var(--bad,#c0392b)">${mal}⚠</span>` : ''}</td>`; };
+  const fila = r => `<div style="padding:8px 0;border-bottom:1px solid var(--line)"><div style="display:flex;gap:8px;align-items:baseline"><b style="width:52px;flex:none">${esc(r.folio)}</b><div class="grow" style="min-width:0"><div>${esc(r.proveedor)}${r.villa ? ` <span class="mut sm">· ${esc(r.villa)}</span>` : ''}</div><div class="mut sm">${esc(mesLbl(r.mes))} · ${esc(CQ_EST[r.estado] || r.estado)}${r.estado === 'MONTO DISTINTO' ? ` · Caja ${fmt(r.monto_caja)} / App ${fmt(r.monto_app)}` : ''}</div></div><b style="white-space:nowrap;${r.estado === 'CUADRA' ? 'color:var(--ok)' : ''}">${fmt(r.monto_app != null ? r.monto_app : r.monto_caja)}</b></div></div>`;
+  B.innerHTML = `<div class="mut sm" style="margin-bottom:8px">Folios de efectivo de Caja Efectivo contra los de la app, con nombres de proveedor unificados. Toca un cuadro para filtrar.</div>
+    <div class="filters" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px"><select id="cqMes"><option value="">Todos los meses</option>${meses.map(m => `<option value="${m}" ${f.mes === m ? 'selected' : ''}>${esc(mesLbl(m))}</option>`).join('')}</select><select id="cqServ"><option value="">Todos los servicios</option>${servs.map(s => `<option value="${esc(s)}" ${f.serv === s ? 'selected' : ''}>${esc(s)}</option>`).join('')}</select>${(f.mes || f.est || f.serv) ? '<button class="btn ghost" data-cqlimpia>Quitar filtros</button>' : ''}</div>
+    <div class="kpis">${Object.keys(CQ_EST).map(chip).join('')}</div>
+    <div class="card" style="overflow:auto"><h3 class="rh">Servicios por mes <span class="mut sm">(✓ cuadra · ⚠ con diferencia)</span></h3><table class="ingtbl cn"><thead><tr><th>Proveedor</th>${meses.map(m => `<th class="r">${esc(mesLbl(m).slice(0, 3))}</th>`).join('')}</tr></thead><tbody>${provs.map(p => `<tr><td>${esc(p.split('|')[1])}</td>${meses.map(m => celda(p, m)).join('')}</tr>`).join('')}</tbody></table></div>
+    <div class="card"><h3 class="rh">Folios <span class="mut sm">(${L.length})</span></h3>${L.slice(0, 150).map(fila).join('') || '<div class="mut" style="padding:10px 0">Nada con esos filtros.</div>'}${L.length > 150 ? `<div class="mut sm" style="padding:8px 0">Se muestran 150 de ${L.length}. Filtra por mes o servicio.</div>` : ''}</div>`;
+  $('#cqMes').onchange = e => { f.mes = e.target.value; pintaCnCuadre(); };
+  $('#cqServ').onchange = e => { f.serv = e.target.value; pintaCnCuadre(); };
+  B.onclick = ev => { const t = ev.target; if (t.closest('[data-cqlimpia]')) { S.cq = { mes: '', est: '', serv: '' }; return pintaCnCuadre(); } const k = t.closest('[data-cqest]'); if (k) { f.est = f.est === k.dataset.cqest ? '' : k.dataset.cqest; pintaCnCuadre(); } };
+}
 async function viewCancun() {
   const tok = S.cnTok = (S.cnTok || 0) + 1;
   S.cn = S.cn || { mes: '', villa: '', cat: '', tipo: '', q: '', lim: 100, abierto: '' };
-  $('#view').innerHTML = `<div class="pagehead"><h2>Cancún</h2><span class="sub">Villas de renta · 2026</span></div><div id="cnBody"><div class="sk"></div><div class="sk"></div></div>`;
+  $('#view').innerHTML = `<div class="pagehead"><h2>Cancún</h2><span class="sub">Villas de renta · 2026</span></div><div class="cnseg" role="tablist"><button data-cnvista="mov" class="${S.cnVista === 'cuadre' ? '' : 'on'}">Movimientos</button><button data-cnvista="cuadre" class="${S.cnVista === 'cuadre' ? 'on' : ''}">Cuadre con Caja</button></div><div id="cnBody"><div class="sk"></div><div class="sk"></div></div>`;
+  $('#view').querySelectorAll('[data-cnvista]').forEach(b => b.onclick = () => { S.cnVista = b.dataset.cnvista; viewCancun(); });
+  if (S.cnVista === 'cuadre') return viewCnCuadre();
   try {
     const [mov, rep, gc] = await Promise.all([
       fetchAll(() => sb.from('cancun_movimientos').select('id,fecha,folio,concepto,monto,pago,tipo,categoria,villa,depto,comentarios,sync_en')),
