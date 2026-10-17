@@ -825,8 +825,8 @@ async function viewCancun() {
   $('#view').innerHTML = `<div class="pagehead"><h2>Cancún</h2><span class="sub">Villas de renta · 2026</span></div><div id="cnBody"><div class="sk"></div><div class="sk"></div></div>`;
   try {
     const [mov, rep, gc] = await Promise.all([
-      fetchAll(() => sb.from('cancun_movimientos').select('id,fecha,folio,concepto,monto,pago,tipo,categoria,villa,comentarios,sync_en')),
-      fetchAll(() => sb.from('cancun_reparto').select('id,id_gasto,villa,monto,categoria')),
+      fetchAll(() => sb.from('cancun_movimientos').select('id,fecha,folio,concepto,monto,pago,tipo,categoria,villa,depto,comentarios,sync_en')),
+      fetchAll(() => sb.from('cancun_reparto').select('id,id_gasto,villa,depto,monto,categoria')),
       fetchAll(() => sb.from('cancun_gastos_comp').select('id,id_mov'))]);
     if (S.tab !== 'cancun' || tok !== S.cnTok) return;
     const gMov = new Map(gc.map(g => [g.id, g.id_mov])), porMov = new Map();
@@ -914,9 +914,9 @@ function pintaCnLista() {
     const sh = share(m), rr = D.porMov.get(m.id) || [];
     const monto = sh && sh.length ? sh.reduce((s, r) => s + cents(r.monto), 0) / 100 : Number(m.monto);
     const col = m.tipo === 'INGRESO' ? 'color:var(--ok)' : m.tipo === 'PRESTAMO' ? 'color:var(--mut)' : '';
-    const det = f.abierto === m.id && rr.length ? `<div class="mut sm" style="padding:6px 0 2px 44px">Repartido: ${rr.map(r => `${esc(r.villa)} <b>${fmt(r.monto)}</b>`).join(' · ')}</div>` : '';
+    const det = f.abierto === m.id && rr.length ? `<div class="mut sm" style="padding:6px 0 2px 44px">Repartido: ${rr.map(r => `${esc(r.villa)}${r.depto ? ' ' + esc(r.depto) : ''} <b>${fmt(r.monto)}</b>`).join(' · ')}</div>` : '';
     const sub = [m.categoria, m.pago, m.folio].filter(Boolean).map(esc).join(' · ');
-    return `<div data-cnrow="${esc(m.id)}" style="padding:8px 0;border-bottom:1px solid var(--line);${rr.length ? 'cursor:pointer' : ''}"><div style="display:flex;gap:10px;align-items:baseline"><span class="mut sm" style="width:34px;flex:none">${dd(m.fecha)}</span><div class="grow" style="min-width:0"><div>${esc(m.concepto || '—')}${m.comentarios ? ` <span class="mut sm">· ${esc(m.comentarios)}</span>` : ''}</div><div class="mut sm">${esc(m.villa || 'Sin villa')}${rr.length ? ` (${rr.length} villas)` : ''} · ${sub}${m.tipo === 'PRESTAMO' ? ' · PRÉSTAMO' : ''}</div></div><b style="${col};white-space:nowrap">${m.tipo === 'INGRESO' ? '+' : ''}${fmt(monto)}</b></div>${det}</div>`;
+    return `<div data-cnrow="${esc(m.id)}" style="padding:8px 0;border-bottom:1px solid var(--line);${rr.length ? 'cursor:pointer' : ''}"><div style="display:flex;gap:10px;align-items:baseline"><span class="mut sm" style="width:34px;flex:none">${dd(m.fecha)}</span><div class="grow" style="min-width:0"><div>${esc(m.concepto || '—')}${m.comentarios ? ` <span class="mut sm">· ${esc(m.comentarios)}</span>` : ''}</div><div class="mut sm">${esc(m.villa || 'Sin villa')}${m.depto ? ' ' + esc(m.depto) : ''}${rr.length ? ` (${new Set(rr.map(r => r.villa)).size} villas)` : ''} · ${sub}${m.tipo === 'PRESTAMO' ? ' · PRÉSTAMO' : ''}</div></div><b style="${col};white-space:nowrap">${m.tipo === 'INGRESO' ? '+' : ''}${fmt(monto)}</b></div>${det}</div>`;
   };
   el.innerHTML = `<div class="card"><h3 class="rh">Movimientos <span class="mut sm">(${lista.length})</span></h3>${lista.slice(0, f.lim).map(fila).join('') || '<div class="mut" style="padding:10px 0">Sin movimientos con esos filtros.</div>'}${lista.length > f.lim ? `<div style="text-align:center;padding-top:10px"><button class="btn ghost" data-cnmas>Ver más (${lista.length - f.lim})</button></div>` : ''}</div>`;
 }
