@@ -401,6 +401,7 @@ button.lnk[data-act=quitaradj]{background:none;border:0;padding:2px 4px;color:va
 input.autollenado{background:rgba(224,180,74,.16)!important;border-color:#e0b44a!important}
 .ingk{cursor:pointer}.ingk.on{outline:2px solid var(--navy);outline-offset:-2px}
 .ingtbl{width:100%;border-collapse:collapse;font-size:13px;white-space:nowrap}.ingtbl th,.ingtbl td{padding:6px 8px;border-bottom:1px solid var(--line)}.ingtbl th{text-align:left;color:var(--mut);font-weight:600}.ingtbl th.r,.ingtbl td.r{text-align:right}
+.rgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:10px}.rcard{background:var(--card);border-radius:14px;padding:12px 14px;box-shadow:0 1px 3px rgba(20,52,92,.08);cursor:pointer}.rtop{display:flex;align-items:center;gap:8px;margin-bottom:4px}.rk{width:22px;height:22px;border-radius:11px;background:var(--bg);color:var(--mut);font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:none}.rneto{font-size:20px;font-weight:800;white-space:nowrap}.rrow{display:flex;align-items:center;gap:8px;margin:4px 0}.rl{width:52px;flex:none;font-size:12px;color:var(--mut);margin-left:30px;width:60px}.rtr{flex:1;display:flex;gap:2px;height:8px;background:var(--line);border-radius:4px;overflow:hidden}.rtr i{display:block;height:100%;border-radius:0 4px 4px 0}.rv{font-size:12.5px;font-weight:700;min-width:74px;text-align:right}.rleg{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:8px}.rleg i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
 .cnseg{display:flex;gap:2px;padding:3px;border-radius:11px;background:var(--line);width:fit-content;margin:0 0 10px}.cnseg button{background:transparent;color:var(--navy);padding:7px 12px;border-radius:8px;font-weight:700;font-size:13.5px}.cnseg button.on{background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.15)}
 .ingtbl.cn{font-size:12.5px;white-space:normal}.ingtbl.cn th,.ingtbl.cn td{padding:6px 4px}.ingtbl.cn td.r,.ingtbl.cn th.r{white-space:nowrap}
 .ingtbl tbody tr{cursor:pointer}.ingtbl tbody tr:hover,.ingtbl tbody tr.on{background:var(--infobg)}.ingtbl tfoot td{border-top:2px solid var(--line);border-bottom:0}
@@ -820,6 +821,48 @@ window.addEventListener('message', ev => {
 /* ===================== CANCÚN (copia del Google Sheet REPORTE CANCUN 2026) ===================== */
 const veCancun = () => !!S.perfil?.puede_cancun;   // solo quien tenga perfiles.puede_cancun (hoy: Pedro)
 const CN_COMP = 'VARIAS / COMPARTIDO';
+const CN_IMP = 'IMPUESTOS (HOSPEDAJE)';   // el impuesto sobre hospedaje no se reparte entre villas: va aparte
+/* Rentabilidad por villa: ingresos, gastos directos y parte de gastos compartidos de cada villa */
+function pintaRent() {
+  const D = S.cnD, B = $('#cnBody'); if (!D || !B) return;
+  const r = S.cr = S.cr || { mes: '', ord: 'neto' };
+  const meses = [...new Set(D.mov.map(m => String(m.fecha).slice(0, 7)))].sort().reverse();
+  if (r.mes && !meses.includes(r.mes)) r.mes = '';
+  const V = new Map();
+  D.parts.filter(p => (p.m.tipo === 'INGRESO' || p.m.tipo === 'EGRESO') && (!r.mes || String(p.m.fecha).slice(0, 7) === r.mes)).forEach(p => {
+    if (!V.has(p.villa)) V.set(p.villa, { v: p.villa, ing: 0, dir: 0, comp: 0 });
+    const o = V.get(p.villa);
+    if (p.m.tipo === 'INGRESO') o.ing += p.monto; else if (p.m.villa === CN_COMP) o.comp += p.monto; else o.dir += p.monto;
+  });
+  const GEN = ['CANCUN', 'Sin villa', CN_IMP];
+  const all = [...V.values()].map(o => ({ ...o, gas: o.dir + o.comp, neto: o.ing - o.dir - o.comp, mar: o.ing > 0 ? (o.ing - o.dir - o.comp) / o.ing : null }));
+  const vil = all.filter(o => !GEN.includes(o.v) && (o.ing || o.gas)), gen = all.filter(o => GEN.includes(o.v));
+  const ord = { neto: (a, b) => b.neto - a.neto, mar: (a, b) => (b.mar ?? -9) - (a.mar ?? -9), ing: (a, b) => b.ing - a.ing, gas: (a, b) => b.gas - a.gas }[r.ord];
+  vil.sort(ord);
+  const T = vil.reduce((t, o) => ({ ing: t.ing + o.ing, dir: t.dir + o.dir, comp: t.comp + o.comp }), { ing: 0, dir: 0, comp: 0 });
+  const IMPT = gen.filter(o => o.v === CN_IMP).reduce((s, o) => s + o.gas, 0), G = gen.filter(o => o.v !== CN_IMP).reduce((s, o) => s + o.gas, 0), net = T.ing - T.dir - T.comp - G - IMPT;
+  const mx = Math.max(1, ...vil.map(o => Math.max(o.ing, o.gas)));
+  const sg = (n, f2) => n < 0 ? '-' + f2(-n) : f2(n);
+  const pct = x => x == null ? '–' : Math.round(x * 100) + '%';
+  const w = n => Math.max(n > 0 ? 1.5 : 0, n / mx * 100).toFixed(1) + '%';
+  const bad = 'var(--bad,#c0392b)';
+  const card = (o, i) => `<div class="rcard" data-rvilla="${esc(o.v)}"><div class="rtop"><span class="rk">${i + 1}</span><b class="grow">${esc(o.v)}</b><span class="rneto" style="${o.neto < 0 ? 'color:' + bad : ''}">${sg(o.neto / 100, fmtK)}</span></div>
+    <div class="mut sm" style="margin:-2px 0 8px 30px">Ganancia${r.mes ? ' de ' + esc(mesLbl(r.mes)) : ' del año'} · margen <b style="color:var(--ink)">${pct(o.mar)}</b></div>
+    <div class="rrow"><span class="rl">Ingresos</span><div class="rtr"><i style="width:${w(o.ing)};background:var(--navy)"></i></div><span class="rv">${sg(o.ing / 100, fmtK)}</span></div>
+    <div class="rrow"><span class="rl">Gastos</span><div class="rtr"><i style="width:${w(o.dir)};background:var(--gold)"></i><i style="width:${w(o.comp)};background:var(--gold);opacity:.5"></i></div><span class="rv">${fmtK(o.gas / 100)}</span></div>
+    <div class="mut sm" style="margin:2px 0 0 30px">Directos ${fmtK(o.dir / 100)} · Compartidos ${fmtK(o.comp / 100)}</div></div>`;
+  const peor = vil.length > 1 ? vil[vil.length - 1] : null, mejor = vil[0];
+  B.innerHTML = `<div class="mut sm" style="margin-bottom:8px">Cuánto gana o pierde cada villa: sus ingresos menos sus gastos directos y la parte que le toca de los gastos compartidos. Toca una villa para ver sus movimientos.</div>
+    <div class="filters" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px"><select id="crMes"><option value="">Todo 2026</option>${meses.map(m => `<option value="${m}" ${r.mes === m ? 'selected' : ''}>${esc(mesLbl(m))}</option>`).join('')}</select><select id="crOrd">${[['neto', 'Orden: mayor ganancia'], ['mar', 'Orden: mayor margen'], ['ing', 'Orden: más ingresos'], ['gas', 'Orden: más gastos']].map(([k, l]) => `<option value="${k}" ${r.ord === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+    <div class="kpis"><div class="kpi"><div class="mut sm">Ingresos de villas</div><div class="big" style="color:var(--ok)">${fmtK(T.ing / 100)}</div></div><div class="kpi"><div class="mut sm">Gastos de villas</div><div class="big">${fmtK((T.dir + T.comp) / 100)}</div></div><div class="kpi"><div class="mut sm">Impuesto sobre hospedaje</div><div class="big">${fmtK(IMPT / 100)}</div></div><div class="kpi"><div class="mut sm">Gastos generales (sin villa)</div><div class="big">${fmtK(G / 100)}</div></div><div class="kpi" style="grid-column:1/-1"><div class="mut sm">Resultado total</div><div class="big" style="${net < 0 ? 'color:' + bad : ''}">${sg(net / 100, fmtK)}</div></div></div>
+    ${mejor ? `<div class="mut sm" style="margin:-2px 0 10px">Mejor: <b style="color:var(--ink)">${esc(mejor.v)}</b> (${sg(mejor.neto / 100, fmtK)})${peor ? ` · Peor: <b style="color:var(--ink)">${esc(peor.v)}</b> (${sg(peor.neto / 100, fmtK)})` : ''}</div>` : ''}
+    <div class="rleg mut sm"><span><i style="background:var(--navy)"></i>Ingresos</span><span><i style="background:var(--gold)"></i>Gasto directo</span><span><i style="background:var(--gold);opacity:.5"></i>Gasto compartido</span></div>
+    <div class="rgrid">${vil.map(card).join('') || '<div class="mut">Sin datos en ese periodo.</div>'}</div>
+    <div class="mut sm" style="margin-top:10px">El impuesto sobre hospedaje (${fmtK(IMPT / 100)}) y los gastos generales (${fmtK(G / 100)}) no se reparten entre villas, por eso no aparecen dentro de la ganancia de cada una.</div>`;
+  $('#crMes').onchange = e => { r.mes = e.target.value; pintaRent(); };
+  $('#crOrd').onchange = e => { r.ord = e.target.value; pintaRent(); };
+  B.onclick = ev => { const c = ev.target.closest('[data-rvilla]'); if (!c) return; S.cn = S.cn || {}; S.cn.villa = c.dataset.rvilla; S.cn.mes = r.mes; S.cn.lim = 100; S.cn.abierto = ''; S.cnVista = 'mov'; viewCancun(); };
+}
 /* Cuadre de folios: Caja Efectivo (historial) contra los gastos en efectivo de Cancún, por mes y proveedor unificado */
 const CQ_EST = { 'CUADRA': 'Cuadra', 'MONTO DISTINTO': 'Monto distinto', 'SOLO CAJA': 'Solo en Caja', 'SOLO APP': 'Solo en la app', 'POSTERIOR AL CORTE DE CAJA': 'Después del corte de Caja', 'ENE-ABR (CAJA SIN FOLIO)': 'Ene-abr (Caja sin folio)' };
 async function viewCnCuadre() {
@@ -854,7 +897,7 @@ function pintaCnCuadre() {
 async function viewCancun() {
   const tok = S.cnTok = (S.cnTok || 0) + 1;
   S.cn = S.cn || { mes: '', villa: '', cat: '', tipo: '', q: '', lim: 100, abierto: '' };
-  $('#view').innerHTML = `<div class="pagehead"><h2>Cancún</h2><span class="sub">Villas de renta · 2026</span></div><div class="cnseg" role="tablist"><button data-cnvista="mov" class="${S.cnVista === 'cuadre' ? '' : 'on'}">Movimientos</button><button data-cnvista="cuadre" class="${S.cnVista === 'cuadre' ? 'on' : ''}">Cuadre con Caja</button></div><div id="cnBody"><div class="sk"></div><div class="sk"></div></div>`;
+  $('#view').innerHTML = `<div class="pagehead"><h2>Cancún</h2><span class="sub">Villas de renta · 2026</span></div><div class="cnseg" role="tablist"><button data-cnvista="mov" class="${!S.cnVista || S.cnVista === 'mov' ? 'on' : ''}">Movimientos</button><button data-cnvista="rent" class="${S.cnVista === 'rent' ? 'on' : ''}">Rentabilidad</button><button data-cnvista="cuadre" class="${S.cnVista === 'cuadre' ? 'on' : ''}">Cuadre con Caja</button></div><div id="cnBody"><div class="sk"></div><div class="sk"></div></div>`;
   $('#view').querySelectorAll('[data-cnvista]').forEach(b => b.onclick = () => { S.cnVista = b.dataset.cnvista; viewCancun(); });
   if (S.cnVista === 'cuadre') return viewCnCuadre();
   try {
@@ -865,6 +908,7 @@ async function viewCancun() {
     if (S.tab !== 'cancun' || tok !== S.cnTok) return;
     const gMov = new Map(gc.map(g => [g.id, g.id_mov])), porMov = new Map();
     rep.forEach(r => { const m = gMov.get(r.id_gasto); if (!m) return; if (!porMov.has(m)) porMov.set(m, []); porMov.get(m).push(r); });
+    mov.forEach(m => { if (m.categoria === 'IMPUESTO HOSPEDAJE') { m.villa = CN_IMP; porMov.delete(m.id); } });
     mov.sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)) || String(b.id).localeCompare(String(a.id)));
     const parts = [];   // cada movimiento, o cada parte de un gasto compartido, con su villa
     mov.forEach(m => {
@@ -873,7 +917,7 @@ async function viewCancun() {
       else parts.push({ m, villa: m.villa || 'Sin villa', monto: cents(m.monto), cat: m.categoria });
     });
     S.cnD = { mov, parts, porMov, sync: mov.reduce((s, m) => m.sync_en && m.sync_en > s ? m.sync_en : s, '') };
-    pintaCn();
+    if (S.cnVista === 'rent') pintaRent(); else pintaCn();
   } catch (e) { if (tok === S.cnTok && $('#cnBody')) $('#cnBody').innerHTML = `<div class="warnbox">${esc(errMsg(e))}</div>`; }
 }
 function pintaCn() {
