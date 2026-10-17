@@ -817,7 +817,7 @@ window.addEventListener('message', ev => {
   if (d.caja === 'sesion') sb.auth.getSession().then(({ data }) => { if (!data.session && S.perfil) { S.perfil = null; location.reload(); } });
 });
 /* ===================== CANCÚN (copia del Google Sheet REPORTE CANCUN 2026) ===================== */
-const veCancun = () => veIngresos();
+const veCancun = () => !!S.perfil?.puede_cancun;   // solo quien tenga perfiles.puede_cancun (hoy: Pedro)
 const CN_COMP = 'VARIAS / COMPARTIDO';
 async function viewCancun() {
   const tok = S.cnTok = (S.cnTok || 0) + 1;
