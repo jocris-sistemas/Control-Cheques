@@ -1610,13 +1610,14 @@ async function openDetail(id) {
     try {
       const { data: lins } = await sb.from('cheque_lineas').select('*').eq('cheque_id', id).order('orden', { ascending: true });
       if (lins && lins.length) {
+        const esFac = /^FOLIO /.test(lins[0].hoja || '');
         const per = lins[0].periodo ? fdia(lins[0].periodo).replace(/^\d+ de /, '') : '';
         const grupos = []; lins.forEach(l => { let g = grupos.find(x => x.k === (l.folio_id || l.grupo)); if (!g) { g = { k: l.folio_id || l.grupo, grupo: l.grupo, folio: (c.cheque_folios || []).find(f => f.id === l.folio_id), rows: [] }; grupos.push(g); } g.rows.push(l); });
         const sm = (rows, k) => rows.reduce((a, r) => a + cents(r[k]), 0) / 100;
         lineasHtml = `<details class="card" data-lin="1" style="padding:8px 10px;margin-top:8px"><summary><b>Detalle de líneas</b> · ${esc(lins[0].concepto || '')} ${esc(per)} · ${lins.length} líneas · ${fmt(sm(lins, 'total'))}</summary>
-          ${grupos.map(g => { const t = sm(g.rows, 'total'); const dif = g.folio ? cents(t) - cents(g.folio.monto) : 0; return `<div style="margin-top:10px"><div class="row"><b class="grow">${esc(g.grupo || '')}${g.folio ? ' · folio ' + esc(g.folio.folio_numero) : ''}</b><span class="money">${fmt(t)}</span></div>
+          ${grupos.map(g => { const t = sm(g.rows, 'total'); const dif = g.folio ? cents(t) - cents(g.folio.monto) : 0; return `<div style="margin-top:10px"><div class="row"><b class="grow">${esFac && g.folio ? 'Folio ' + esc(g.folio.folio_numero) : esc(g.grupo || '') + (g.folio ? ' · folio ' + esc(g.folio.folio_numero) : '')}</b><span class="money">${fmt(t)}</span></div>
             ${dif ? `<div class="mut sm">El folio es por ${fmt(g.folio.monto)}: diferencia de ${fmt(dif / 100)} por redondeo de la factura.</div>` : ''}
-            <table><thead><tr><th>Línea</th><th>Nombre</th><th class="r">Monto</th><th class="r">IVA</th><th class="r">Total</th></tr></thead><tbody>${g.rows.map(r => `<tr><td>${esc(r.linea || '')}<div class="mut sm">${esc(r.celular || '')}</div></td><td>${esc(r.nombre || '')}</td><td class="r money">${fmt(r.monto)}</td><td class="r money">${fmt(r.iva)}</td><td class="r money">${fmt(r.total)}</td></tr>`).join('')}</tbody></table></div>`; }).join('')}</details>`;
+            <table><thead><tr><th>${esFac ? '# Factura' : 'Línea'}</th><th>${esFac ? 'Obra' : 'Nombre'}</th>${esFac ? '' : '<th class="r">Monto</th><th class="r">IVA</th>'}<th class="r">Total</th></tr></thead><tbody>${g.rows.map(r => `<tr><td>${esc(r.linea || '')}<div class="mut sm">${esc(r.celular || '')}</div></td><td>${esc(r.nombre || '')}</td>${esFac ? '' : `<td class="r money">${fmt(r.monto)}</td><td class="r money">${fmt(r.iva)}</td>`}<td class="r money">${fmt(r.total)}</td></tr>`).join('')}</tbody></table></div>`; }).join('')}</details>`;
       }
     } catch (e) { /* el detalle de líneas es opcional */ }
     if (tk !== S.detTok) return;
@@ -2203,6 +2204,8 @@ async function horizTodos(motivo) {
   out.innerHTML = `<b>Listo.</b> Ajustados: ${ok} · sin cambio: ${omit}${fail ? ' · con error: ' + fail : ''}`; if (btn) btn.disabled = false; refreshView(true);
 }
 async function subirArchivo(chequeId, tipo, files, nombreFijo, opts = {}) {
+  // Varios PDFs a la vez (p. ej. todas las facturas de un cheque): cada uno se sube como documento aparte.
+  if (files.length > 1 && !nombreFijo && files.every(f => f.type === 'application/pdf')) { for (const f of files) await subirArchivo(chequeId, tipo, [f], null, opts); return; }
   const blob = await filesToPdf(files);
   // En un cheque cancelado, la foto (tipo "otro") siempre se llama "Foto cheque cancelado".
   if (tipo === 'otro' && !nombreFijo) { try { const q = await sb.from('cheques').select('estatus').eq('id', chequeId).maybeSingle(); if (q.data && q.data.estatus === 'cancelado') nombreFijo = 'Foto cheque cancelado.pdf'; } catch (e) { } }
