@@ -636,6 +636,8 @@ const folioTxt = f => f.es_ajuste ? 'AJUSTE' : f.sin_folio ? 'SIN FOLIO' : f.fol
 const foliosDeCancelado = c => { const all = c.cheque_folios || []; if (!all.length) return []; const t = f => Date.parse(f.creado_en) || 0; const mx = Math.max(...all.map(t)); return all.filter(f => !f.activo && Math.abs(t(f) - mx) < 5000); };
 const puedeReexpedir = c => c.estatus === 'cancelado' && !c.es_historial && puedeTocar(c) && foliosDeCancelado(c).length > 0;
 const foliosActivos = c => (c.cheque_folios || []).filter(f => f.activo);
+// Si todos los folios son SIN FOLIO (sin cargo) no se muestra "1 folio": solo el resumen.
+const folResumen = (fol, resumen) => fol.length && fol.every(f => f.sin_folio) ? `<b>${resumen}</b>` : `<b>${fol.length} folio${fol.length === 1 ? '' : 's'}</b><span class="mut">${resumen ? ' · ' + resumen : ''}</span>`;
 const sumFolios = c => foliosActivos(c).reduce((a, f) => a + cents(f.monto), 0);
 const archActivos = (c, tipo) => (c.archivos || []).filter(a => a.activo && (!tipo || a.tipo === tipo));
 
@@ -1161,7 +1163,7 @@ function cardPend(c, rechazado = false) {
     <div class="cd-body">
     ${c.concepto ? `<div class="cd-con">${esc(c.concepto)}</div>` : ''}
     ${alertas ? `<div class="alerts">${alertas}</div>` : ''}
-    <details class="fol"><summary><b>${fol.length} folio${fol.length === 1 ? '' : 's'}</b><span class="mut">${resumen ? ' · ' + resumen : ''}</span></summary>
+    <details class="fol"><summary>${folResumen(fol, resumen)}</summary>
       <table><thead><tr><th>Cargo</th><th>Folio</th><th>Detalle</th><th class="r">Monto</th></tr></thead><tbody>
       ${fol.map(f => `<tr><td>${f.es_ajuste ? '' : esc(cargoNombre(f.cargo_id))}</td><td>${f.es_ajuste ? '' : f.sin_folio ? '<span class="chip warn">SIN FOLIO</span>' : esc(f.folio_numero)}</td><td>${esc([f.proveedor, f.descripcion, f.obra].filter(Boolean).join(' · '))}${detLin(c, f)}${f.sin_folio && f.sin_folio_motivo ? `<div class="mut sm">Motivo: ${esc(f.sin_folio_motivo)}</div>` : ''}</td><td class="r money">${fmt(f.monto)}</td></tr>`).join('')}
       </tbody></table></details>
@@ -1563,7 +1565,7 @@ function cardHist(c) {
     <div class="cd-body">
     ${c.concepto ? `<div class="cd-con">${esc(c.concepto)}</div>` : ''}
     <div class="alerts">${estadoChip(c)}${alertas}</div>
-    ${fol.length ? `<details class="fol"><summary><b>${fol.length} folio${fol.length === 1 ? '' : 's'}</b><span class="mut">${resumen ? ' · ' + resumen : ''}</span></summary>
+    ${fol.length ? `<details class="fol"><summary>${folResumen(fol, resumen)}</summary>
       <table><thead><tr><th>Cargo</th><th>Folio</th><th>Detalle</th><th class="r">Monto</th></tr></thead><tbody>
       ${fol.map(f => `<tr><td>${f.es_ajuste ? '' : esc(cargoNombre(f.cargo_id))}</td><td>${f.es_ajuste ? '' : f.sin_folio ? '<span class="chip warn">SIN FOLIO</span>' : esc(f.folio_numero)}</td><td>${esc([f.proveedor, f.descripcion, f.obra].filter(Boolean).join(' · '))}${detLin(c, f)}${f.sin_folio && f.sin_folio_motivo ? `<div class="mut sm">Motivo: ${esc(f.sin_folio_motivo)}</div>` : ''}</td><td class="r money">${fmt(f.monto)}</td></tr>`).join('')}
       </tbody></table></details>` : ''}
