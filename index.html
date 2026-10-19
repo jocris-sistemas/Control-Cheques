@@ -1256,7 +1256,8 @@ async function viewRep() {
 }
 
 /* ===================== VISTA: INGRESOS (cuenta Excer Afirme) ===================== */
-const veIngresos = () => esAdmin() || !!S.perfil?.puede_archivos;
+const veIngresos = () => esAdmin() || !!S.perfil?.puede_archivos || !!S.perfil?.puede_ver_ingresos_solo;
+const editaIng = () => esAdmin() || !!S.perfil?.puede_archivos;   // quien solo puede ver no importa ni clasifica
 const ING_CATS = [['RENE', 'Rene'], ['EGBERT', 'Egbert'], ['OMAR', 'Omar'], ['CANCUN', 'Cancún'], ['OTROS', 'Otros']];
 const ingCatTxt = c => (ING_CATS.find(x => x[0] === c) || [0, 'Por clasificar'])[1];
 const ctaCorta = c => String(c || 'Excer Afirme').split(' ')[0];
@@ -1301,8 +1302,9 @@ function pintaIng() {
     <div class="card" style="overflow:auto"><h3 class="rh">Por mes</h3><table class="ingtbl"><thead><tr><th>Mes</th>${ING_CATS.map(([, l]) => `<th class="r">${l}</th>`).join('')}<th class="r">Total</th></tr></thead><tbody>${tr}</tbody><tfoot><tr><td><b>Total</b></td>${tot}<td class="r"><b>${fmtK(sum(all.filter(esExcer)) / 100)}</b></td></tr></tfoot></table>${hayOtras ? '<div class="mut sm" style="margin-top:6px">El Total es solo de la cuenta Excer. Rene, Egbert y Omar suman además sus depósitos de otras cuentas (ITE), que no entran al Total.</div>' : ''}</div>
     <div id="ingLista"></div>`;
   const B = $('#ingBody');
-  $('#ingImp').onclick = () => $('#ingFile').click();
-  $('#ingFile').onchange = e => { const fl = e.target.files[0]; e.target.value = ''; if (fl) ingImportar(fl); };
+  if (!editaIng()) $('#ingImp')?.closest('.card')?.remove();
+  if ($('#ingImp')) $('#ingImp').onclick = () => $('#ingFile').click();
+  if ($('#ingFile')) $('#ingFile').onchange = e => { const fl = e.target.files[0]; e.target.value = ''; if (fl) ingImportar(fl); };
   $('#ingMes').onchange = e => { f.mes = e.target.value; f.lim = 120; pintaIng(); };
   $('#ingQ').oninput = e => { f.q = e.target.value; f.lim = 120; pintaIngLista(); };
   B.onclick = ev => {
@@ -1331,7 +1333,7 @@ function pintaIngLista() {
   const opts = c => `<option value="">Por clasificar</option>` + ING_CATS.map(([k, l]) => `<option value="${k}" ${c === k ? 'selected' : ''}>${l}</option>`).join('');
   const titulo = f.cat === 'NULL' ? 'Por clasificar' : f.cat ? ingCatTxt(f.cat) : 'Todos los depósitos';
   box.innerHTML = resCta + `<div class="card"><h3 class="rh">${titulo}${f.mes ? ' · ' + mesLbl(f.mes) : ''} <span class="mut sm">· ${a.length} depósito${a.length === 1 ? '' : 's'} · ${fmt(tot / 100)}</span></h3>
-    ${a.slice(0, f.lim).map(r => `<div class="ingrow"><div class="grow" style="min-width:0"><div style="font-weight:600;overflow-wrap:anywhere">${esc(ingNombre(r))}</div><div class="mut sm">${fdate(r.fecha)}${r.concepto && r.pagador ? ' · ' + esc(String(r.concepto).slice(0, 40)) : ''}${r.nota ? ' · ' + esc(r.nota) : ''}${esExcer(r) ? '' : ' · <b>' + esc(r.cuenta) + '</b> (fuera del Total)'}</div></div><div class="money" style="white-space:nowrap;font-weight:700">${fmt(r.monto)}</div><select class="ingsel c-${r.categoria || 'NULL'}" data-ingsel="${r.id}" aria-label="Clasificar">${opts(r.categoria)}</select></div>`).join('') || '<div class="mut sm">Sin depósitos.</div>'}
+    ${a.slice(0, f.lim).map(r => `<div class="ingrow"><div class="grow" style="min-width:0"><div style="font-weight:600;overflow-wrap:anywhere">${esc(ingNombre(r))}</div><div class="mut sm">${fdate(r.fecha)}${r.concepto && r.pagador ? ' · ' + esc(String(r.concepto).slice(0, 40)) : ''}${r.nota ? ' · ' + esc(r.nota) : ''}${esExcer(r) ? '' : ' · <b>' + esc(r.cuenta) + '</b> (fuera del Total)'}</div></div><div class="money" style="white-space:nowrap;font-weight:700">${fmt(r.monto)}</div>${editaIng() ? `<select class="ingsel c-${r.categoria || 'NULL'}" data-ingsel="${r.id}" aria-label="Clasificar">${opts(r.categoria)}</select>` : `<span class="ingsel c-${r.categoria || 'NULL'}" style="display:inline-block;text-align:center">${ingCatTxt(r.categoria)}</span>`}</div>`).join('') || '<div class="mut sm">Sin depósitos.</div>'}
     ${a.length > f.lim ? `<div style="text-align:center;margin-top:10px"><button class="btn ghost sm" data-ingmas="1">Ver más (${a.length - f.lim})</button></div>` : ''}</div>`;
 }
 async function ingClasificar(id, cat) {
