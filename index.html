@@ -132,7 +132,7 @@ nav.tabs button.on svg{transform:translateY(-1px);stroke:var(--navy)}
 nav.tabs button.on::before{content:"";position:absolute;top:-5px;left:30%;right:30%;height:3px;border-radius:0 0 4px 4px;background:var(--gold)}
 nav.tabs .badge{top:2px;left:calc(50% + 6px);box-shadow:0 0 0 2px #fff}
 main{padding:16px 14px 24px}
-.pagehead{display:flex;align-items:flex-end;gap:10px;margin:4px 2px 14px}
+.pagehead{display:flex;align-items:flex-end;gap:10px;margin:4px 2px 14px;position:relative}.sello{position:absolute;top:-4px;right:2px;font-size:10.5px;line-height:1.25;color:var(--mut);text-align:right;white-space:nowrap;pointer-events:none}.sello b{font-weight:700;color:var(--ink)}
 .pagehead h2{margin:0;font-size:22px;letter-spacing:-.01em}
 .pagehead .sub{color:var(--mut);font-size:13px;margin-bottom:2px}
 .card{border-radius:var(--radius);box-shadow:var(--shadow);border:1px solid #e6eaf1}
@@ -709,7 +709,7 @@ async function boot() {
   try { const { data: fr } = await sb.from('firmas').select('imagen').maybeSingle(); S.firma = fr ? fr.imagen : null; } catch (e) { S.firma = null; }
   S.tab = ['pend', 'cheques', 'rep', 'ing'].includes(navGet('jc_tab')) ? navGet('jc_tab') : 'pend'; // al recargar vuelve a la última pestaña (si no, Pendientes)
   renderShell();
-  refreshPendCount(); cargarAlertas(true); resincronizarPush();
+  refreshPendCount(); cargarAlertas(true); resincronizarPush(); selloActualiza();
   if (!boot._iv) boot._iv = setInterval(() => { if (S.perfil) refreshPendCount(); }, 60000);
 }
 async function loadCatalogs() {
@@ -790,7 +790,7 @@ function abrirModulo(m, desdeHist) {
   const w = $('#cajaWrap'); if (w) w.classList.toggle('hidden', !caja);
   if (caja) cajaFrame();
   altoHeader();
-  if (!caja) { refreshPendCount(); refreshView(true); }
+  if (!caja) { refreshPendCount(); refreshView(true); selloActualiza(); }
 }
 // Mientras Acumulado no está en su Inicio, se deja una entrada "guardia": el botón atrás la consume y Acumulado regresa una pantalla.
 function revisaGuardia() {
@@ -998,6 +998,35 @@ function pintaCnLista() {
   };
   el.innerHTML = `<div class="card"><h3 class="rh">Movimientos <span class="mut sm">(${lista.length})</span></h3>${lista.slice(0, f.lim).map(fila).join('') || '<div class="mut" style="padding:10px 0">Sin movimientos con esos filtros.</div>'}${lista.length > f.lim ? `<div style="text-align:center;padding-top:10px"><button class="btn ghost" data-cnmas>Ver más (${lista.length - f.lim})</button></div>` : ''}</div>`;
 }
+/* Fecha de última actualización en la esquina de cada apartado */
+const SELLO_FUENTE = {
+  ing: { t: 'ingresos', c: 'creado_en', f: 'fecha', a: 'Importado', b: 'Último depósito' },
+  cancun: { t: 'cancun_movimientos', c: 'sync_en', f: 'fecha', a: 'Datos del Sheet', b: 'Último movimiento' },
+  pend: { t: 'cheques', c: 'actualizado_en', a: 'Actualizado' },
+  cheques: { t: 'cheques', c: 'actualizado_en', a: 'Actualizado' },
+  rep: { t: 'cheques', c: 'actualizado_en', a: 'Actualizado' }
+};
+const selloTxt = {};
+const selloFecha = iso => { try { return new Date(iso).toLocaleString('es-MX', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).replace(/\./g, ''); } catch (e) { return ''; } };
+function selloPon() {
+  const ph = document.querySelector('#view .pagehead'); if (!ph || ph.querySelector('.sello')) return;
+  const t = selloTxt[S.tab]; if (!t) return;
+  const e = document.createElement('span'); e.className = 'sello'; e.innerHTML = t; ph.appendChild(e);
+}
+let selloObs = null;
+async function selloActualiza() {
+  if (!selloObs && $('#view')) { selloObs = new MutationObserver(selloPon); selloObs.observe($('#view'), { childList: true, subtree: true }); }
+  const tab = S.tab, d = SELLO_FUENTE[tab]; if (!d) return;
+  try {
+    const cols = d.f ? d.c + ',' + d.f : d.c;
+    const { data } = await sb.from(d.t).select(cols).order(d.c, { ascending: false }).limit(1);
+    const r = data && data[0]; if (!r || !r[d.c]) return;
+    let h = esc(d.a) + ': <b>' + esc(selloFecha(r[d.c])) + '</b>';
+    if (d.f && r[d.f]) { const q = await sb.from(d.t).select(d.f).order(d.f, { ascending: false }).limit(1); const m = q.data && q.data[0]; if (m && m[d.f]) h += '<br>' + esc(d.b) + ': <b>' + esc(fdate(m[d.f])) + '</b>'; }
+    selloTxt[tab] = h; if (S.tab === tab) selloPon();
+  } catch (e) { }
+}
+
 function go(tab) {
   S.tab = tab; navSet('jc_tab', tab);
   document.querySelectorAll('nav.tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
@@ -1005,7 +1034,7 @@ function go(tab) {
   { const b = $('#selbar'); if (b) b.classList.add('hidden'); }
   ({ pend: viewPend, cheques: viewCheques, nuevo: viewNuevo, series: viewSeries, bit: viewBit, rep: viewRep, ing: viewIng, cancun: viewCancun }[tab])();
   window.scrollTo(0, 0);
-  refreshPendCount(); cargarAlertas();
+  refreshPendCount(); cargarAlertas(); selloActualiza();
 }
 
 /* ===================== CONSULTAS ===================== */
@@ -1297,7 +1326,7 @@ function pintaIng() {
   $('#ingBody').innerHTML = `
     <div class="card" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><div class="grow"><b>Importar movimientos del banco</b><div class="mut sm">Sube el CSV de Afirme. Solo se agregan los depósitos nuevos; los que ya estaban se omiten.</div></div><button class="btn gold sm" id="ingImp">Importar CSV</button><input type="file" id="ingFile" accept=".csv,.txt,text/csv" class="hidden"></div>
     ${sinC.length ? `<div class="warnbox" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><div class="grow"><b>${sinC.length} depósito${sinC.length === 1 ? '' : 's'} por clasificar</b> · ${fmt(sum(sinC) / 100)}</div><button class="btn gold sm" data-ingcat="NULL">Verlos</button></div>` : ''}
-    <div class="filters" style="margin:10px 0"><select id="ingMes" aria-label="Mes"><option value="">Todo 2026</option>${meses.map(m => `<option value="${m}" ${f.mes === m ? 'selected' : ''}>${mesLbl(m)}</option>`).join('')}</select><input id="ingQ" type="text" placeholder="Buscar pagador, concepto o monto" value="${esc(f.q)}"></div>
+    <div class="filters" style="margin:10px 0"><select id="ingMes" aria-label="Mes"><option value="">Todo 2026</option>${meses.map(m => `<option value="${m}" ${f.mes === m ? 'selected' : ''}>${mesLbl(m)}</option>`).join('')}</select><select id="ingCat" aria-label="Concepto"><option value="">Todos los conceptos</option>${ING_CATS.map(([k, l]) => `<option value="${k}" ${f.cat === k ? 'selected' : ''}>${l}</option>`).join('')}<option value="NULL" ${f.cat === 'NULL' ? 'selected' : ''}>Por clasificar</option></select><input id="ingQ" type="text" placeholder="Buscar pagador, concepto o monto" value="${esc(f.q)}"></div>
     <div class="kpis k6">${kpis}</div>
     <div class="card" style="overflow:auto"><h3 class="rh">Por mes</h3><table class="ingtbl"><thead><tr><th>Mes</th>${ING_CATS.map(([, l]) => `<th class="r">${l}</th>`).join('')}<th class="r">Total</th></tr></thead><tbody>${tr}</tbody><tfoot><tr><td><b>Total</b></td>${tot}<td class="r"><b>${fmtK(sum(all.filter(esExcer)) / 100)}</b></td></tr></tfoot></table>${hayOtras ? '<div class="mut sm" style="margin-top:6px">El Total es solo de la cuenta Excer. Rene, Egbert y Omar suman además sus depósitos de otras cuentas (ITE), que no entran al Total.</div>' : ''}</div>
     <div id="ingLista"></div>`;
@@ -1314,7 +1343,7 @@ function pintaIng() {
     if (ev.target.closest('[data-ingmas]')) { f.lim += 120; pintaIngLista(); }
   };
   B.onkeydown = ev => { if (ev.key !== 'Enter') return; const k = ev.target.closest('[data-ingcat],[data-ingcta]'); if (k) k.click(); };
-  B.onchange = ev => { const s = ev.target.closest('[data-ingsel]'); if (s) ingClasificar(s.dataset.ingsel, s.value || null); };
+  B.onchange = ev => { if (ev.target.id === 'ingCat') { f.cat = ev.target.value; f.cuenta = ''; f.lim = 120; return pintaIng(); } const s = ev.target.closest('[data-ingsel]'); if (s) ingClasificar(s.dataset.ingsel, s.value || null); };
   pintaIngLista();
 }
 function pintaIngLista() {
