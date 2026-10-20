@@ -2532,8 +2532,8 @@ async function viewNuevo(editCheque, copiaDe) {
   <div id="sumbar" class="sumbar"></div>
   <h3>Folio (archivo o foto)</h3>
   <div class="card">
-    <div class="row"><button class="btn ghost sm" data-act="pickfolio">Adjuntar folio (un solo archivo para todos)</button><span id="folInfo" class="mut sm">${F.folioFiles.length ? F.folioFiles.length + ' archivo(s) listo(s) para subir' : 'Sin adjuntar'}</span><button class="lnk sm" data-act="quitaradj" data-k="folio" id="folQuitar" ${F.folioFiles.length ? '' : 'hidden'}>Quitar</button></div>
-    <div class="mut sm" style="margin-top:6px">Un solo PDF o foto para todos los folios existentes; los folios generados por el sistema se guardan automáticamente.</div>
+    <div class="row"><button class="btn ghost sm" data-act="pickfolio">Adjuntar folio (archivo o foto)</button><span id="folInfo" class="mut sm">${F.folioFiles.length ? F.folioFiles.length + ' archivo(s) listo(s) para subir' : 'Sin adjuntar'}</span><button class="lnk sm" data-act="quitaradj" data-k="folio" id="folQuitar" ${F.folioFiles.length ? '' : 'hidden'}>Quitar</button></div>
+    <div class="mut sm" style="margin-top:6px">PDF o foto con los folios existentes. Las líneas «Sin folio» no llevan archivo y los folios generados por el sistema se guardan automáticamente.</div>
   </div>
   <h3>Factura</h3>
   <div class="card">
