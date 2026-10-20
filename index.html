@@ -185,6 +185,8 @@ body{font-variant-numeric:tabular-nums}
 .cd-top{display:flex;gap:12px;align-items:flex-start}
 .cd-ben{font-size:17px;font-weight:700;line-height:1.25;overflow-wrap:anywhere}
 .cd-sub{color:var(--mut);font-size:13.5px;margin-top:3px}
+.cd-num{display:inline-block;font-weight:800;font-size:15.5px;color:#0f2a4d;background:#e4ecf8;border-radius:7px;padding:1px 8px}
+:root[data-theme="dark"] .cd-num{background:#2a3a57;color:#e6efff}
 .cd-monto{font-size:22px;font-weight:800;letter-spacing:-.01em;white-space:nowrap}
 .cd-con{margin-top:8px;font-size:15px}
 .cd-meta{color:var(--mut);font-size:12.5px;margin-top:8px}
@@ -1124,11 +1126,9 @@ async function calcAvisos(pend) {
     for (const c of pend) {
       const av = [], ben = norm(c.beneficiario), m = cents(c.monto), f0 = new Date(c.fecha + 'T12:00:00');
       const dup = base.filter(r => r.id !== c.id && norm(r.beneficiario) === ben && cents(r.monto) === m && Math.abs(new Date(r.fecha + 'T12:00:00') - f0) <= 15 * 86400000);
-      if (dup.length) av.push(`POSIBLE DUPLICADO · cheque ${dup.map(d => d.numero_cheque).slice(0, 2).join(', ')}`);
       const prev = base.filter(r => r.id !== c.id && norm(r.beneficiario) === ben && cents(r.monto) > 0);
       const mx = prev.reduce((a, r) => Math.max(a, cents(r.monto)), 0);
       if (prev.length >= 2 && m >= 3 * mx && m >= 500000) av.push(`MONTO ATÍPICO · antes máx. ${fmt(mx / 100)}`);
-      else if (m >= 10000000) av.push('MONTO ALTO');
       for (const f of foliosActivos(c)) {
         if (f.sin_folio || !f.folio_numero) continue;
         const otro = fol.find(x => x.cheque_id !== c.id && x.cargo_id === f.cargo_id && String(x.folio_numero) === String(f.folio_numero));
@@ -1156,7 +1156,7 @@ function cardPend(c, rechazado = false) {
     <div class="cd-top">
       <div class="grow cd-id">
         <div class="cd-ben">${esc(c.beneficiario)}</div>
-        <div class="cd-sub">Cheque ${c.numero_cheque} · ${esc(chequeraNombre(c.chequera_id))} · ${fdate(c.fecha)}</div>
+        <div class="cd-sub"><span class="cd-num">Cheque ${c.numero_cheque}</span> · ${esc(chequeraNombre(c.chequera_id))} · ${fdate(c.fecha)}</div>
       </div>
       <div class="money cd-monto">${fmt(c.monto)}</div>
     </div>
@@ -1558,7 +1558,7 @@ function cardHist(c) {
     <div class="cd-top">
       <div class="grow cd-id">
         <div class="cd-ben">${esc(c.beneficiario)}</div>
-        <div class="cd-sub">Cheque ${c.numero_cheque} · ${esc(chequeraNombre(c.chequera_id))} · ${fdate(c.fecha)}</div>
+        <div class="cd-sub"><span class="cd-num">Cheque ${c.numero_cheque}</span> · ${esc(chequeraNombre(c.chequera_id))} · ${fdate(c.fecha)}</div>
       </div>
       <div class="money cd-monto">${fmt(c.monto)}</div>
     </div>
