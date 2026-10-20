@@ -412,6 +412,14 @@ input.autollenado{background:rgba(224,180,74,.16)!important;border-color:#e0b44a
 .ingsel.c-RENE{background:var(--infobg);color:var(--info)}.ingsel.c-EGBERT{background:var(--okbg);color:var(--ok)}.ingsel.c-OMAR{background:var(--warnbg);color:var(--warn)}.ingsel.c-CANCUN{background:#ede7f6;color:#5b3f9e}.ingsel.c-OTROS{background:#eceff3;color:#59626f}.ingsel.c-NULL{background:var(--badbg);color:var(--bad)}
 :root[data-theme="dark"] .ingsel.c-CANCUN{background:#2e2548;color:#cdb9f5}:root[data-theme="dark"] .ingsel.c-OTROS{background:#25344a;color:#b5c2d4}
 @media(max-width:520px){.ingsel{width:128px}.ingrow{flex-wrap:wrap}.ingrow .grow{flex:1 1 100%}.ingrow .money{margin-left:0;flex:1}}
+/* Escritorio ancho: aprovecha toda la pantalla */
+@media(min-width:1280px){
+  main{max-width:min(1760px,96vw);padding:18px 28px 28px}
+  header.top{padding-left:28px;padding-right:28px}
+}
+@media(min-width:1600px){
+  .cards{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
 </style>
 </head>
 <body>
