@@ -1121,7 +1121,7 @@ function docsMenu(c) {
   const orden = ['foto_cheque', 'folio', 'factura', 'comprobante_cobro', 'otro'];
   const items = [];
   orden.forEach(t => { const l = archActivos(c, t); l.forEach((a, i) => items.push(`<button data-act="verpath" data-path="${esc(a.path)}">${DOCICO[t] || ''}${docLabel(c, t)}${l.length > 1 ? ' ' + (i + 1) : ''}</button>`)); });
-  const poliza = c.estatus !== 'cancelado' && c.es_historial ? '' : `${items.length ? '<div class="sep"></div>' : ''}<button data-act="poliza" data-id="${c.id}">${DOCICO.poliza}Póliza</button>`;
+  const poliza = `${items.length ? '<div class="sep"></div>' : ''}<button data-act="poliza" data-id="${c.id}">${DOCICO.poliza}Póliza</button>`;
   if (!items.length && !poliza) return '';
   return `<details class="dd"><summary class="btn ghost sm">Ver documentos</summary><div class="ddm">${items.join('') || '<div class="mut sm" style="padding:8px 12px">Sin documentos</div>'}${poliza}</div></details>`;
 }
@@ -1653,6 +1653,7 @@ async function openDetail(id) {
     const tipoTxt = { factura: 'Factura', folio: 'Folio', comprobante_cobro: 'Ticket / ficha de depósito', foto_cheque: 'Foto del cheque', otro: 'Otro' };
     const hist = c.es_historial;
     let acciones = '';
+    if (hist) acciones += `<button class="btn ghost" data-act="poliza" data-id="${id}">Ver póliza</button>`;
     if (!hist) {
       const sinFoto = !c.es_historial && c.estatus !== 'cancelado' && !archActivos(c, 'foto_cheque').length && !c.sin_foto_motivo;
       if (esAdmin() && c.estatus === 'pendiente') acciones += `<button class="btn ok" data-act="autorizar" data-id="${id}" ${sinFoto ? 'disabled title="Falta la foto del cheque"' : (!cuadra ? 'disabled title="Los folios no cuadran con el monto del cheque"' : '')}>Autorizar</button><button class="btn bad" data-act="rechazar" data-id="${id}">Cancelar</button>`;
@@ -1682,7 +1683,7 @@ async function openDetail(id) {
         ${c.cobrado ? `<div>Cobrado</div><div>${fdate(c.fecha_cobro)}</div>` : ''}
         ${c.nota_historial ? `<div>Nota</div><div>${esc(c.nota_historial)}</div>` : ''}
       </div></div>
-      ${hist ? '<div class="warnbox">Cheque del historial (archivo), sin póliza ni folios del sistema.</div>' : (c.estatus === 'cancelado' && !fol.length) ? '<div class="warnbox">Cheque cancelado, sin monto ni folios.</div>' : `
+      ${hist ? '<div class="warnbox">Cheque del historial (archivo), sin folios del sistema. La póliza se genera con los datos del cheque.</div>' : (c.estatus === 'cancelado' && !fol.length) ? '<div class="warnbox">Cheque cancelado, sin monto ni folios.</div>' : `
       <h3>Folios</h3><div class="card" style="padding:6px 10px"><table><thead><tr><th>Cargo</th><th>Folio</th><th>Detalle</th><th class="r">Monto</th></tr></thead><tbody>
         ${fol.map(f => `<tr><td>${f.es_ajuste ? '' : esc(cargoNombre(f.cargo_id))}</td><td>${f.es_ajuste ? '' : f.sin_folio ? '<span class="chip warn">SIN FOLIO</span>' : esc(f.folio_numero)}</td><td>${esc([f.proveedor, f.descripcion, f.obra].filter(Boolean).join(' · '))}${detLin(c, f)}${f.sin_folio && f.sin_folio_motivo ? `<div class="mut sm">Motivo: ${esc(f.sin_folio_motivo)}</div>` : ''}</td><td class="r money">${fmt(f.monto)}</td></tr>`).join('') || '<tr><td colspan="4" class="mut">Sin folios</td></tr>'}
       </tbody></table></div>
