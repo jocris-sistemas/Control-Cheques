@@ -444,7 +444,7 @@ input.autollenado{background:rgba(224,180,74,.16)!important;border-color:#e0b44a
 <script>
 /* ===================== CONFIG ===================== */
 // No permitir que otra página meta la app en un marco (evita clics engañosos sobre "Autorizar")
-if (window.top !== window.self) { let mismo = false; try { mismo = window.top.location.origin === location.origin; } catch (e) { } if (!mismo) { document.documentElement.style.display = 'none'; try { window.top.location = location.href; } catch (e) { } throw new Error('La app no se puede abrir dentro de otra página.'); } }
+if (window.top !== window.self) { let mismo = false; try { mismo = window.top.location.origin === location.origin; } catch (e) { } if (!mismo) { document.documentElement.style.display = 'none'; try { window.top.location = location.href; } catch (e) { } throw new Error('La aplicación no puede abrirse dentro de otra página.'); } }
 const SUPABASE_URL = 'https://hbttxvanyqczspljtqpz.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_J4abyTF0BPq47eBTVLjIFQ_5-x2HOiJ';
 const BUCKET = 'cheques-archivos';
@@ -459,7 +459,7 @@ function aplicaTema() {
 }
 aplicaTema();
 try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', aplicaTema); } catch (e) { }
-if (!window.supabase) { document.addEventListener('DOMContentLoaded', () => { const a = document.getElementById('app'); if (a) a.innerHTML = '<div class="login"><div class="box"><div class="warnbox">No hay conexión a internet. Conéctate y vuelve a abrir la app.</div><button class="btn gold" onclick="location.reload()">Reintentar</button></div></div>'; }); throw new Error('Sin conexión: no cargó supabase-js'); }
+if (!window.supabase) { document.addEventListener('DOMContentLoaded', () => { const a = document.getElementById('app'); if (a) a.innerHTML = '<div class="login"><div class="box"><div class="warnbox">No hay conexión a internet. Verificar la conexión y abrir nuevamente la aplicación.</div><button class="btn gold" onclick="location.reload()">Reintentar</button></div></div>'; }); throw new Error('Sin conexión: no cargó supabase-js'); }
 const fetchKA = (u, o = {}) => (String(u).indexOf('/rest/v1/rpc/') > 0 && typeof o.body === 'string' && o.body.length < 50000) ? fetch(u, { ...o, keepalive: true }) : fetch(u, o);
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, autoRefreshToken: true }, global: { fetch: fetchKA } });
 /* Cerrar sesión de verdad: solo en este dispositivo, y recargando para no dejar datos del usuario en memoria */
@@ -525,7 +525,7 @@ function deshacerDiferido() {
   const d = S.dif; if (!d) return; clearTimeout(d.t); S.dif = null; $('#undo').classList.add('hidden');
   d.ids.forEach(i => document.getElementById('cp-' + i)?.classList.remove('saliendo'));
   if (d.ids.length > 1) { d.ids.forEach(i => { const cb = document.querySelector(`[data-sel="${i}"]`); if (cb) cb.checked = true; }); updateSel(); }
-  toast('Listo, no se autorizó.');
+  toast('Autorización cancelada.');
 }
 document.addEventListener('visibilitychange', () => { if (document.hidden) flushDiferido(); });
 window.addEventListener('pagehide', () => flushDiferido());
@@ -548,7 +548,7 @@ function updateSel() {
   const ids = selIds();
   if (!ids.length || S.tab !== 'pend') { bar.classList.add('hidden'); return; }
   const tot = ids.reduce((a, i) => a + cents((S.pendMap?.get(i) || {}).monto || 0), 0) / 100;
-  bar.innerHTML = `<div class="grow"><b>${ids.length}</b> cheque${ids.length === 1 ? '' : 's'} elegido${ids.length === 1 ? '' : 's'}<br><span class="money">${fmt(tot)}</span></div><button class="btn ghost sm" data-act="selquitar">Quitar</button><button class="btn ok" data-act="autsel">Autorizar</button>`;
+  bar.innerHTML = `<div class="grow"><b>${ids.length}</b> cheque${ids.length === 1 ? '' : 's'} seleccionado${ids.length === 1 ? '' : 's'}<br><span class="money">${fmt(tot)}</span></div><button class="btn ghost sm" data-act="selquitar">Quitar</button><button class="btn ok" data-act="autsel">Autorizar</button>`;
   bar.classList.remove('hidden');
 }
 document.addEventListener('keydown', ev => { if (ev.key === 'Enter' && ev.target && ev.target.id === 'cmtTxt') { ev.preventDefault(); const b = document.querySelector('[data-act=comentar]'); if (b) b.click(); } });
@@ -560,8 +560,8 @@ function dlgAutSel() {
   openModal(`<h2>Autorizar ${cs.length} cheque${cs.length === 1 ? '' : 's'}</h2>
     <div class="card">${cs.map(c => `<div class="row" style="justify-content:space-between;gap:10px;margin:5px 0"><span>${esc(c.beneficiario)} <span class="mut sm">· cheque ${c.numero_cheque}</span></span><b class="money">${fmt(c.monto)}</b></div>`).join('')}
     <div class="row" style="justify-content:space-between;margin-top:10px;padding-top:10px;border-top:1px solid var(--line)"><b>Total</b><b class="money">${fmt(tot)}</b></div></div>
-    <label class="f">Comentario (opcional, se guarda en cada cheque)</label><textarea id="cmt"></textarea>
-    <div class="row" style="margin-top:14px"><button class="btn ok grow" data-act="okautsel">Sí, autorizar ${cs.length}</button><button class="btn ghost" data-act="close">Cancelar</button></div>`);
+    <label class="f">Comentario (opcional; se registra en cada cheque)</label><textarea id="cmt"></textarea>
+    <div class="row" style="margin-top:14px"><button class="btn ok grow" data-act="okautsel">Autorizar ${cs.length}</button><button class="btn ghost" data-act="close">Cancelar</button></div>`);
 }
 async function autorizarLote(ids, cm) {
   let ok = 0; const fail = [];
@@ -583,15 +583,15 @@ async function pushActual() { if (!pushSoportado()) return null; try { const reg
 async function guardarSub(sub) { const j = sub.toJSON(); await rpc('guardar_push', { p: { endpoint: j.endpoint, p256dh: j.keys.p256dh, auth: j.keys.auth, agente: navigator.userAgent.slice(0, 200) } }); }
 async function activarPush() {
   if (!pushSoportado()) {
-    if (esIOS() && !esInstalada()) throw new Error('En iPhone primero instala la app: en Safari toca Compartir → "Agregar a inicio", ábrela desde ese ícono y activa aquí.');
-    throw new Error('Este navegador no permite notificaciones. Usa Chrome en Android o la app instalada en iPhone.');
+    if (esIOS() && !esInstalada()) throw new Error('En iPhone, la aplicación debe instalarse primero desde Safari (Compartir → "Agregar a inicio") y abrirse desde ese ícono.');
+    throw new Error('Este navegador no admite notificaciones. Se requiere Chrome en Android o la aplicación instalada en iPhone.');
   }
   const perm = await Notification.requestPermission();
-  if (perm !== 'granted') throw new Error('No se dio permiso. Si lo bloqueaste, actívalo en la configuración del navegador para este sitio.');
+  if (perm !== 'granted') throw new Error('No se otorgó el permiso de notificaciones. Habilitarlo en la configuración del navegador para este sitio.');
   const reg = await navigator.serviceWorker.ready;
   let sub;
   try { sub = (await reg.pushManager.getSubscription()) || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64aBytes(VAPID_PUB) }); }
-  catch (e) { throw new Error('El celular no dejó registrar las notificaciones. Revisa que Chrome tenga permiso de notificaciones (Ajustes del teléfono → Apps → Chrome → Notificaciones) y vuelve a intentar.'); }
+  catch (e) { throw new Error('No fue posible registrar las notificaciones. Verificar el permiso de notificaciones de Chrome (Ajustes del teléfono → Apps → Chrome → Notificaciones) e intentar de nuevo.'); }
   await guardarSub(sub);
   try { await rpc('probar_push', {}); } catch (e) { }
 }
@@ -600,13 +600,13 @@ function guiaInstalarIOS() {
   const ua = navigator.userAgent, chrome = /CriOS/i.test(ua), otraApp = /FBAN|FBAV|Instagram|Line\/|GSA\//i.test(ua);
   const paso = (n, t) => `<div style="display:flex;gap:12px;align-items:flex-start;margin:10px 0"><div style="flex:none;width:28px;height:28px;border-radius:50%;background:var(--navy);color:#fff;display:grid;place-items:center;font-weight:700">${n}</div><div style="padding-top:3px">${t}</div></div>`;
   openModal(`<h2 style="margin-top:0">Instalar en iPhone</h2>
-    <div class="mut sm" style="margin-bottom:6px">Apple no deja que una página se instale con un botón; se hace desde el menú Compartir. Solo la primera vez.</div>
-    ${otraApp ? '<div class="warnbox">Estás dentro de otra app. Primero toca los tres puntos o el ícono de brújula y elige <b>Abrir en Safari</b>.</div>' : ''}
+    <div class="mut sm" style="margin-bottom:6px">La instalación se realiza una sola vez desde el menú Compartir de Safari.</div>
+    ${otraApp ? '<div class="warnbox">La página está abierta dentro de otra aplicación. Abrirla primero en Safari (menú de tres puntos o ícono de brújula → <b>Abrir en Safari</b>).</div>' : ''}
     <div class="card">
-      ${paso(1, chrome ? `Toca el botón <b>Compartir</b> ${SHARE_SVG} que está arriba, junto a la dirección.` : `Toca el botón <b>Compartir</b> ${SHARE_SVG} en la barra de abajo de Safari.`)}
-      ${paso(2, 'Baja en la lista y toca <b>Agregar a inicio</b> (o "Agregar a la pantalla de inicio").')}
-      ${paso(3, 'Toca <b>Agregar</b>. Aparece el ícono de JOCRIS en tu pantalla de inicio.')}
-      ${paso(4, 'Abre la app <b>desde ese ícono</b>. Ahí ya puedes activar las notificaciones en Mi cuenta.')}
+      ${paso(1, chrome ? `Seleccionar <b>Compartir</b> ${SHARE_SVG} en la parte superior, junto a la dirección.` : `Seleccionar <b>Compartir</b> ${SHARE_SVG} en la barra inferior de Safari.`)}
+      ${paso(2, 'Seleccionar <b>Agregar a inicio</b> (o "Agregar a la pantalla de inicio") en la lista.')}
+      ${paso(3, 'Confirmar con <b>Agregar</b>. El ícono de JOCRIS aparecerá en la pantalla de inicio.')}
+      ${paso(4, 'Abrir la aplicación <b>desde ese ícono</b> y activar las notificaciones en Mi cuenta.')}
     </div>`);
 }
 async function soltarPush() { try { const s = await pushActual(); if (s) await rpc('quitar_push', { p_endpoint: s.endpoint }); } catch (e) { } }
@@ -615,15 +615,15 @@ async function desactivarPush() { const sub = await pushActual(); if (!sub) retu
 async function resincronizarPush() { try { if (pushSoportado() && Notification.permission === 'granted') { const sub = await pushActual(); if (sub) await guardarSub(sub); } } catch (e) { } }
 function htmlDispSeguro() {
   const on = dispSeguro();
-  return `<div class="mut sm" style="margin-bottom:6px">${on ? 'Activo en este dispositivo: aquí la sesión ya no se cerrará sola. ' : ''}Úsalo solo en un celular o computadora de uso personal — nunca en un equipo compartido o público.</div>${on
-    ? '<button class="btn ghost" data-act="dispseg" data-v="0">Quitar: sí cerrar por inactividad aquí</button>'
+  return `<div class="mut sm" style="margin-bottom:6px">${on ? 'Activo en este dispositivo: la sesión no se cierra por inactividad. ' : ''}Solo para equipos de uso personal; no usar en equipos compartidos o públicos.</div>${on
+    ? '<button class="btn ghost" data-act="dispseg" data-v="0">Desmarcar dispositivo seguro</button>'
     : '<button class="btn ghost" data-act="dispseg" data-v="1">Marcar este dispositivo como seguro</button>'}`;
 }
 async function htmlPush() {
-  if (!pushSoportado()) return `<div class="mut sm" style="margin-bottom:6px">${esIOS() && !esInstalada() ? 'En iPhone primero instala la app (Safari → Compartir → "Agregar a inicio") y ábrela desde ese ícono.' : 'Este navegador no permite notificaciones.'}</div>`;
+  if (!pushSoportado()) return `<div class="mut sm" style="margin-bottom:6px">${esIOS() && !esInstalada() ? 'En iPhone se requiere instalar la aplicación (Safari → Compartir → "Agregar a inicio") y abrirla desde ese ícono.' : 'Este navegador no admite notificaciones.'}</div>`;
   const sub = await pushActual(); const on = !!sub && Notification.permission === 'granted';
-  const que = esAdmin() ? 'Te avisa cuando hay cheques por autorizar.' : 'Te avisa cuando te rechazan un cheque.';
-  return `<div class="mut sm" style="margin-bottom:6px">${on ? 'Activadas en este dispositivo. ' : ''}${que}</div>${on ? '<button class="btn ghost" data-act="pushtest">Mandar aviso de prueba</button> <button class="btn ghost" data-act="pushoff">Desactivar</button>' : '<button class="btn gold" data-act="pushon">Activar notificaciones</button>'}`;
+  const que = esAdmin() ? 'Aviso de cheques pendientes de autorización.' : 'Aviso de cheques rechazados.';
+  return `<div class="mut sm" style="margin-bottom:6px">${on ? 'Activadas en este dispositivo. ' : ''}${que}</div>${on ? '<button class="btn ghost" data-act="pushtest">Enviar aviso de prueba</button> <button class="btn ghost" data-act="pushoff">Desactivar</button>' : '<button class="btn gold" data-act="pushon">Activar notificaciones</button>'}`;
 }
 if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', ev => { if (ev.data === 'refrescar' && S.perfil) { refreshPendCount(); refreshView(true); } });
 
@@ -638,7 +638,7 @@ function closeModal() { S.detTok = (S.detTok || 0) + 1; $('#modal').innerHTML = 
 function estadoChip(c) {
   if (c.es_historial) return c.cobrado ? '<span class="chip cobrado">Historial · Cobrado</span>' : (c.estatus === 'cancelado' ? '<span class="chip cancelado">Historial · Cancelado</span>' : '<span class="chip historial">Historial</span>');
   if (c.estatus === 'autorizado') return c.cobrado ? '<span class="chip cobrado">Cobrado</span>' : '<span class="chip autorizado">Autorizado · por cobrar</span>';
-  return `<span class="chip ${c.estatus}">${{ pendiente: 'Pendiente de autorizar', rechazado: 'Rechazado', cancelado: 'Cancelado' }[c.estatus]}</span>`;
+  return `<span class="chip ${c.estatus}">${{ pendiente: 'Pendiente de autorización', rechazado: 'Rechazado', cancelado: 'Cancelado' }[c.estatus]}</span>`;
 }
 const ICON = {
   pend: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.7 2.7L16 9.5"/></svg>',
@@ -714,11 +714,11 @@ function renderLogin(msg = '') {
     if (error) {
       const m = String(error.message || error);
       back(/invalid login|invalid_credentials|credentials/i.test(m) ? 'Correo o contraseña incorrectos.'
-        : /fetch|network|load failed/i.test(m) ? 'No hay conexión con el servidor. Revisa tu internet e inténtalo de nuevo.'
-        : 'No se pudo entrar: ' + m); return;
+        : /fetch|network|load failed/i.test(m) ? 'No hay conexión con el servidor. Verificar la conexión a internet e intentar de nuevo.'
+        : 'No fue posible iniciar sesión: ' + m); return;
     }
     marcaAct(true);
-    try { await boot(); } catch (e) { back('Entraste, pero la app no pudo cargar: ' + String(e.message || e)); }
+    try { await boot(); } catch (e) { back('Sesión iniciada, pero la aplicación no pudo cargarse: ' + String(e.message || e)); }
   };
 }
 async function boot() {
@@ -727,8 +727,8 @@ async function boot() {
   if (inactivoDemasiado()) return cerrarSesion('Se cerró la sesión por inactividad.');
   marcaAct(true);
   const { data: p, error: pe } = await sb.from('perfiles').select('*').eq('id', session.user.id).maybeSingle();
-  if (pe) { $('#app').innerHTML = `<div class="login"><div class="logo"><b>JOCRIS</b><span>Control de Cheques</span></div><div class="box"><div class="warnbox">No hay conexión con el servidor. Revisa tu internet.</div><button class="btn gold grow" id="btnRetry">Reintentar</button></div></div>`; $('#btnRetry').onclick = () => { $('#app').innerHTML = '<div class="spin">Cargando…</div>'; boot().catch(() => boot()); }; return; }
-  if (!p || !p.activo) return cerrarSesion('Tu usuario no está activo en el sistema. Avísale a Pedro.');
+  if (pe) { $('#app').innerHTML = `<div class="login"><div class="logo"><b>JOCRIS</b><span>Control de Cheques</span></div><div class="box"><div class="warnbox">No hay conexión con el servidor. Verificar la conexión a internet.</div><button class="btn gold grow" id="btnRetry">Reintentar</button></div></div>`; $('#btnRetry').onclick = () => { $('#app').innerHTML = '<div class="spin">Cargando…</div>'; boot().catch(() => boot()); }; return; }
+  if (!p || !p.activo) return cerrarSesion('El usuario no está activo en el sistema. Contactar a Pedro.');
   S.perfil = p;
   $('#app').innerHTML = '<div class="spin">Cargando…</div>';
   await loadCatalogs();
@@ -743,7 +743,7 @@ async function loadCatalogs() {
     sb.from('chequeras').select('*').eq('activa', true).order('nombre'),
     sb.from('cargos').select('*').eq('activo', true).order('id'),
     sb.from('series_folio').select('*')]);
-  if (a.error || b.error || c.error) { const e = a.error || b.error || c.error; if (S.chequeras.length && S.cargos.length) { toast('No se pudieron actualizar los catálogos (revisa tu conexión): ' + errMsg(e), 'err'); return; } toast('No se pudieron cargar chequeras y cargos (revisa tu conexión y vuelve a abrir la app): ' + errMsg(e), 'err'); }
+  if (a.error || b.error || c.error) { const e = a.error || b.error || c.error; if (S.chequeras.length && S.cargos.length) { toast('No fue posible actualizar los catálogos: ' + errMsg(e), 'err'); return; } toast('No fue posible cargar chequeras y cargos: ' + errMsg(e), 'err'); }
   S.chequeras = a.data || []; S.cargos = b.data || [];
   S.series = {}; (c.data || []).forEach(s => S.series[s.cargo_id] = s);
 }
@@ -878,19 +878,19 @@ function pintaRent() {
     <div class="rrow"><span class="rl">Gastos</span><div class="rtr"><i style="width:${w(o.dir)};background:var(--gold)"></i><i style="width:${w(o.comp)};background:var(--gold);opacity:.5"></i></div><span class="rv">${fmtK(o.gas / 100)}</span></div>
     <div class="mut sm" style="margin:2px 0 0 30px">Directos ${fmtK(o.dir / 100)} · Compartidos ${fmtK(o.comp / 100)}</div></div>`;
   const peor = vil.length > 1 ? vil[vil.length - 1] : null, mejor = vil[0];
-  B.innerHTML = `<div class="mut sm" style="margin-bottom:8px">Cuánto gana o pierde cada villa: sus ingresos menos sus gastos directos y la parte que le toca de los gastos compartidos. Toca una villa para ver sus movimientos.</div>
+  B.innerHTML = `<div class="mut sm" style="margin-bottom:8px">Resultado por villa: ingresos menos gastos directos y parte proporcional de gastos compartidos.</div>
     <div class="filters" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px"><select id="crMes"><option value="">Todo 2026</option>${meses.map(m => `<option value="${m}" ${r.mes === m ? 'selected' : ''}>${esc(mesLbl(m))}</option>`).join('')}</select><select id="crOrd">${[['neto', 'Orden: mayor ganancia'], ['mar', 'Orden: mayor margen'], ['ing', 'Orden: más ingresos'], ['gas', 'Orden: más gastos']].map(([k, l]) => `<option value="${k}" ${r.ord === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
     <div class="kpis"><div class="kpi"><div class="mut sm">Ingresos de villas</div><div class="big" style="color:var(--ok)">${fmtK(T.ing / 100)}</div></div><div class="kpi"><div class="mut sm">Gastos de villas</div><div class="big">${fmtK((T.dir + T.comp) / 100)}</div></div><div class="kpi"><div class="mut sm">Impuesto sobre hospedaje</div><div class="big">${fmtK(IMPT / 100)}</div></div><div class="kpi"><div class="mut sm">Gastos generales (sin villa)</div><div class="big">${fmtK(G / 100)}</div></div><div class="kpi" style="grid-column:1/-1"><div class="mut sm">Resultado total</div><div class="big" style="${net < 0 ? 'color:' + bad : ''}">${sg(net / 100, fmtK)}</div></div></div>
     ${mejor ? `<div class="mut sm" style="margin:-2px 0 10px">Mejor: <b style="color:var(--ink)">${esc(mejor.v)}</b> (${sg(mejor.neto / 100, fmtK)})${peor ? ` · Peor: <b style="color:var(--ink)">${esc(peor.v)}</b> (${sg(peor.neto / 100, fmtK)})` : ''}</div>` : ''}
     <div class="rleg mut sm"><span><i style="background:var(--navy)"></i>Ingresos</span><span><i style="background:var(--gold)"></i>Gasto directo</span><span><i style="background:var(--gold);opacity:.5"></i>Gasto compartido</span></div>
-    <div class="rgrid">${vil.map(card).join('') || '<div class="mut">Sin datos en ese periodo.</div>'}</div>
-    <div class="mut sm" style="margin-top:10px">El impuesto sobre hospedaje (${fmtK(IMPT / 100)}) y los gastos generales (${fmtK(G / 100)}) no se reparten entre villas, por eso no aparecen dentro de la ganancia de cada una.</div>`;
+    <div class="rgrid">${vil.map(card).join('') || '<div class="mut">Sin datos en el periodo seleccionado.</div>'}</div>
+    <div class="mut sm" style="margin-top:10px">El impuesto sobre hospedaje (${fmtK(IMPT / 100)}) y los gastos generales (${fmtK(G / 100)}) no se distribuyen entre villas.</div>`;
   $('#crMes').onchange = e => { r.mes = e.target.value; pintaRent(); };
   $('#crOrd').onchange = e => { r.ord = e.target.value; pintaRent(); };
   B.onclick = ev => { const c = ev.target.closest('[data-rvilla]'); if (!c) return; S.cn = S.cn || {}; S.cn.villa = c.dataset.rvilla; S.cn.mes = r.mes; S.cn.lim = 100; S.cn.abierto = ''; S.cnVista = 'mov'; viewCancun(); };
 }
 /* Cuadre de folios: Caja Efectivo (historial) contra los gastos en efectivo de Cancún, por mes y proveedor unificado */
-const CQ_EST = { 'CUADRA': 'Cuadra', 'MONTO DISTINTO': 'Monto distinto', 'SOLO CAJA': 'Solo en Caja', 'SOLO APP': 'Solo en la app', 'POSTERIOR AL CORTE DE CAJA': 'Después del corte de Caja', 'ENE-ABR (CAJA SIN FOLIO)': 'Ene-abr (Caja sin folio)' };
+const CQ_EST = { 'CUADRA': 'Cuadra', 'MONTO DISTINTO': 'Monto distinto', 'SOLO CAJA': 'Solo en Caja', 'SOLO APP': 'Solo en la aplicación', 'POSTERIOR AL CORTE DE CAJA': 'Posterior al corte de Caja', 'ENE-ABR (CAJA SIN FOLIO)': 'Ene-abr (Caja sin folio)' };
 async function viewCnCuadre() {
   const tok = S.cnTok = (S.cnTok || 0) + 1; S.cq = S.cq || { mes: '', est: '', serv: '' };
   $('#cnBody').innerHTML = '<div class="sk"></div><div class="sk"></div>';
@@ -911,11 +911,11 @@ function pintaCnCuadre() {
   const provs = [...new Set(D.filter(r => r.estado !== 'ENE-ABR (CAJA SIN FOLIO)' && (!f.serv || r.servicio === f.serv)).map(r => r.servicio + '|' + r.proveedor))].sort();
   const celda = (p, m) => { const a = D.filter(r => r.estado !== 'ENE-ABR (CAJA SIN FOLIO)' && r.servicio + '|' + r.proveedor === p && r.mes === m); if (!a.length) return '<td class="r mut">·</td>'; const ok = a.filter(r => r.estado === 'CUADRA').length, mal = a.length - ok; return `<td class="r">${ok ? `<span style="color:var(--ok)">${ok}✓</span>` : ''}${mal ? ` <span style="color:var(--bad,#c0392b)">${mal}⚠</span>` : ''}</td>`; };
   const fila = r => `<div style="padding:8px 0;border-bottom:1px solid var(--line)"><div style="display:flex;gap:8px;align-items:baseline"><b style="width:52px;flex:none">${esc(r.folio)}</b><div class="grow" style="min-width:0"><div>${esc(r.proveedor)}${r.villa ? ` <span class="mut sm">· ${esc(r.villa)}</span>` : ''}</div><div class="mut sm">${esc(mesLbl(r.mes))} · ${esc(CQ_EST[r.estado] || r.estado)}${r.estado === 'MONTO DISTINTO' ? ` · Caja ${fmt(r.monto_caja)} / App ${fmt(r.monto_app)}` : ''}</div></div><b style="white-space:nowrap;${r.estado === 'CUADRA' ? 'color:var(--ok)' : ''}">${fmt(r.monto_app != null ? r.monto_app : r.monto_caja)}</b></div></div>`;
-  B.innerHTML = `<div class="mut sm" style="margin-bottom:8px">Folios de efectivo de Caja Efectivo contra los de la app, con nombres de proveedor unificados. Toca un cuadro para filtrar.</div>
+  B.innerHTML = `<div class="mut sm" style="margin-bottom:8px">Folios de efectivo de Caja Efectivo contra los registrados en la aplicación, con proveedores unificados.</div>
     <div class="filters" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px"><select id="cqMes"><option value="">Todos los meses</option>${meses.map(m => `<option value="${m}" ${f.mes === m ? 'selected' : ''}>${esc(mesLbl(m))}</option>`).join('')}</select><select id="cqServ"><option value="">Todos los servicios</option>${servs.map(s => `<option value="${esc(s)}" ${f.serv === s ? 'selected' : ''}>${esc(s)}</option>`).join('')}</select>${(f.mes || f.est || f.serv) ? '<button class="btn ghost" data-cqlimpia>Quitar filtros</button>' : ''}</div>
     <div class="kpis">${Object.keys(CQ_EST).map(chip).join('')}</div>
     <div class="card" style="overflow:auto"><h3 class="rh">Servicios por mes <span class="mut sm">(✓ cuadra · ⚠ con diferencia)</span></h3><table class="ingtbl cn"><thead><tr><th>Proveedor</th>${meses.map(m => `<th class="r">${esc(mesLbl(m).slice(0, 3))}</th>`).join('')}</tr></thead><tbody>${provs.map(p => `<tr><td>${esc(p.split('|')[1])}</td>${meses.map(m => celda(p, m)).join('')}</tr>`).join('')}</tbody></table></div>
-    <div class="card"><h3 class="rh">Folios <span class="mut sm">(${L.length})</span></h3>${L.slice(0, 150).map(fila).join('') || '<div class="mut" style="padding:10px 0">Nada con esos filtros.</div>'}${L.length > 150 ? `<div class="mut sm" style="padding:8px 0">Se muestran 150 de ${L.length}. Filtra por mes o servicio.</div>` : ''}</div>`;
+    <div class="card"><h3 class="rh">Folios <span class="mut sm">(${L.length})</span></h3>${L.slice(0, 150).map(fila).join('') || '<div class="mut" style="padding:10px 0">No se encontraron resultados.</div>'}${L.length > 150 ? `<div class="mut sm" style="padding:8px 0">Se muestran 150 de ${L.length}. Filtrar por mes o servicio.</div>` : ''}</div>`;
   $('#cqMes').onchange = e => { f.mes = e.target.value; pintaCnCuadre(); };
   $('#cqServ').onchange = e => { f.serv = e.target.value; pintaCnCuadre(); };
   B.onclick = ev => { const t = ev.target; if (t.closest('[data-cqlimpia]')) { S.cq = { mes: '', est: '', serv: '' }; return pintaCnCuadre(); } const k = t.closest('[data-cqest]'); if (k) { f.est = f.est === k.dataset.cqest ? '' : k.dataset.cqest; pintaCnCuadre(); } };
@@ -974,7 +974,7 @@ function pintaCn() {
   const tM = (() => { const a = base.filter(p => !f.villa || p.villa === f.villa), i = ing(a), e = egr(a), b = BC ? Object.values(BC).reduce((x, y) => x + y, 0) : 0; return `<tr><td><b>Total</b></td><td class="r"><b>${sg(i / 100, fmtK)}</b></td>${bcOk ? `<td class="r"><b>${sg(b / 100, fmtK)}</b></td>` : '<td class="r mut">–</td>'}<td class="r"><b>${sg(e / 100, fmtK)}</b></td>${neto(i - e)}${bcOk ? neto(b - e) : '<td class="r mut">–</td>'}</tr>`; })();
   const sy = D.sync ? new Date(D.sync).toLocaleString('es-MX', { timeZone: 'America/Monterrey', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
   $('#cnBody').innerHTML = `
-    <div class="mut sm" style="margin:-4px 0 10px">Copia del Google Sheet${sy ? ' · actualizada el ' + esc(sy).replace(/\.$/, '') : ''}. Mientras sigas capturando en el Sheet, la app se actualiza copiándolo de nuevo.</div>
+    <div class="mut sm" style="margin:-4px 0 10px">Copia del Google Sheet${sy ? ' · actualizada el ' + esc(sy).replace(/\.$/, '') : ''}.</div>
     <div class="filters" style="margin:10px 0">
       <select id="cnMes" aria-label="Mes"><option value="">Todo 2026</option>${meses.map(m => `<option value="${m}" ${f.mes === m ? 'selected' : ''}>${mesLbl(m)}</option>`).join('')}</select>
       <select id="cnVilla" aria-label="Villa"><option value="">Todas las villas</option>${villas.map(v => `<option value="${esc(v)}" ${f.villa === v ? 'selected' : ''}>${esc(v)}</option>`).join('')}</select>
@@ -985,8 +985,8 @@ function pintaCn() {
     </div>
     <div class="kpis">${kp('Ingresos', fmt(I / 100), esc(ambito), 'var(--ok)')}${kp('Egresos', fmt(E / 100), esc(ambito))}${kp('Neto', sg(N / 100, fmt), esc(ambito), N < 0 ? 'var(--bad,#c0392b)' : '')}</div>
     <div class="repgrid">
-      <div class="card" style="overflow:auto"><h3 class="rh">Por villa${f.mes ? ' · ' + esc(mesLbl(f.mes)) : ''}</h3><table class="ingtbl cn"><thead><tr><th>Villa</th><th class="r">Ingresos</th><th class="r">Egresos</th><th class="r">Neto</th></tr></thead><tbody>${vl.map(filaV).join('')}</tbody><tfoot>${tV}</tfoot></table><div class="mut sm" style="margin-top:6px">Los gastos compartidos ya van repartidos entre sus villas. Toca una villa para filtrar.</div></div>
-      <div class="card" style="overflow:auto"><h3 class="rh">Por mes${f.villa ? ' · ' + esc(f.villa) : ''}</h3><table class="ingtbl cn"><thead><tr><th>Mes</th><th class="r">Ingresos Airbnb</th><th class="r">Depósitos banco</th><th class="r">Egresos</th><th class="r">Neto vs Airbnb</th><th class="r">Neto vs banco</th></tr></thead><tbody>${meses.map(filaM).join('')}</tbody><tfoot>${tM}</tfoot></table><div class="mut sm" style="margin-top:6px">${BC ? (bcOk ? 'Depósitos banco: lo que entró a la cuenta de Excer clasificado como Cancún (Ingresos). Neto vs banco = depósitos − egresos.' : 'El banco no distingue villa ni categoría: quita esos filtros para ver las columnas del banco.') : 'No se pudieron leer los depósitos del banco.'}</div></div>
+      <div class="card" style="overflow:auto"><h3 class="rh">Por villa${f.mes ? ' · ' + esc(mesLbl(f.mes)) : ''}</h3><table class="ingtbl cn"><thead><tr><th>Villa</th><th class="r">Ingresos</th><th class="r">Egresos</th><th class="r">Neto</th></tr></thead><tbody>${vl.map(filaV).join('')}</tbody><tfoot>${tV}</tfoot></table><div class="mut sm" style="margin-top:6px">Los gastos compartidos se incluyen distribuidos entre sus villas.</div></div>
+      <div class="card" style="overflow:auto"><h3 class="rh">Por mes${f.villa ? ' · ' + esc(f.villa) : ''}</h3><table class="ingtbl cn"><thead><tr><th>Mes</th><th class="r">Ingresos Airbnb</th><th class="r">Depósitos banco</th><th class="r">Egresos</th><th class="r">Neto vs Airbnb</th><th class="r">Neto vs banco</th></tr></thead><tbody>${meses.map(filaM).join('')}</tbody><tfoot>${tM}</tfoot></table><div class="mut sm" style="margin-top:6px">${BC ? (bcOk ? 'Depósitos banco: abonos en la cuenta de Excer clasificados como Cancún (Ingresos). Neto vs banco = depósitos − egresos.' : 'El banco no distingue villa ni categoría; quitar esos filtros para ver las columnas del banco.') : 'No fue posible leer los depósitos del banco.'}</div></div>
     </div>
     <div id="cnLista"></div>`;
   const B = $('#cnBody');
@@ -1023,11 +1023,11 @@ function pintaCnLista() {
     const sh = share(m), rr = D.porMov.get(m.id) || [];
     const monto = sh && sh.length ? sh.reduce((s, r) => s + cents(r.monto), 0) / 100 : Number(m.monto);
     const col = m.tipo === 'INGRESO' ? 'color:var(--ok)' : m.tipo === 'PRESTAMO' ? 'color:var(--mut)' : '';
-    const det = f.abierto === m.id && rr.length ? `<div class="mut sm" style="padding:6px 0 2px 44px">Repartido: ${rr.map(r => `${esc(r.villa)}${r.depto ? ' ' + esc(r.depto) : ''} <b>${fmt(r.monto)}</b>`).join(' · ')}</div>` : '';
+    const det = f.abierto === m.id && rr.length ? `<div class="mut sm" style="padding:6px 0 2px 44px">Distribución: ${rr.map(r => `${esc(r.villa)}${r.depto ? ' ' + esc(r.depto) : ''} <b>${fmt(r.monto)}</b>`).join(' · ')}</div>` : '';
     const sub = [m.categoria, m.pago, m.folio].filter(Boolean).map(esc).join(' · ');
     return `<div data-cnrow="${esc(m.id)}" style="padding:8px 0;border-bottom:1px solid var(--line);${rr.length ? 'cursor:pointer' : ''}"><div style="display:flex;gap:10px;align-items:baseline"><span class="mut sm" style="width:34px;flex:none">${dd(m.fecha)}</span><div class="grow" style="min-width:0"><div>${esc(m.concepto || '—')}${m.comentarios ? ` <span class="mut sm">· ${esc(m.comentarios)}</span>` : ''}</div><div class="mut sm">${esc(m.villa || 'Sin villa')}${m.depto ? ' ' + esc(m.depto) : ''}${rr.length ? ` (${new Set(rr.map(r => r.villa)).size} villas)` : ''} · ${sub}${m.tipo === 'PRESTAMO' ? ' · PRÉSTAMO' : ''}</div></div><b style="${col};white-space:nowrap">${m.tipo === 'INGRESO' ? '+' : ''}${fmt(monto)}</b></div>${det}</div>`;
   };
-  el.innerHTML = `<div class="card"><h3 class="rh">Movimientos <span class="mut sm">(${lista.length})</span></h3>${lista.slice(0, f.lim).map(fila).join('') || '<div class="mut" style="padding:10px 0">Sin movimientos con esos filtros.</div>'}${lista.length > f.lim ? `<div style="text-align:center;padding-top:10px"><button class="btn ghost" data-cnmas>Ver más (${lista.length - f.lim})</button></div>` : ''}</div>`;
+  el.innerHTML = `<div class="card"><h3 class="rh">Movimientos <span class="mut sm">(${lista.length})</span></h3>${lista.slice(0, f.lim).map(fila).join('') || '<div class="mut" style="padding:10px 0">No se encontraron movimientos.</div>'}${lista.length > f.lim ? `<div style="text-align:center;padding-top:10px"><button class="btn ghost" data-cnmas>Ver más (${lista.length - f.lim})</button></div>` : ''}</div>`;
 }
 /* Fecha de última actualización en la esquina de cada apartado */
 const SELLO_FUENTE = {
@@ -1074,12 +1074,12 @@ const SEL = '*, cheque_folios(id,cargo_id,folio_numero,proveedor,descripcion,obr
 /* ===================== VISTA: AUTORIZAR / PENDIENTES ===================== */
 async function viewPend() {
   const tok = S.pendTok = (S.pendTok || 0) + 1;
-  $('#view').innerHTML = `<div class="pagehead"><h2>${esAdmin() ? 'Por autorizar' : 'Pendientes'}</h2><span class="sub">${esAdmin() ? 'Cheques en espera de tu autorización' : 'Cheques en espera de autorización'}</span></div><div id="pushAviso"></div><div id="pendList"><div class="sk"></div><div class="sk"></div></div>`;
+  $('#view').innerHTML = `<div class="pagehead"><h2>${esAdmin() ? 'Por autorizar' : 'Pendientes'}</h2><span class="sub">${esAdmin() ? 'Cheques en espera de autorización' : 'Cheques en espera de autorización'}</span></div><div id="pushAviso"></div><div id="pendList"><div class="sk"></div><div class="sk"></div></div>`;
   try { let noIos = false; try { noIos = localStorage.getItem('jocris_ios_aviso') === 'no'; } catch (e) { }
-    if (esIOS() && !esInstalada() && !noIos) $('#pushAviso').innerHTML = `<div class="card" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><div class="grow"><b>Instala la app en tu iPhone</b><div class="mut sm">Se abre más rápido y puedes recibir avisos.</div></div><button class="btn gold sm" data-act="instalar">Cómo instalar</button><button class="btn ghost sm" data-act="iosno">Ahora no</button></div>`;
+    if (esIOS() && !esInstalada() && !noIos) $('#pushAviso').innerHTML = `<div class="card" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><div class="grow"><b>Instalación en iPhone</b><div class="mut sm">Acceso directo y recepción de avisos.</div></div><button class="btn gold sm" data-act="instalar">Ver instrucciones</button><button class="btn ghost sm" data-act="iosno">Omitir</button></div>`;
   } catch (e) { }
   try { let oculto = false; try { oculto = localStorage.getItem('jocris_push_aviso') === 'no'; } catch (e) { }
-    if (esAdmin() && !oculto && pushSoportado() && Notification.permission === 'default' && !$('#pushAviso').innerHTML) $('#pushAviso').innerHTML = `<div class="card" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><div class="grow"><b>Recibe un aviso en tu celular</b><div class="mut sm">Cuando haya cheques por autorizar, aunque tengas la app cerrada.</div></div><button class="btn gold sm" data-act="pushon">Activar</button><button class="btn ghost sm" data-act="pushno">Ahora no</button></div>`;
+    if (esAdmin() && !oculto && pushSoportado() && Notification.permission === 'default' && !$('#pushAviso').innerHTML) $('#pushAviso').innerHTML = `<div class="card" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><div class="grow"><b>Avisos en el celular</b><div class="mut sm">Notificación de cheques por autorizar, aun con la aplicación cerrada.</div></div><button class="btn gold sm" data-act="pushon">Activar</button><button class="btn ghost sm" data-act="pushno">Omitir</button></div>`;
   } catch (e) { }
   const { data, error } = await sb.from('cheques').select(SEL).eq('estatus', 'pendiente').eq('es_historial', false).order('creado_en', { ascending: true });
   if (tok !== S.pendTok || S.tab !== 'pend' || !$('#pendList')) return;
@@ -1095,13 +1095,13 @@ async function viewPend() {
     const tot = data.reduce((a, c) => a + cents(c.monto), 0) / 100;
     html += `<div class="card summary"><div class="ico">${ICON.pend}</div><div class="grow"><div class="mut sm">${esAdmin() ? 'Por autorizar' : 'Pendientes de autorización'}</div><div class="money big">${fmt(tot)}</div></div><div class="sumcnt"><span><b>${data.length}</b> cheque${data.length === 1 ? '' : 's'}</span>${canc.length ? `<span>${canc.length} cancelado${canc.length === 1 ? '' : 's'} por confirmar</span>` : ''}${rech.length ? `<span>${rech.length} rechazado${rech.length === 1 ? '' : 's'}</span>` : ''}</div></div>`;
   }
-  if (!data.length && !canc.length) html += `<div class="card empty">${ICON.pend}<div>No hay cheques pendientes. Todo al día.</div></div>`;
+  if (!data.length && !canc.length) html += `<div class="card empty">${ICON.pend}<div>No hay cheques pendientes.</div></div>`;
   // Pendientes y cancelados por confirmar van juntos, por número de cheque del más viejo al más nuevo.
   const todos = data.concat(canc).sort((a, b) => (a.numero_cheque - b.numero_cheque) || (a.chequera_id - b.chequera_id));
   const listos = esAdmin() ? data.filter(c => sumFolios(c) === cents(c.monto) && (archActivos(c, 'foto_cheque').length || c.sin_foto_motivo)).length : 0;
-  if (listos >= 2) html += `<div class="selrow"><button class="btn ghost sm" data-act="selall">Elegir los ${listos} listos para autorizar</button></div>`;
+  if (listos >= 2) html += `<div class="selrow"><button class="btn ghost sm" data-act="selall">Seleccionar los ${listos} cheques listos para autorizar</button></div>`;
   html += `<div class="cards">` + todos.map(c => c.estatus === 'cancelado' ? cardCancel(c) : cardPend(c)).join('') + `</div>`;
-  if (rech.length) html += `<h3>Rechazados (esperan corrección)</h3><div class="cards">` + rech.map(c => cardPend(c, true)).join('') + `</div>`;
+  if (rech.length) html += `<h3>Rechazados (pendientes de corrección)</h3><div class="cards">` + rech.map(c => cardPend(c, true)).join('') + `</div>`;
   if (tok !== S.pendTok || S.tab !== 'pend' || !$('#pendList')) return;
   $('#pendList').outerHTML = html;
 }
@@ -1123,7 +1123,7 @@ function docsMenu(c) {
   orden.forEach(t => { const l = archActivos(c, t); l.forEach((a, i) => items.push(`<button data-act="verpath" data-path="${esc(a.path)}">${DOCICO[t] || ''}${docLabel(c, t)}${l.length > 1 ? ' ' + (i + 1) : ''}</button>`)); });
   const poliza = c.estatus !== 'cancelado' && c.es_historial ? '' : `${items.length ? '<div class="sep"></div>' : ''}<button data-act="poliza" data-id="${c.id}">${DOCICO.poliza}Póliza</button>`;
   if (!items.length && !poliza) return '';
-  return `<details class="dd"><summary class="btn ghost sm">Ver documentos</summary><div class="ddm">${items.join('') || '<div class="mut sm" style="padding:8px 12px">Aún no hay documentos</div>'}${poliza}</div></details>`;
+  return `<details class="dd"><summary class="btn ghost sm">Ver documentos</summary><div class="ddm">${items.join('') || '<div class="mut sm" style="padding:8px 12px">Sin documentos</div>'}${poliza}</div></details>`;
 }
 function cardCancel(c) {
   return `<div class="card cd st-cancelado" id="cp-${c.id}">
@@ -1132,10 +1132,10 @@ function cardCancel(c) {
       <div class="cd-sub">${esc(chequeraNombre(c.chequera_id))} · ${fdate(c.fecha)}</div></div>
       <div class="money cd-monto">${fmt(c.monto)}</div></div>
     <div class="cd-body"><div class="warnbox" style="margin-top:10px">Motivo: ${esc(c.motivo_cancelacion || c.concepto || '')}</div>
-    <div class="cd-meta">Lo registró: ${esc(c.capturado_por_nombre || '')}</div></div>
-    <div class="cd-side"><div class="cd-tools">${docsMenu(c)}<button class="btn ghost sm" data-act="detalle" data-id="${c.id}">Detalle</button>${puedeReexpedir(c) ? `<button class="btn gold sm" data-act="reexpedir" data-id="${c.id}">Crear nuevo igual</button>` : ''}</div>
-    ${esAdmin() ? `<div class="cd-act"><button class="btn ok grow" data-act="enterar" data-id="${c.id}">Enterado y de acuerdo con la cancelación</button></div>`
-      : '<div class="chip warn cd-wait">Esperando que el Ing. dé por enterada la cancelación</div>'}</div>
+    <div class="cd-meta">Registró: ${esc(c.capturado_por_nombre || '')}</div></div>
+    <div class="cd-side"><div class="cd-tools">${docsMenu(c)}<button class="btn ghost sm" data-act="detalle" data-id="${c.id}">Detalle</button>${puedeReexpedir(c) ? `<button class="btn gold sm" data-act="reexpedir" data-id="${c.id}">Reexpedir</button>` : ''}</div>
+    ${esAdmin() ? `<div class="cd-act"><button class="btn ok grow" data-act="enterar" data-id="${c.id}">Dar por enterada la cancelación</button></div>`
+      : '<div class="chip warn cd-wait">Pendiente de confirmación de la cancelación</div>'}</div>
   </div>`;
 }
 /* Alertas para quien autoriza: posible duplicado, folio repetido en el mismo cargo, monto atípico o alto */
@@ -1199,19 +1199,19 @@ function cardPend(c, rechazado = false) {
     ${rechazado ? `<div class="warnbox">Rechazado: ${esc(c.motivo_rechazo || '')}</div>` : ''}
     </div>
     <div class="cd-side">
-    ${esAdmin() && !rechazado && cuadra && okFoto ? `<label class="cd-sel"><input type="checkbox" data-sel="${c.id}"><span>Elegir para autorizar</span></label>` : ''}
+    ${esAdmin() && !rechazado && cuadra && okFoto ? `<label class="cd-sel"><input type="checkbox" data-sel="${c.id}"><span>Seleccionar para autorizar</span></label>` : ''}
     <div class="cd-tools">
       ${docsMenu(c)}
       <button class="btn ghost sm" data-act="detalle" data-id="${c.id}">Detalle</button>
       ${puedeCancelar(c) && !(esAdmin() && !rechazado) ? `<button class="btn ghost sm" data-act="cancelar" data-id="${c.id}">Cancelar cheque</button>` : ''}
-      ${!okFoto && !rechazado && puedeTocar(c) ? `<button class="btn ghost sm" data-act="sinfoto" data-id="${c.id}">No hay foto</button>` : ''}
+      ${!okFoto && !rechazado && puedeTocar(c) ? `<button class="btn ghost sm" data-act="sinfoto" data-id="${c.id}">Marcar sin foto</button>` : ''}
     </div>
     ${esAdmin() && !rechazado ? `<div class="cd-act">
       <button class="btn ok grow" data-act="autorizar" data-id="${c.id}" ${sinFac || !cuadra || !okFoto ? 'disabled' : ''}>Autorizar</button>
       <button class="btn outbad" data-act="rechazar" data-id="${c.id}">Cancelar</button></div>
-      ${!okFoto || !cuadra ? `<div class="cd-why">No se puede autorizar: ${[!okFoto ? 'falta la foto del cheque' : '', !cuadra ? 'los folios no cuadran con el monto' : ''].filter(Boolean).join(' y ')}.</div>` : ''}
+      ${!okFoto || !cuadra ? `<div class="cd-why">No es posible autorizar: ${[!okFoto ? 'falta la foto del cheque' : '', !cuadra ? 'los folios no cuadran con el monto' : ''].filter(Boolean).join(' y ')}.</div>` : ''}
 ` : ''}
-    ${!esAdmin() && !rechazado ? '<div class="chip warn cd-wait">PDTE. DE AUTORIZAR</div>' : ''}
+    ${!esAdmin() && !rechazado ? '<div class="chip warn cd-wait">PDTE. DE AUTORIZACIÓN</div>' : ''}
     ${rechazado && puedeTocar(c) ? `<div class="cd-act"><button class="btn gold grow" data-act="editar" data-id="${c.id}">Corregir y reenviar</button></div>` : ''}
     </div>
   </div>`;
@@ -1223,16 +1223,16 @@ async function loadCheque(id) {
 function dlgAutorizar(id, c) {
   openModal(`<h2>Autorizar cheque</h2>
     <div class="card"><div class="b">${esc(c.beneficiario)}</div><div class="money big">${fmt(c.monto)}</div><div class="mut sm">Póliza / Cheque ${c.numero_cheque}</div></div>
-    ${c.sin_foto_motivo && !archActivos(c, 'foto_cheque').length ? `<div class="warnbox"><b>Sin foto del cheque.</b> Motivo: ${esc(c.sin_foto_motivo)}${c.sin_foto_por_nombre ? ' (marcó ' + esc(c.sin_foto_por_nombre) + ')' : ''}</div>` : ''}
+    ${c.sin_foto_motivo && !archActivos(c, 'foto_cheque').length ? `<div class="warnbox"><b>Sin foto del cheque.</b> Motivo: ${esc(c.sin_foto_motivo)}${c.sin_foto_por_nombre ? ' (registró ' + esc(c.sin_foto_por_nombre) + ')' : ''}</div>` : ''}
     <label class="f">Comentario (opcional)</label><textarea id="cmt"></textarea>
-    <div class="row" style="margin-top:14px"><button class="btn ok grow" data-act="okautorizar" data-id="${id}">Sí, autorizar</button><button class="btn ghost" data-act="close">Cancelar</button></div>`);
+    <div class="row" style="margin-top:14px"><button class="btn ok grow" data-act="okautorizar" data-id="${id}">Autorizar</button><button class="btn ghost" data-act="close">Cancelar</button></div>`);
 }
 let ccFiles = [];
 function dlgCancelado() {
   ccFiles = [];
   openModal(`<h2 style="margin-top:0">Registrar cheque cancelado</h2>
-  <div class="mut sm">Para un cheque que ya salió cancelado de origen (error de impresión, dañado…). No lleva monto ni folios; su póliza es el mismo número del cheque. Guarda el cheque físico con su talón.</div>
-  <div class="grid2"><div><label class="f">Chequera</label><select id="cc_ch"><option value="">Elige…</option>${S.chequeras.map(c => `<option value="${c.id}">${esc(c.nombre)}</option>`).join('')}</select></div>
+  <div class="mut sm">Cheque cancelado de origen (error de impresión, daño, etc.). Sin monto ni folios; la póliza corresponde al número del cheque.</div>
+  <div class="grid2"><div><label class="f">Chequera</label><select id="cc_ch"><option value="">Seleccionar…</option>${S.chequeras.map(c => `<option value="${c.id}">${esc(c.nombre)}</option>`).join('')}</select></div>
   <div><label class="f">No. de cheque</label><input type="number" inputmode="numeric" id="cc_num"></div></div>
   <label class="f">Fecha</label><input type="date" id="cc_fecha" value="${today()}">
   <label class="f">Motivo</label><input type="text" id="cc_mot" placeholder="Ej. error de impresión">
@@ -1270,7 +1270,7 @@ function barrasHtml(items, nota) {
 async function viewRep() {
   const tok = S.repTok = (S.repTok || 0) + 1;
   S.res = S.res || { mes: '', q: '', lim: 60 };
-  $('#view').innerHTML = `<div class="pagehead"><h2>Resumen</h2><span class="sub">Cuánto ha recibido cada beneficiario · solo cheques cobrados</span></div>
+  $('#view').innerHTML = `<div class="pagehead"><h2>Resumen</h2><span class="sub">Total por beneficiario · solo cheques cobrados</span></div>
     <div class="filters" style="margin-bottom:10px"><select id="repCh" aria-label="Chequera"><option value="">Todas las chequeras</option>${S.chequeras.map(c => `<option value="${c.id}" ${String(S.repCh || '') === String(c.id) ? 'selected' : ''}>${esc(c.nombre)}</option>`).join('')}</select><select id="resMes" aria-label="Mes"></select><input id="resQ" type="text" placeholder="Buscar beneficiario" value="${esc(S.res.q)}"></div>
     <div id="repBody"><div class="sk"></div><div class="sk"></div></div>`;
   try {
@@ -1353,11 +1353,11 @@ function pintaIng() {
   }).join('');
   const tot = ING_CATS.map(([k]) => `<td class="r"><b>${fmtK(sum(all.filter(r => r.categoria === k)) / 100)}</b></td>`).join('');
   $('#ingBody').innerHTML = `
-    <div class="card" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><div class="grow"><b>Importar movimientos del banco</b><div class="mut sm">Sube el CSV de Afirme. Solo se agregan los depósitos nuevos; los que ya estaban se omiten.</div></div><button class="btn gold sm" id="ingImp">Importar CSV</button><input type="file" id="ingFile" accept=".csv,.txt,text/csv" class="hidden"></div>
-    ${sinC.length ? `<div class="warnbox" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><div class="grow"><b>${sinC.length} depósito${sinC.length === 1 ? '' : 's'} por clasificar</b> · ${fmt(sum(sinC) / 100)}</div><button class="btn gold sm" data-ingcat="NULL">Verlos</button></div>` : ''}
+    <div class="card" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><div class="grow"><b>Importar movimientos del banco</b><div class="mut sm">CSV de Afirme. Solo se agregan depósitos nuevos; los existentes se omiten.</div></div><button class="btn gold sm" id="ingImp">Importar CSV</button><input type="file" id="ingFile" accept=".csv,.txt,text/csv" class="hidden"></div>
+    ${sinC.length ? `<div class="warnbox" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><div class="grow"><b>${sinC.length} depósito${sinC.length === 1 ? '' : 's'} por clasificar</b> · ${fmt(sum(sinC) / 100)}</div><button class="btn gold sm" data-ingcat="NULL">Ver</button></div>` : ''}
     <div class="filters" style="margin:10px 0"><select id="ingMes" aria-label="Mes"><option value="">Todo 2026</option>${meses.map(m => `<option value="${m}" ${f.mes === m ? 'selected' : ''}>${mesLbl(m)}</option>`).join('')}</select><select id="ingCat" aria-label="Concepto"><option value="">Todos los conceptos</option>${ING_CATS.map(([k, l]) => `<option value="${k}" ${f.cat === k ? 'selected' : ''}>${l}</option>`).join('')}<option value="NULL" ${f.cat === 'NULL' ? 'selected' : ''}>Por clasificar</option></select><input id="ingQ" type="text" placeholder="Buscar pagador, concepto o monto" value="${esc(f.q)}"></div>
     <div class="kpis k6">${kpis}</div>
-    <div class="card" style="overflow:auto"><h3 class="rh">Por mes</h3><table class="ingtbl"><thead><tr><th>Mes</th>${ING_CATS.map(([, l]) => `<th class="r">${l}</th>`).join('')}<th class="r">Total</th></tr></thead><tbody>${tr}</tbody><tfoot><tr><td><b>Total</b></td>${tot}<td class="r"><b>${fmtK(sum(all.filter(esExcer)) / 100)}</b></td></tr></tfoot></table>${hayOtras ? '<div class="mut sm" style="margin-top:6px">El Total es solo de la cuenta Excer. Rene, Egbert y Omar suman además sus depósitos de otras cuentas (ITE), que no entran al Total.</div>' : ''}</div>
+    <div class="card" style="overflow:auto"><h3 class="rh">Por mes</h3><table class="ingtbl"><thead><tr><th>Mes</th>${ING_CATS.map(([, l]) => `<th class="r">${l}</th>`).join('')}<th class="r">Total</th></tr></thead><tbody>${tr}</tbody><tfoot><tr><td><b>Total</b></td>${tot}<td class="r"><b>${fmtK(sum(all.filter(esExcer)) / 100)}</b></td></tr></tfoot></table>${hayOtras ? '<div class="mut sm" style="margin-top:6px">El Total corresponde solo a la cuenta Excer; los depósitos de otras cuentas (ITE) no se incluyen.</div>' : ''}</div>
     <div id="ingLista"></div>`;
   const B = $('#ingBody');
   if (!editaIng()) $('#ingImp')?.closest('.card')?.remove();
@@ -1384,7 +1384,7 @@ function pintaIngLista() {
   a.forEach(r => { const o = porCta[ctaDe(r)] = porCta[ctaDe(r)] || { n: 0, v: 0 }; o.n++; o.v += cents(r.monto); });
   const ctas = Object.keys(porCta).sort((x, y) => porCta[y].v - porCta[x].v);
   if (f.cuenta && !porCta[f.cuenta]) f.cuenta = '';
-  const resCta = f.cat && f.cat !== 'NULL' && ctas.length > 1 ? `<div class="card" style="margin-bottom:10px"><h3 class="rh">${ingCatTxt(f.cat)} por cuenta${f.mes ? ' · ' + mesLbl(f.mes) : ''} <span class="mut sm">· toca una para ver solo esa</span></h3><div class="bars">${ctas.map(k => `<div class="brow${f.cuenta === k ? ' on' : ''}" data-ingcta="${esc(k)}" role="button" tabindex="0" style="cursor:pointer"><div class="bhead"><span class="bl">${f.cuenta === k ? '▸ ' : ''}${esc(k)}${esc(k) === 'Excer Afirme' ? '' : ' <span class="bn">(fuera del Total)</span>'} <span class="bn">· ${porCta[k].n} depósito${porCta[k].n === 1 ? '' : 's'}</span></span><span class="bv money">${fmt(porCta[k].v / 100)}</span></div></div>`).join('')}</div><div class="bhead" style="margin-top:6px;border-top:1px solid var(--line);padding-top:6px"><b>Total ${ingCatTxt(f.cat)}</b><b class="money">${fmt(ctas.reduce((x, k) => x + porCta[k].v, 0) / 100)}</b></div></div>` : '';
+  const resCta = f.cat && f.cat !== 'NULL' && ctas.length > 1 ? `<div class="card" style="margin-bottom:10px"><h3 class="rh">${ingCatTxt(f.cat)} por cuenta${f.mes ? ' · ' + mesLbl(f.mes) : ''}</h3><div class="bars">${ctas.map(k => `<div class="brow${f.cuenta === k ? ' on' : ''}" data-ingcta="${esc(k)}" role="button" tabindex="0" style="cursor:pointer"><div class="bhead"><span class="bl">${f.cuenta === k ? '▸ ' : ''}${esc(k)}${esc(k) === 'Excer Afirme' ? '' : ' <span class="bn">(fuera del Total)</span>'} <span class="bn">· ${porCta[k].n} depósito${porCta[k].n === 1 ? '' : 's'}</span></span><span class="bv money">${fmt(porCta[k].v / 100)}</span></div></div>`).join('')}</div><div class="bhead" style="margin-top:6px;border-top:1px solid var(--line);padding-top:6px"><b>Total ${ingCatTxt(f.cat)}</b><b class="money">${fmt(ctas.reduce((x, k) => x + porCta[k].v, 0) / 100)}</b></div></div>` : '';
   if (f.cuenta) a = a.filter(r => ctaDe(r) === f.cuenta);
   if (q) a = a.filter(r => (ingNombre(r) + ' ' + (r.concepto || '') + ' ' + Number(r.monto).toFixed(2) + ' ' + fmt(r.monto)).toLowerCase().includes(q));
   const tot = (f.cat ? a : a.filter(esExcer)).reduce((s, r) => s + cents(r.monto), 0);
@@ -1402,13 +1402,13 @@ async function ingClasificar(id, cat) {
       await rpc('ingresos_clasificar', { p_ids: [id], p_cat: cat, p_regla: regla });
       r.categoria = cat; r.origen = cat ? 'manual' : null;
       if (regla) S.ingRows.forEach(x => { if (!x.categoria && x.pagador && ingNorm(x.pagador) === nom) { x.categoria = cat; x.origen = 'regla'; } });
-      toast(cat ? 'Clasificado como ' + ingCatTxt(cat) + (regla && otros.length ? ` (+${otros.length} más)` : '') : 'Quitada la clasificación', 'ok');
+      toast(cat ? 'Clasificado como ' + ingCatTxt(cat) + (regla && otros.length ? ` (+${otros.length} más)` : '') : 'Clasificación eliminada', 'ok');
     } catch (e) { toast(errMsg(e), 'bad'); }
     pintaIng();
   };
   if (!otros.length) return aplica(false);
-  openModal(`<h2 style="margin-top:0">¿Aplicar a todos?</h2><p>Hay <b>${otros.length}</b> depósito${otros.length === 1 ? '' : 's'} más sin clasificar de <b>${esc(nom)}</b>. ¿Marcarlos también como <b>${ingCatTxt(cat)}</b> y recordarlo para los próximos CSV?</p>
-    <div class="row"><button class="btn gold grow" data-ing="todos">Sí, todos</button><button class="btn ghost grow" data-ing="solo">Solo este</button></div>`);
+  openModal(`<h2 style="margin-top:0">¿Aplicar a todos?</h2><p>Hay <b>${otros.length}</b> depósito${otros.length === 1 ? '' : 's'} más sin clasificar de <b>${esc(nom)}</b>. ¿Clasificarlos también como <b>${ingCatTxt(cat)}</b> y aplicar la regla en los próximos CSV?</p>
+    <div class="row"><button class="btn gold grow" data-ing="todos">Aplicar a todos</button><button class="btn ghost grow" data-ing="solo">Solo este</button></div>`);
   $('#modal').querySelectorAll('[data-ing]').forEach(b => b.onclick = () => { closeModal(); aplica(b.dataset.ing === 'todos'); });
 }
 async function ingImportar(file) {
@@ -1418,7 +1418,7 @@ async function ingImportar(file) {
     try { txt = new TextDecoder('utf-8', { fatal: true }).decode(buf); } catch (er) { txt = new TextDecoder('windows-1252').decode(buf); }
     const filas = csvFilas(txt), h = (filas[0] || []).map(normCol);
     const iC = h.indexOf('concepto'), iF = h.findIndex(x => x.startsWith('fecha')), iA = h.indexOf('abono');
-    if (iC < 0 || iF < 0 || iA < 0) throw new Error('No reconozco el archivo. Debe ser el CSV de movimientos de Afirme (con columnas Concepto, Fecha y Abono).');
+    if (iC < 0 || iF < 0 || iA < 0) throw new Error('Formato de archivo no reconocido. Se requiere el CSV de movimientos de Afirme (columnas Concepto, Fecha y Abono).');
     const vistos = {}, out = [];
     for (const r of filas.slice(1)) {
       const raw = String(r[iC] ?? ''), monto = Number(String(r[iA] ?? '').replace(/[$,\s]/g, ''));
@@ -1429,21 +1429,21 @@ async function ingImportar(file) {
       const pg = raw.match(/SPEI RECIBIDO DE (.*?) DE LA CTA/i), rf = raw.match(/RFC (\S+)/), cc = raw.match(/CONCEPTO (.*)$/);
       out.push({ fecha, monto, pagador: pg ? pg[1].trim() : '', rfc: rf ? rf[1] : '', concepto: cc ? cc[1] : raw, raw, n: vistos[key] });
     }
-    if (!out.length) throw new Error('No encontré depósitos en el archivo.');
+    if (!out.length) throw new Error('No se encontraron depósitos en el archivo.');
     let nuevos = 0, exist = 0, sin = 0;
     for (let i = 0; i < out.length; i += 150) {
       toast(`Importando ${Math.min(i + 150, out.length)} de ${out.length}…`);
       const r = await rpc('ingresos_importar', { p_filas: out.slice(i, i + 150) });
       nuevos += r.nuevos; exist += r.existentes; sin += r.sin_clasificar;
     }
-    openModal(`<h2 style="margin-top:0">Importación lista</h2><p><b>${nuevos}</b> depósito${nuevos === 1 ? '' : 's'} nuevo${nuevos === 1 ? '' : 's'}${exist ? `, ${exist} ya estaban` : ''}.${sin ? ` <b>${sin}</b> quedaron por clasificar.` : ''}</p><div class="row"><button class="btn gold grow" data-act="close">Listo</button></div>`);
+    openModal(`<h2 style="margin-top:0">Importación concluida</h2><p><b>${nuevos}</b> depósito${nuevos === 1 ? '' : 's'} nuevo${nuevos === 1 ? '' : 's'}${exist ? `, ${exist} ya registrados` : ''}.${sin ? ` <b>${sin}</b> pendientes de clasificar.` : ''}</p><div class="row"><button class="btn gold grow" data-act="close">Aceptar</button></div>`);
     if (S.tab === 'ing') viewIng();
   } catch (e) { toast(errMsg(e), 'bad'); }
 }
 
 /* ===================== VISTA: LISTA DE CHEQUES ===================== */
 const MESES_N = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
-const ESTATUS_F = [['cobrado', 'Cobrados'], ['porcobrar', 'Autorizados sin cobrar'], ['pendiente', 'Pendientes de autorizar'], ['rechazado', 'Rechazados'], ['cancelado', 'Cancelados']];
+const ESTATUS_F = [['cobrado', 'Cobrados'], ['porcobrar', 'Autorizados sin cobrar'], ['pendiente', 'Pendientes de autorización'], ['rechazado', 'Rechazados'], ['cancelado', 'Cancelados']];
 const mesTxt = m => { const [y, mm] = m.split('-'); return MESES_N[Number(mm) - 1].toUpperCase() + ' ' + y; };
 async function cargarMeses() {
   if (!S.mesesCache || Date.now() - S.mesesCache.t > 60000) {
@@ -1474,7 +1474,7 @@ function fddResumen(k) {
 function fddHtml(k) {
   const sel = S.filt[k], op = opcFiltro(k);
   return `<details class="dd fdd ${sel.length ? 'on' : ''}" data-fk="${k}"><summary class="btn ghost sm"><span class="ft">${esc(fddResumen(k))}</span><b class="fn" ${sel.length > 1 ? '' : 'hidden'}>${sel.length}</b></summary><div class="ddm">
-    <div class="ddh"><span class="mut sm">Puedes elegir varios</span><button type="button" data-act="fddnada" data-k="${k}" ${sel.length ? '' : 'hidden'}>Quitar selección</button></div>
+    <div class="ddh"><span class="mut sm">Selección múltiple</span><button type="button" data-act="fddnada" data-k="${k}" ${sel.length ? '' : 'hidden'}>Quitar selección</button></div>
     ${op.length ? op.map(([v, t]) => `<label><input type="checkbox" data-fk="${k}" value="${esc(v)}" ${sel.includes(v) ? 'checked' : ''}><span>${esc(t)}</span></label>`).join('') : '<div class="mut sm" style="padding:8px 10px">Sin opciones</div>'}
   </div></details>`;
 }
@@ -1558,7 +1558,7 @@ async function loadList(reset) {
     const vals = fr.filter(x => x.estatus === 'autorizado' || x.estatus === 'pendiente');
     const sm = a => a.reduce((t, x) => t + cents(x.monto), 0) / 100;
     const cob = vals.filter(x => x.estatus === 'autorizado' && x.cobrado), pcb = vals.filter(x => !(x.estatus === 'autorizado' && x.cobrado));
-    $('#resumen').innerHTML = fr.length ? `<div class="card summary"><div class="ico">${ICON.money}</div><div class="grow"><div class="mut sm">Suma de lo filtrado (sin cancelados ni rechazados)</div><div class="money big">${fmt(sm(vals))}</div><div class="mut sm">Cobrados ${fmt(sm(cob))} · Sin cobrar ${fmt(sm(pcb))}</div></div><div class="mut sm">${vals.length} cheque(s)</div></div>` : '';
+    $('#resumen').innerHTML = fr.length ? `<div class="card summary"><div class="ico">${ICON.money}</div><div class="grow"><div class="mut sm">Total filtrado (sin cancelados ni rechazados)</div><div class="money big">${fmt(sm(vals))}</div><div class="mut sm">Cobrados ${fmt(sm(cob))} · Sin cobrar ${fmt(sm(pcb))}</div></div><div class="mut sm">${vals.length} cheque(s)</div></div>` : '';
   } else if (!f.q) {
     let pc = []; try { pc = await fetchAll(() => sb.from('cheques').select('id,monto').eq('es_historial', false).eq('estatus', 'autorizado').eq('cobrado', false)); } catch (e) { pc = []; }
     const tot = (pc || []).reduce((a, x) => a + cents(x.monto), 0) / 100;
@@ -1625,7 +1625,7 @@ function rowCheque(c) {
 async function cargaComs(id) {
   try { const { data } = await sb.from('cheque_comentarios').select('*').eq('cheque_id', id).order('creado_en', { ascending: true }); return data || []; } catch (e) { return []; }
 }
-const comsHtml = l => l.length ? l.map(m => `<div class="cmt"><b>${esc(m.autor_nombre)}</b> <span class="mut sm">${fdt(m.creado_en)}</span><div>${esc(m.texto)}</div></div>`).join('') : '<div class="mut sm">Sin comentarios. Úsalo para dejar una nota o duda sobre este cheque.</div>';
+const comsHtml = l => l.length ? l.map(m => `<div class="cmt"><b>${esc(m.autor_nombre)}</b> <span class="mut sm">${fdt(m.creado_en)}</span><div>${esc(m.texto)}</div></div>`).join('') : '<div class="mut sm">Sin comentarios.</div>';
 async function openDetail(id) {
   const tk = S.detTok = (S.detTok || 0) + 1;
   openModal('<div class="spin">Cargando…</div>');
@@ -1643,7 +1643,7 @@ async function openDetail(id) {
         const sm = (rows, k) => rows.reduce((a, r) => a + cents(r[k]), 0) / 100;
         lineasHtml = `<details class="card" data-lin="1" style="padding:8px 10px;margin-top:8px"><summary><b>Detalle de líneas</b> · ${esc(lins[0].concepto || '')} ${esc(per)} · ${lins.length} líneas · ${fmt(sm(lins, 'total'))}</summary>
           ${grupos.map(g => { const t = sm(g.rows, 'total'); const dif = g.folio ? cents(t) - cents(g.folio.monto) : 0; return `<div style="margin-top:10px"><div class="row"><b class="grow">${esFac && g.folio ? 'Folio ' + esc(g.folio.folio_numero) : esc(g.grupo || '') + (g.folio ? ' · folio ' + esc(g.folio.folio_numero) : '')}</b><span class="money">${fmt(t)}</span></div>
-            ${dif ? `<div class="mut sm">El folio es por ${fmt(g.folio.monto)}: diferencia de ${fmt(dif / 100)} por redondeo de la factura.</div>` : ''}
+            ${dif ? `<div class="mut sm">Folio por ${fmt(g.folio.monto)}; diferencia de ${fmt(dif / 100)} por redondeo de la factura.</div>` : ''}
             <table><thead><tr><th>${esFac ? '# Factura' : 'Línea'}</th><th>${esFac ? 'Obra' : 'Nombre'}</th>${esFac ? '' : '<th class="r">Monto</th><th class="r">IVA</th>'}<th class="r">Total</th></tr></thead><tbody>${g.rows.map(r => `<tr><td>${esc(r.linea || '')}<div class="mut sm">${esc(r.celular || '')}</div></td><td>${esc(r.nombre || '')}</td>${esFac ? '' : `<td class="r money">${fmt(r.monto)}</td><td class="r money">${fmt(r.iva)}</td>`}<td class="r money">${fmt(r.total)}</td></tr>`).join('')}</tbody></table></div>`; }).join('')}</details>`;
       }
     } catch (e) { /* el detalle de líneas es opcional */ }
@@ -1661,7 +1661,7 @@ async function openDetail(id) {
       if (esAdmin() && c.cobrado) acciones += `<button class="btn ghost" data-act="descobrar" data-id="${id}">Desmarcar cobro</button>`;
       if (puedeCancelar(c) && !(esAdmin() && c.estatus === 'pendiente')) acciones += `<button class="btn ghost" data-act="cancelar" data-id="${id}">Cancelar cheque</button>`;
       if (c.estatus !== 'cancelado') acciones += `<button class="btn ghost" data-act="poliza" data-id="${id}">Ver póliza</button>`;
-      if (puedeReexpedir(c)) acciones += `<button class="btn gold" data-act="reexpedir" data-id="${id}">Crear nuevo cheque igual</button>`;
+      if (puedeReexpedir(c)) acciones += `<button class="btn gold" data-act="reexpedir" data-id="${id}">Reexpedir cheque</button>`;
     }
     const puedeSubir = !hist && (c.estatus !== 'cancelado' || puedeCapturar());
     openModal(`
@@ -1676,30 +1676,30 @@ async function openDetail(id) {
         ${c.autorizado_por_nombre ? `<div>Autorizó</div><div>${esc(c.autorizado_por_nombre)} · ${fdt(c.fecha_autorizacion)}${c.comentario_autorizacion ? '<br><span class="mut">' + esc(c.comentario_autorizacion) + '</span>' : ''}</div>` : ''}
         ${c.motivo_rechazo ? `<div>Rechazo</div><div>${esc(c.motivo_rechazo)}</div>` : ''}
         ${c.motivo_cancelacion ? `<div>Cancelación</div><div>${esc(c.motivo_cancelacion)}</div>` : ''}
-        ${c.estatus === 'cancelado' && !c.es_historial ? `<div>Confirmación del Ing.</div><div>${c.cancelacion_enterada_en ? 'Enterado: ' + esc(c.cancelacion_enterada_por_nombre || '') + ' · ' + fdt(c.cancelacion_enterada_en) : '<span class="chip warn">Pendiente de confirmar</span>'}</div>` : ''}
+        ${c.estatus === 'cancelado' && !c.es_historial ? `<div>Confirmación del Ing.</div><div>${c.cancelacion_enterada_en ? 'Enterado: ' + esc(c.cancelacion_enterada_por_nombre || '') + ' · ' + fdt(c.cancelacion_enterada_en) : '<span class="chip warn">Pendiente de confirmación</span>'}</div>` : ''}
         ${c.sin_foto_motivo ? `<div>Sin foto</div><div>${esc(c.sin_foto_motivo)}<br><span class="mut">${esc(c.sin_foto_por_nombre || '')}${c.sin_foto_en ? ' · ' + fdt(c.sin_foto_en) : ''}</span></div>` : ''}
         ${c.sin_factura_motivo ? `<div>Sin factura</div><div>${esc(c.sin_factura_motivo)}</div>` : ''}
         ${c.cobrado ? `<div>Cobrado</div><div>${fdate(c.fecha_cobro)}</div>` : ''}
         ${c.nota_historial ? `<div>Nota</div><div>${esc(c.nota_historial)}</div>` : ''}
       </div></div>
-      ${hist ? '<div class="warnbox">Cheque del historial (archivo). No lleva póliza ni folios del sistema.</div>' : (c.estatus === 'cancelado' && !fol.length) ? '<div class="warnbox">Cheque cancelado: no lleva monto ni folios.</div>' : `
+      ${hist ? '<div class="warnbox">Cheque del historial (archivo), sin póliza ni folios del sistema.</div>' : (c.estatus === 'cancelado' && !fol.length) ? '<div class="warnbox">Cheque cancelado, sin monto ni folios.</div>' : `
       <h3>Folios</h3><div class="card" style="padding:6px 10px"><table><thead><tr><th>Cargo</th><th>Folio</th><th>Detalle</th><th class="r">Monto</th></tr></thead><tbody>
         ${fol.map(f => `<tr><td>${f.es_ajuste ? '' : esc(cargoNombre(f.cargo_id))}</td><td>${f.es_ajuste ? '' : f.sin_folio ? '<span class="chip warn">SIN FOLIO</span>' : esc(f.folio_numero)}</td><td>${esc([f.proveedor, f.descripcion, f.obra].filter(Boolean).join(' · '))}${detLin(c, f)}${f.sin_folio && f.sin_folio_motivo ? `<div class="mut sm">Motivo: ${esc(f.sin_folio_motivo)}</div>` : ''}</td><td class="r money">${fmt(f.monto)}</td></tr>`).join('') || '<tr><td colspan="4" class="mut">Sin folios</td></tr>'}
       </tbody></table></div>
       ${cuadra ? '' : `<div class="warnbox">No cuadra: folios ${fmt(sumFolios(c) / 100)} vs cheque ${fmt(c.monto)}.</div>`}`}
       ${lineasHtml}
       <h3>Documentos</h3><div class="card files">
-        ${arch.length ? arch.map(a => `<div class="row" style="margin-bottom:6px"><span class="chip historial">${esc(c.estatus === 'cancelado' ? docLabel(c, a.tipo) : (tipoTxt[a.tipo] || a.tipo))}</span><button class="lnk grow" style="text-align:left" data-act="verpath" data-path="${esc(a.path)}">${esc(a.nombre || 'archivo')}</button>${puedeEditarArch(a) && !hist ? `<details class="dd"><summary class="btn ghost sm">Editar</summary><div class="ddm" style="left:auto;right:0"><button data-act="reemplazar" data-id="${a.id}" data-cheque="${id}" data-tipo="${esc(a.tipo)}">Reemplazar archivo…</button>${/\.pdf$/i.test(a.nombre || a.path) ? `<button data-act="horizontal" data-id="${a.id}" data-cheque="${id}">Pasar a hoja horizontal</button><button data-act="girar" data-id="${a.id}" data-cheque="${id}">Girar 90°</button>` : ''}<div class="sep"></div><button class="bad" data-act="quitar" data-id="${a.id}" data-cheque="${id}">Quitar…</button></div></details>` : ''}</div>`).join('') : '<span class="mut">Aún no hay documentos.</span>'}
+        ${arch.length ? arch.map(a => `<div class="row" style="margin-bottom:6px"><span class="chip historial">${esc(c.estatus === 'cancelado' ? docLabel(c, a.tipo) : (tipoTxt[a.tipo] || a.tipo))}</span><button class="lnk grow" style="text-align:left" data-act="verpath" data-path="${esc(a.path)}">${esc(a.nombre || 'archivo')}</button>${puedeEditarArch(a) && !hist ? `<details class="dd"><summary class="btn ghost sm">Editar</summary><div class="ddm" style="left:auto;right:0"><button data-act="reemplazar" data-id="${a.id}" data-cheque="${id}" data-tipo="${esc(a.tipo)}">Reemplazar archivo…</button>${/\.pdf$/i.test(a.nombre || a.path) ? `<button data-act="horizontal" data-id="${a.id}" data-cheque="${id}">Pasar a hoja horizontal</button><button data-act="girar" data-id="${a.id}" data-cheque="${id}">Girar 90°</button>` : ''}<div class="sep"></div><button class="bad" data-act="quitar" data-id="${a.id}" data-cheque="${id}">Quitar…</button></div></details>` : ''}</div>`).join('') : '<span class="mut">Sin documentos.</span>'}
         ${puedeSubir && puedeArchivos() ? `<div class="row" style="margin-top:10px">
           ${c.estatus !== 'cancelado' ? `<button class="btn ghost sm" data-act="subir" data-id="${id}" data-tipo="foto_cheque">+ Foto del cheque</button><button class="btn ghost sm" data-act="subir" data-id="${id}" data-tipo="factura">+ Factura</button><button class="btn ghost sm" data-act="subir" data-id="${id}" data-tipo="folio">+ Folio</button>` : ''}
           ${c.estatus !== 'cancelado' && !archActivos(c, 'comprobante_cobro').length ? `<button class="btn ghost sm" data-act="subir" data-id="${id}" data-tipo="comprobante_cobro">+ Ticket / ficha de depósito</button>` : ''}
           ${c.estatus === 'cancelado' ? `<button class="btn ghost sm" data-act="subircanc" data-id="${id}">${archActivos(c, 'foto_cheque').length ? 'Reemplazar con foto del cheque cancelado' : '+ Foto del cheque cancelado'}</button>` : `<button class="btn ghost sm" data-act="subir" data-id="${id}" data-tipo="otro">+ Otro</button>`}${c.estatus !== 'cancelado' ? `<button class="btn ghost sm" data-act="copiardocs" data-id="${id}">Copiar documentos de un cheque cancelado</button>` : ''}</div>`
-          : (!hist && puedeCapturar() ? '<div class="mut sm" style="margin-top:8px">Para agregar, reemplazar o quitar documentos de un cheque ya capturado, avisa a Pedro. Lo que tú subiste lo puedes cambiar o quitar durante 24 horas.</div>' : '')}
-        ${!hist && puedeTocar(c) && c.estatus === 'pendiente' && !archActivos(c, 'foto_cheque').length && (puedeOperar() || !c.sin_foto_motivo) ? `<div class="row" style="margin-top:8px">${c.sin_foto_motivo ? `<button class="btn ghost sm" data-act="quitarsf" data-id="${id}">Quitar marca "sin foto"</button>` : `<button class="btn ghost sm" data-act="sinfoto" data-id="${id}">No hay foto</button>`}</div>` : ''}
+          : (!hist && puedeCapturar() ? '<div class="mut sm" style="margin-top:8px">Los documentos propios pueden modificarse durante 24 horas; otros cambios se solicitan a Pedro.</div>' : '')}
+        ${!hist && puedeTocar(c) && c.estatus === 'pendiente' && !archActivos(c, 'foto_cheque').length && (puedeOperar() || !c.sin_foto_motivo) ? `<div class="row" style="margin-top:8px">${c.sin_foto_motivo ? `<button class="btn ghost sm" data-act="quitarsf" data-id="${id}">Quitar marca "sin foto"</button>` : `<button class="btn ghost sm" data-act="sinfoto" data-id="${id}">Marcar sin foto</button>`}</div>` : ''}
       </div>
       ${acciones ? `<div class="row" style="margin:12px 0">${acciones}</div>` : ''}
       <h3>Comentarios</h3><div class="card" id="cmtBox"><div id="cmtList">${comsHtml(coms)}</div>
-        <div class="row" style="margin-top:10px"><input type="text" id="cmtTxt" maxlength="1000" placeholder="Escribe un comentario…" autocomplete="off" style="flex:1"><button class="btn gold sm" data-act="comentar" data-id="${id}">Enviar</button></div></div>
+        <div class="row" style="margin-top:10px"><input type="text" id="cmtTxt" maxlength="1000" placeholder="Agregar comentario…" autocomplete="off" style="flex:1"><button class="btn gold sm" data-act="comentar" data-id="${id}">Enviar</button></div></div>
       <h3>Bitácora</h3><div>${(bit || []).map(b => `<div class="log"><b>${esc(b.accion.replace(/_/g, ' '))}</b> · ${esc(b.usuario_nombre || '')}<br><span class="mut">${fdt(b.creado_en)}</span></div>`).join('') || '<span class="mut">Sin movimientos</span>'}</div>
     `);
   } catch (e) { if (tk === S.detTok) openModal(`<div class="warnbox">${esc(errMsg(e))}</div>`); }
@@ -1727,11 +1727,11 @@ function pickFuente() {
     const pinta = () => {
       ov.innerHTML = `<div class="sheet"><h2 style="margin-top:0">Agregar documento</h2>
         <div class="row" style="flex-direction:column;gap:10px;align-items:stretch">
-          <button class="btn gold" id="fzCam">📷 Tomar foto ahora</button>
-          <button class="btn ghost" id="fzGal">Elegir de la galería o archivos</button></div>
-        ${files.length ? `<div class="mut sm" style="margin-top:12px">${files.length} archivo(s) listo(s). Si el documento tiene varias hojas, toma una foto de cada una y toca “Listo”.</div>
+          <button class="btn gold" id="fzCam">📷 Tomar foto</button>
+          <button class="btn ghost" id="fzGal">Seleccionar de la galería o archivos</button></div>
+        ${files.length ? `<div class="mut sm" style="margin-top:12px">${files.length} archivo(s) agregado(s). Para documentos de varias hojas, tomar una foto de cada hoja.</div>
           <div class="row" style="margin-top:8px;flex-wrap:wrap;gap:6px">${files.map(f => f.type.startsWith('image/') ? `<img src="${URL.createObjectURL(f)}" style="height:64px;border-radius:8px;border:1px solid var(--line,#ccd)">` : `<span class="chip">${esc(f.name)}</span>`).join('')}</div>` : ''}
-        <div class="row" style="margin-top:14px"><button class="btn ok grow" id="fzOk" ${files.length ? '' : 'disabled'}>Listo${files.length ? ' (' + files.length + ')' : ''}</button><button class="btn ghost" id="fzNo">Cancelar</button></div></div>`;
+        <div class="row" style="margin-top:14px"><button class="btn ok grow" id="fzOk" ${files.length ? '' : 'disabled'}>Aceptar${files.length ? ' (' + files.length + ')' : ''}</button><button class="btn ghost" id="fzNo">Cancelar</button></div></div>`;
       ov.querySelector('#fzCam').onclick = async () => { const f = await pickCamara(); if (f.length) { files.push(...f); pinta(); } };
       ov.querySelector('#fzGal').onclick = async () => { const f = await pickFiles(true); if (f.length) { files.push(...f); pinta(); } };
       ov.querySelector('#fzOk').onclick = () => cierra(files);
@@ -1748,7 +1748,7 @@ function loadImg(file, maxDim = 1800) {
       const cv = document.createElement('canvas'); cv.width = w; cv.height = h; cv.getContext('2d').drawImage(im, 0, 0, w, h);
       URL.revokeObjectURL(url); res({ data: cv.toDataURL('image/jpeg', 0.82), w, h });
     };
-    im.onerror = () => rej(new Error('No se pudo leer la imagen.')); im.src = url;
+    im.onerror = () => rej(new Error('No fue posible leer la imagen.')); im.src = url;
   });
 }
 /* ---- Recorte asistido de la foto del cheque ----
@@ -1776,7 +1776,7 @@ function cargaCanvas(file, maxDim = 2600) {
   return new Promise((res, rej) => {
     const url = URL.createObjectURL(file), im = new Image();
     im.onload = () => { const k = Math.min(1, maxDim / Math.max(im.width, im.height)), cv = document.createElement('canvas'); cv.width = Math.round(im.width * k); cv.height = Math.round(im.height * k); cv.getContext('2d').drawImage(im, 0, 0, cv.width, cv.height); URL.revokeObjectURL(url); res(cv); };
-    im.onerror = () => { URL.revokeObjectURL(url); rej(new Error('No se pudo leer la imagen.')); }; im.src = url;
+    im.onerror = () => { URL.revokeObjectURL(url); rej(new Error('No fue posible leer la imagen.')); }; im.src = url;
   });
 }
 function giraCanvas(cv, cw) {
@@ -1789,8 +1789,8 @@ function ajustarFoto(file) {
     let cv; try { cv = await cargaCanvas(file); } catch (e) { return res(file); }
     let girado = false, dw = 0, dh = 0, B = null;
     const ov = document.createElement('div'); ov.className = 'overlay'; ov.style.zIndex = 75;
-    ov.innerHTML = `<div class="sheet"><h2 style="margin-top:0">Recorta el cheque</h2>
-      <div class="mut sm">Arrastra las esquinas para dejar solo el cheque. Si está de lado, gíralo.</div>
+    ov.innerHTML = `<div class="sheet"><h2 style="margin-top:0">Recortar cheque</h2>
+      <div class="mut sm">Ajustar las esquinas al contorno del cheque.</div>
       <div id="crWrap" class="crwrap"><canvas id="crCv"></canvas><div id="crBox" class="crbox"><i data-h="nw"></i><i data-h="ne"></i><i data-h="sw"></i><i data-h="se"></i></div></div>
       <div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn ghost sm" id="crL">↺ Girar</button><button class="btn ghost sm" id="crR">↻ Girar</button><button class="btn ghost sm" id="crAuto">Sugerir recorte</button></div>
       <div class="row" style="margin-top:14px"><button class="btn ok grow" id="crOk">Usar recorte</button><button class="btn ghost" id="crFull">Foto completa</button></div></div>`;
@@ -1853,7 +1853,7 @@ function cargarOpenCV() {
     const sc = document.createElement('script'); sc.async = true;
     sc.src = 'https://cdn.jsdelivr.net/npm/@techstark/opencv-js@4.12.0-release.1/dist/opencv.js'; sc.integrity = 'sha384-i8A4fJEsRcMFMyEEDNri/2MR12DhkFLlUF+9oxUrxs6prIcRj7YtWAQ1OJ+iE0C7'; sc.crossOrigin = 'anonymous';
     sc.onload = () => { const t0 = Date.now(); const iv = setInterval(() => { const c = window.cv; if (c && c.Mat) { clearInterval(iv); try { delete c.then; } catch (e) { } window.__cvMod = c; ok(c); } else if (Date.now() - t0 > 60000) { clearInterval(iv); _cvP = null; no(new Error('OpenCV no inicializó')); } }, 80); };
-    sc.onerror = () => { _cvP = null; no(new Error('No se pudo cargar el detector de orillas.')); };
+    sc.onerror = () => { _cvP = null; no(new Error('No fue posible cargar el detector de bordes.')); };
     document.head.appendChild(sc);
   });
   return _cvP;
@@ -1973,7 +1973,7 @@ function escanearFoto(file, modo, titulo, nota) {
     let cv; try { cv = await cargaCanvas(file, 2600); } catch (e) { return res(file); }
     let Q = null, dw = 0, dh = 0, paso = 1, salidaCv = null, mejora = true;
     const ov = document.createElement('div'); ov.className = 'overlay'; ov.style.zIndex = 75; document.body.appendChild(ov);
-    ov.innerHTML = '<div class="sheet"><div class="spin">Preparando el recorte…</div><div class="mut sm" style="text-align:center">La primera vez tarda unos segundos en descargar el detector de orillas.</div></div>';
+    ov.innerHTML = '<div class="sheet"><div class="spin">Preparando el recorte…</div><div class="mut sm" style="text-align:center">La primera carga del detector de bordes puede tardar unos segundos.</div></div>';
     const nom = file.name.replace(/\.[a-z0-9]+$/i, '');
     const cierra = f => { ov.remove(); res(f); };
     const aFile = c => new Promise(r2 => c.toBlob(b => r2(new File([b], nom + '-escaneo.jpg', { type: 'image/jpeg' })), 'image/jpeg', 0.88));
@@ -1985,7 +1985,7 @@ function escanearFoto(file, modo, titulo, nota) {
       ov.innerHTML = `<div class="sheet"><h2 style="margin-top:0">${esc(titulo)}</h2>${nota ? `<div class="mut sm" style="margin-bottom:4px">${esc(nota)}</div>` : ''}
         <div class="mut sm">${msg}</div>
         <div id="esWrap" class="eswrap"><canvas id="esCv"></canvas><svg id="esSvg"></svg>${[0, 1, 2, 3].map(i => `<i class="esh" data-i="${i}"></i>`).join('')}</div>
-        <div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn ghost sm" id="esL">↺ Girar</button><button class="btn ghost sm" id="esR">↻ Girar</button><button class="btn ghost sm" id="esAuto">Buscar orillas</button></div>
+        <div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn ghost sm" id="esL">↺ Girar</button><button class="btn ghost sm" id="esR">↻ Girar</button><button class="btn ghost sm" id="esAuto">Detectar bordes</button></div>
         <div class="row" style="margin-top:14px"><button class="btn ok grow" id="esOk">Recortar y mejorar</button><button class="btn ghost" id="esOrig">Usar foto original</button></div></div>`;
       const wrap = ov.querySelector('#esWrap'), cnv = ov.querySelector('#esCv'), svg = ov.querySelector('#esSvg'), hs = [...ov.querySelectorAll('.esh')];
       const layout = () => {
@@ -2009,38 +2009,38 @@ function escanearFoto(file, modo, titulo, nota) {
       const gira = cw => { cv = giraCanvas(cv, cw); Q = Q.map(([x, y]) => cw ? [1 - y, x] : [y, 1 - x]); Q = cw ? [Q[3], Q[0], Q[1], Q[2]] : [Q[1], Q[2], Q[3], Q[0]]; layout(); };
       ov.querySelector('#esL').onclick = () => gira(false);
       ov.querySelector('#esR').onclick = () => gira(true);
-      ov.querySelector('#esAuto').onclick = () => { if (!detecta()) toast('No encontré las orillas: acomoda las esquinas con el dedo.', 'err'); pinta(); };
+      ov.querySelector('#esAuto').onclick = () => { if (!detecta()) toast('No se detectaron los bordes. Ajustar las esquinas manualmente.', 'err'); pinta(); };
       ov.querySelector('#esOrig').onclick = async () => cierra(file);
       ov.querySelector('#esOk').onclick = () => {
-        if (!convexo(Q.map(p => [p[0] * dw, p[1] * dh]))) return toast('Las esquinas se cruzaron: acomódalas en orden.', 'err');
+        if (!convexo(Q.map(p => [p[0] * dw, p[1] * dh]))) return toast('Las esquinas se cruzan. Ajustarlas en orden.', 'err');
         const b = ov.querySelector('#esOk'); b.disabled = true; b.textContent = 'Procesando…';
-        setTimeout(() => { try { let o = enderezar(cv, Q); if (modo === 'cheque' && o.height > o.width * 1.05) o = giraCanvas(o, false); salidaCv = o; pasoResultado(); } catch (e) { toast('No se pudo procesar la foto.', 'err'); b.disabled = false; b.textContent = 'Recortar y mejorar'; } }, 30);
+        setTimeout(() => { try { let o = enderezar(cv, Q); if (modo === 'cheque' && o.height > o.width * 1.05) o = giraCanvas(o, false); salidaCv = o; pasoResultado(); } catch (e) { toast('No fue posible procesar la foto.', 'err'); b.disabled = false; b.textContent = 'Recortar y mejorar'; } }, 30);
       };
     };
     const pasoResultado = () => {
       paso = 2;
       const final = () => mejora ? mejorarImagen(copiaCanvas(salidaCv), modo) : salidaCv;
       let vista = final();
-      ov.innerHTML = `<div class="sheet"><h2 style="margin-top:0">¿Así queda bien?</h2>
+      ov.innerHTML = `<div class="sheet"><h2 style="margin-top:0">Vista previa</h2>
         <div class="esres"><img id="esImg" alt="Resultado"></div>
         <label class="row" style="gap:8px;margin-top:8px;align-items:center"><input type="checkbox" id="esMej" ${mejora ? 'checked' : ''} style="width:auto"> <span>Quitar sombras y mejorar nitidez</span></label>
         <div class="row" style="gap:8px;flex-wrap:wrap;margin-top:6px"><button class="btn ghost sm" id="esL2">↺ Girar</button><button class="btn ghost sm" id="esR2">↻ Girar</button><button class="btn ghost sm" id="esVolver">Ajustar esquinas</button></div>
-        <div class="row" style="margin-top:14px"><button class="btn ok grow" id="esUsar">Usar esta</button><button class="btn ghost" id="esOrig2">Usar foto original</button></div></div>`;
+        <div class="row" style="margin-top:14px"><button class="btn ok grow" id="esUsar">Usar imagen</button><button class="btn ghost" id="esOrig2">Usar foto original</button></div></div>`;
       const img = ov.querySelector('#esImg'); const muestra = () => { img.src = vista.toDataURL('image/jpeg', 0.8); };
       muestra();
       ov.querySelector('#esMej').onchange = e => { mejora = e.target.checked; vista = final(); muestra(); };
       ov.querySelector('#esL2').onclick = () => { salidaCv = giraCanvas(salidaCv, false); vista = final(); muestra(); };
       ov.querySelector('#esR2').onclick = () => { salidaCv = giraCanvas(salidaCv, true); vista = final(); muestra(); };
-      ov.querySelector('#esVolver').onclick = () => pasoEsquinas('Acomoda las 4 esquinas sobre las orillas del documento.');
+      ov.querySelector('#esVolver').onclick = () => pasoEsquinas('Ajustar las 4 esquinas sobre los bordes del documento.');
       ov.querySelector('#esOrig2').onclick = () => cierra(file);
       ov.querySelector('#esUsar').onclick = async () => cierra(await aFile(vista));
     };
-    pasoEsquinas(auto ? 'Revisa que las 4 esquinas estén sobre las orillas; si no, arrástralas con el dedo.' : 'No encontré las orillas solo: arrastra las 4 esquinas sobre las orillas del documento.');
+    pasoEsquinas(auto ? 'Verificar que las 4 esquinas coincidan con los bordes del documento.' : 'No se detectaron los bordes. Ajustar las 4 esquinas sobre los bordes del documento.');
   });
 }
 async function escanearFotos(files, tipo) {
   const modo = tipo === 'foto_cheque' ? 'cheque' : 'doc';
-  const tit = { foto_cheque: 'Recorta el cheque', folio: 'Recorta el folio', factura: 'Recorta la factura', comprobante_cobro: 'Recorta el ticket o ficha', otro: 'Recorta el documento' }[tipo] || 'Recorta el documento';
+  const tit = { foto_cheque: 'Recortar cheque', folio: 'Recortar folio', factura: 'Recortar factura', comprobante_cobro: 'Recortar ticket o ficha', otro: 'Recortar documento' }[tipo] || 'Recortar documento';
   const imgs = files.filter(f => f.type && f.type.startsWith('image/')).length; let n = 0; const out = [];
   for (const f of files) { if (f.type && f.type.startsWith('image/')) { n++; out.push(await escanearFoto(f, modo, tit, imgs > 1 ? `Foto ${n} de ${imgs}` : '')); } else out.push(f); }
   return out;
@@ -2074,13 +2074,13 @@ function revisaNombreCat(nombre, provs) {
 }
 function difLectura(L, h) {
   const out = []; if (!L) return out;
-  if (L.numero_cheque && h.numero_cheque && String(Number(L.numero_cheque)) !== String(Number(h.numero_cheque))) out.push(`La foto dice cheque ${L.numero_cheque} y capturaste ${h.numero_cheque}.`);
-  if (L.monto != null && h.monto && cents(L.monto) !== cents(parseMoney(h.monto))) out.push(`La foto dice ${fmt(L.monto)} y capturaste ${fmt(parseMoney(h.monto))}.`);
-  if (L.beneficiario && h.beneficiario && similitud(normNom(L.beneficiario), normNom(h.beneficiario)) < 0.6) out.push(`La foto dice "${L.beneficiario}" y capturaste "${String(h.beneficiario).toUpperCase()}".`);
-  if (L.fecha && h.fecha && L.fecha !== h.fecha) out.push(`La fecha de la foto es ${fdate(L.fecha)} y capturaste ${fdate(h.fecha)}.`);
-  if (L.letra_coincide === false) out.push('En la foto, el importe con letra no coincide con el de número.');
-  if (L.cancelado) out.push('La foto parece de un cheque CANCELADO.');
-  if (L.legible === false) out.push('La foto se ve borrosa: revisa los datos a mano.');
+  if (L.numero_cheque && h.numero_cheque && String(Number(L.numero_cheque)) !== String(Number(h.numero_cheque))) out.push(`Número en la foto: ${L.numero_cheque}; capturado: ${h.numero_cheque}.`);
+  if (L.monto != null && h.monto && cents(L.monto) !== cents(parseMoney(h.monto))) out.push(`Monto en la foto: ${fmt(L.monto)}; capturado: ${fmt(parseMoney(h.monto))}.`);
+  if (L.beneficiario && h.beneficiario && similitud(normNom(L.beneficiario), normNom(h.beneficiario)) < 0.6) out.push(`Beneficiario en la foto: "${L.beneficiario}"; capturado: "${String(h.beneficiario).toUpperCase()}".`);
+  if (L.fecha && h.fecha && L.fecha !== h.fecha) out.push(`Fecha en la foto: ${fdate(L.fecha)}; capturada: ${fdate(h.fecha)}.`);
+  if (L.letra_coincide === false) out.push('El importe con letra no coincide con el importe en número.');
+  if (L.cancelado) out.push('La foto parece corresponder a un cheque CANCELADO.');
+  if (L.legible === false) out.push('Foto poco legible; verificar los datos manualmente.');
   return out;
 }
 function pintaLectura() {
@@ -2088,13 +2088,13 @@ function pintaLectura() {
   const st = F.lecturaEstado;
   if (!st) { box.innerHTML = ''; return; }
   if (st === 'leyendo') { box.innerHTML = '<div class="mut sm" style="margin-top:8px">Leyendo la foto del cheque…</div>'; return; }
-  if (st === 'error') { box.innerHTML = `<div class="mut sm" style="margin-top:8px">No se pudo leer la foto automáticamente${F.lecturaError ? ' (' + esc(F.lecturaError) + ')' : ''}. Revisa los datos a mano.</div>`; return; }
+  if (st === 'error') { box.innerHTML = `<div class="mut sm" style="margin-top:8px">No fue posible leer la foto automáticamente${F.lecturaError ? ' (' + esc(F.lecturaError) + ')' : ''}. Verificar los datos manualmente.</div>`; return; }
   const L = F.lectura, dif = difLectura(L, F.h);
   const dice = [L.numero_cheque ? 'Cheque ' + esc(L.numero_cheque) : '', L.monto != null ? fmt(L.monto) : '', L.beneficiario ? esc(L.beneficiario) : '', L.fecha ? esc(fdate(L.fecha)) : ''].filter(Boolean).join(' · ');
   const nomC = { numero_cheque: 'número', fecha: 'fecha', monto: 'monto', beneficiario: 'beneficiario' }, au = [...(F.autoCampos || [])].map(k => nomC[k]).filter(Boolean);
-  const auTxt = au.length ? `<div style="margin-top:4px">Llené con la foto: <b>${au.join(', ')}</b> (marcados en amarillo). Revísalos; si algo se leyó mal, corrígelo en su casilla.</div>` : '';
-  box.innerHTML = `<div class="${dif.length ? 'warnbox' : 'okbox'}" style="margin-top:8px"><b>La foto dice:</b> ${dice || 'no se alcanzó a leer'}${dif.length ? '<ul style="margin:6px 0 0 18px;padding:0">' + dif.map(t => `<li>${esc(t)}</li>`).join('') + '</ul>' : '<div>Coincide con lo capturado.</div>'}${auTxt}
-    ${dice && dif.length ? '<button class="btn ghost sm" style="margin-top:8px" data-act="usarlectura">Cambiar a lo que dice la foto</button>' : ''}</div>`;
+  const auTxt = au.length ? `<div style="margin-top:4px">Datos tomados de la foto: <b>${au.join(', ')}</b> (marcados en amarillo). Verificar antes de guardar.</div>` : '';
+  box.innerHTML = `<div class="${dif.length ? 'warnbox' : 'okbox'}" style="margin-top:8px"><b>Lectura de la foto:</b> ${dice || 'sin lectura'}${dif.length ? '<ul style="margin:6px 0 0 18px;padding:0">' + dif.map(t => `<li>${esc(t)}</li>`).join('') + '</ul>' : '<div>Coincide con lo capturado.</div>'}${auTxt}
+    ${dice && dif.length ? '<button class="btn ghost sm" style="margin-top:8px" data-act="usarlectura">Usar datos de la foto</button>' : ''}</div>`;
 }
 // Al leer la foto se llenan solos los datos que la persona no ha escrito a mano; siempre se pueden corregir.
 function autoLlenarLectura(F) {
@@ -2129,7 +2129,7 @@ async function tipoEscaneo(chequeId, tipo) { if (tipo !== 'otro') return tipo; t
 async function pickFuenteT(tipo) { const fs = await pickFuente(); return fs.length ? await escanearFotos(fs, tipo || 'otro') : fs; }
 async function filesToPdf(files) {
   if (files.length === 1 && files[0].type === 'application/pdf') return files[0];
-  if (files.some(f => f.type === 'application/pdf')) throw new Error('No mezcles PDFs con fotos: sube el PDF solo.');
+  if (files.some(f => f.type === 'application/pdf')) throw new Error('No se pueden combinar PDF y fotos. Cargar el PDF por separado.');
   const { jsPDF } = window.jspdf; const ims = []; for (const f of files) ims.push(await loadImg(f));
   const horiz = im => im.w > im.h * 1.08;   // cheques, fichas y tickets anchos van en hoja horizontal
   const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: horiz(ims[0]) ? 'landscape' : 'portrait' });
@@ -2143,7 +2143,7 @@ async function filesToPdf(files) {
 /* ---- Reorientar PDFs de una sola imagen (los que arma la app o un escáner): vertical -> horizontal, o girar 90° ---- */
 async function bajarPath(path) {
   const { data, error } = await sb.storage.from(BUCKET).createSignedUrl(path, 120); if (error) throw error;
-  const r = await fetch(data.signedUrl); if (!r.ok) throw new Error('No se pudo descargar el archivo.'); return r.blob();
+  const r = await fetch(data.signedUrl); if (!r.ok) throw new Error('No fue posible descargar el archivo.'); return r.blob();
 }
 async function archivoPorId(id) { const { data, error } = await sb.from('archivos').select('*').eq('id', id).single(); if (error) throw error; return data; }
 function a85(buf, st, en) {
@@ -2178,7 +2178,7 @@ async function pdfReorientar(blob, rot = 0, forzar = false) {
   const mb = txt.match(/\/MediaBox\s*\[\s*0\s+0\s+([\d.]+)\s+([\d.]+)\s*\]/);
   const jp = jpegsDePdf(buf, txt); if (jp.length !== 1) return null;
   const jb = new Blob([jp[0]], { type: 'image/jpeg' }); const url = URL.createObjectURL(jb);
-  const im = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('No se pudo leer la imagen del PDF.')); i.src = url; });
+  const im = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('No fue posible leer la imagen del PDF.')); i.src = url; });
   let w = im.naturalWidth, h = im.naturalHeight; let data;
   if (rot % 360 !== 0) {
     const cv = document.createElement('canvas'); const sw = rot % 180 !== 0; cv.width = sw ? h : w; cv.height = sw ? w : h; const cx = cv.getContext('2d');
@@ -2203,12 +2203,12 @@ async function reemplazarConBlob(archivoId, chequeId, blob, nombre, motivo) {
 function dlgMotivoArch(titulo, act, id, extra, btnTxt, motivoDef = '') {
   const attrs = Object.entries(extra || {}).map(([k, v]) => `data-${k}="${esc(String(v))}"`).join(' ');
   openModal(`<h2>${titulo}</h2><label class="f">Motivo (obligatorio)</label><textarea id="mot">${esc(motivoDef)}</textarea>
-    <div class="mut sm" style="margin-top:6px">Queda registrado en la bitácora con tu nombre.</div>
+    <div class="mut sm" style="margin-top:6px">Se registra en la bitácora con el nombre del usuario.</div>
     <div class="row" style="margin-top:14px"><button class="btn gold grow" data-act="${act}" data-id="${id}" ${attrs}>${btnTxt}</button><button class="btn ghost" data-act="close">Volver</button></div>`);
 }
 /* Revisa todos los PDFs de fotos y pasa a horizontal los que son una imagen ancha en hoja vertical. */
 function dlgHorizTodos() {
-  openModal(`<h2>Pasar PDFs a hoja horizontal</h2><div class="mut sm">Revisa todos los documentos en PDF de una sola imagen (fotos de cheque, fichas, tickets) y deja en hoja horizontal los que son anchos y están en hoja vertical. No toca PDFs de varias hojas ni los que ya están bien. Cada cambio queda en la bitácora del cheque.</div>
+  openModal(`<h2>Pasar PDFs a hoja horizontal</h2><div class="mut sm">Se ajustan a hoja horizontal los PDF de una sola imagen ancha en hoja vertical; cada cambio se registra en la bitácora del cheque.</div>
     <label class="f">Motivo (obligatorio)</label><textarea id="mot">Ajuste de hoja a horizontal (documentos anchos)</textarea>
     <div id="horizOut" class="mut sm" style="margin-top:8px"></div>
     <div class="row" style="margin-top:14px"><button class="btn gold grow" data-act="okhoriztodos">Revisar y ajustar</button><button class="btn ghost" data-act="close">Cerrar</button></div>`);
@@ -2228,7 +2228,7 @@ async function horizTodos(motivo) {
       await reemplazarConBlob(a.id, a.cheque_id, nb, a.nombre, motivo); ok++;
     } catch (e) { fail++; }
   }
-  out.innerHTML = `<b>Listo.</b> Ajustados: ${ok} · sin cambio: ${omit}${fail ? ' · con error: ' + fail : ''}`; if (btn) btn.disabled = false; refreshView(true);
+  out.innerHTML = `<b>Proceso concluido.</b> Ajustados: ${ok} · sin cambio: ${omit}${fail ? ' · con error: ' + fail : ''}`; if (btn) btn.disabled = false; refreshView(true);
 }
 async function subirArchivo(chequeId, tipo, files, nombreFijo, opts = {}) {
   // Varios PDFs a la vez (p. ej. todas las facturas de un cheque): cada uno se sube como documento aparte.
@@ -2247,7 +2247,7 @@ async function abrirPath(path) {
   const w = window.open('', '_blank'); if (w) { try { w.opener = null; } catch (e) { } }
   let r; try { r = await sb.storage.from(BUCKET).createSignedUrl(path, 300); } catch (e) { r = { error: e }; }
   if (r.error) { if (w) w.close(); return toast(errMsg(r.error), 'err'); }
-  if (w) w.location = r.data.signedUrl; else toast('Permite ventanas emergentes para ver el documento.', 'err');
+  if (w) w.location = r.data.signedUrl; else toast('Se requiere permitir ventanas emergentes para ver el documento.', 'err');
 }
 
 /* ===================== FOLIOS GENERADOS POR EL SISTEMA ===================== */
@@ -2456,17 +2456,17 @@ function firmaDesdeImagen(file) {
       for (let i = 0; i < p.length; i += 4) { const lum = (p[i] + p[i + 1] + p[i + 2]) / 3; if (p[i + 3] > 0 && lum > 215) p[i + 3] = 0; else if (p[i + 3] > 0 && lum > 150) p[i + 3] = Math.round(p[i + 3] * (215 - lum) / 65); }
       cx.putImageData(id, 0, 0); URL.revokeObjectURL(url); res(normalizarFirma(cv));
     };
-    im.onerror = () => rej(new Error('No se pudo leer la imagen.')); im.src = url;
+    im.onerror = () => rej(new Error('No fue posible leer la imagen.')); im.src = url;
   });
 }
 function dlgFirma() {
   openModal(`<h2 style="margin-top:0">Mi firma</h2>
-    <div class="mut sm">Se imprime junto a “Solicitó” en los folios que genera el sistema, solo cuando tú eres quien solicita. Solo tú la ves.</div>
+    <div class="mut sm">Se imprime junto a “Solicitó” en los folios del sistema cuando el usuario es el solicitante.</div>
     ${S.firma ? `<div class="card" style="margin-top:10px"><div class="mut sm">Firma guardada</div><img id="firmaAct" src="${/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(S.firma) ? S.firma : ''}" style="max-width:230px;max-height:140px;display:block;margin-top:6px;background:#fff"></div>` : ''}
-    <label class="f">Dibújala aquí con el dedo o el mouse</label>
+    <label class="f">Trazar la firma con el dedo o el mouse</label>
     <canvas id="firmaPad" width="${FIRMA_W}" height="${FIRMA_H}" style="width:100%;max-width:340px;aspect-ratio:${FIRMA_W}/${FIRMA_H};border:1px dashed #98a2b3;border-radius:8px;background:#fff;touch-action:none;display:block"></canvas>
     <div class="row" style="margin-top:10px"><button class="btn gold" data-act="firmaguardar">Guardar firma dibujada</button><button class="btn ghost" data-act="firmalimpiar">Borrar trazo</button></div>
-    <div class="row" style="margin-top:10px"><button class="btn ghost" data-act="firmafoto">O sube una imagen de tu firma</button></div>`);
+    <div class="row" style="margin-top:10px"><button class="btn ghost" data-act="firmafoto">Cargar imagen de la firma</button></div>`);
   const cv = $('#firmaPad'), cx = cv.getContext('2d'); let dib = false;
   cx.lineWidth = 5; cx.lineCap = cx.lineJoin = 'round'; cx.strokeStyle = '#0a0a2a';
   const pos = e => { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) * FIRMA_W / r.width, (e.clientY - r.top) * FIRMA_H / r.height]; };
@@ -2475,7 +2475,7 @@ function dlgFirma() {
   cv.onpointerup = cv.onpointercancel = () => { dib = false; };
 }
 async function guardarFirma(dataUrl) {
-  if (!dataUrl) return toast('Primero dibuja o sube tu firma.', 'err');
+  if (!dataUrl) return toast('Se requiere trazar o cargar una firma.', 'err');
   await rpc('guardar_firma', { p_imagen: dataUrl }); S.firma = dataUrl; toast('Firma guardada.', 'ok'); dlgFirma();
 }
 
@@ -2505,10 +2505,10 @@ async function viewNuevo(editCheque, copiaDe) {
   const provs = await cargarProvs();
   if (S.tab !== 'nuevo') return;
   const uniq = provs.map(p => p.nombre);
-  $('#view').innerHTML = `<div class="pagehead"><h2>${F.editId ? 'Editar cheque' : 'Nuevo cheque'}</h2></div>${F.copia ? `<div class="okbox" style="margin-bottom:10px"><b>Nuevo cheque con los datos del ${F.copia.numero} (cancelado).</b> Ya van copiados chequera, beneficiario, monto, concepto, folios y todos sus documentos (menos la foto del cheque). Pon el <b>número del cheque nuevo</b> y toma su foto.${F.copia.arch.length ? `<div style="margin-top:6px">Archivos que se copian al cheque nuevo:</div>${F.copia.arch.map((a, i) => `<label class="row" style="gap:8px;margin-top:4px"><input type="checkbox" data-act="copiaarch" data-i="${i}" ${a.on ? 'checked' : ''} style="width:auto"> <span>${({ factura: 'Factura', folio: 'Folio', comprobante_cobro: 'Comprobante', otro: 'Documento' })[a.tipo] || 'Archivo'}: ${esc(a.nombre)}</span></label>`).join('')}` : '<div class="mut sm" style="margin-top:6px">El cheque cancelado no tenía documentos subidos.</div>'}</div>` : ''}${F.editId || !puedeOperar() ? '' : '<div class="mut sm" style="margin:-6px 0 10px">¿El cheque ya salió cancelado de origen? <a href="#" data-act="cancelado">Regístralo aquí</a></div>'}
+  $('#view').innerHTML = `<div class="pagehead"><h2>${F.editId ? 'Editar cheque' : 'Nuevo cheque'}</h2></div>${F.copia ? `<div class="okbox" style="margin-bottom:10px"><b>Nuevo cheque con los datos del ${F.copia.numero} (cancelado).</b> Se copiaron chequera, beneficiario, monto, concepto, folios y documentos (excepto la foto del cheque). Capturar el <b>número del cheque nuevo</b> y su foto.${F.copia.arch.length ? `<div style="margin-top:6px">Archivos que se copian al cheque nuevo:</div>${F.copia.arch.map((a, i) => `<label class="row" style="gap:8px;margin-top:4px"><input type="checkbox" data-act="copiaarch" data-i="${i}" ${a.on ? 'checked' : ''} style="width:auto"> <span>${({ factura: 'Factura', folio: 'Folio', comprobante_cobro: 'Comprobante', otro: 'Documento' })[a.tipo] || 'Archivo'}: ${esc(a.nombre)}</span></label>`).join('')}` : '<div class="mut sm" style="margin-top:6px">El cheque cancelado no tiene documentos.</div>'}</div>` : ''}${F.editId || !puedeOperar() ? '' : '<div class="mut sm" style="margin:-6px 0 10px">Cheque cancelado de origen: <a href="#" data-act="cancelado">registrar como cancelado</a></div>'}
   <div class="card">
     <div class="grid2">
-      <div><label class="f">Chequera</label><select id="h_chequera_id"><option value="">Elige…</option>${S.chequeras.map(c => `<option value="${c.id}" ${String(h.chequera_id) === String(c.id) ? 'selected' : ''}>${esc(c.nombre)}</option>`).join('')}</select></div>
+      <div><label class="f">Chequera</label><select id="h_chequera_id"><option value="">Seleccionar…</option>${S.chequeras.map(c => `<option value="${c.id}" ${String(h.chequera_id) === String(c.id) ? 'selected' : ''}>${esc(c.nombre)}</option>`).join('')}</select></div>
       <div><label class="f">No. de cheque</label><input type="number" inputmode="numeric" id="h_numero_cheque" value="${esc(h.numero_cheque)}"></div>
       <div><label class="f">Fecha</label><input type="date" id="h_fecha" value="${esc(h.fecha)}"></div>
       <div><label class="f">Monto del cheque</label><input type="text" inputmode="decimal" id="h_monto" placeholder="0.00" value="${esc(h.monto)}"></div>
@@ -2522,23 +2522,23 @@ async function viewNuevo(editCheque, copiaDe) {
   <h3>Foto del cheque ${F.editId ? '' : '(obligatoria)'}</h3>
   <div class="card">
     <div class="row"><button class="btn gold sm" data-act="pickcheque">📷 Tomar o adjuntar foto del cheque</button><span id="chqInfo" class="mut sm">${F.chequeFiles.length ? F.chequeFiles.length + ' foto(s) lista(s) para subir' : 'Sin foto'}</span></div>
-    <div class="mut sm" style="margin-top:6px">Foto del cheque ya impreso, <b>antes de firmar</b>, donde se lea el beneficiario y el monto. El Ing. la revisa para autorizar.</div>
+    <div class="mut sm" style="margin-top:6px">Foto del cheque impreso, <b>antes de firmar</b>, con beneficiario y monto legibles.</div>
     <div id="chqLee"></div>
   </div>
-  <h3>Folios que cubre este cheque</h3>
+  <h3>Folios que ampara el cheque</h3>
   <div id="lines"></div>
   <button class="btn ghost sm" data-act="addline">+ Agregar folio</button> <button class="btn ghost sm" data-act="addajuste">− Saldo a favor / ajuste</button>
   <div id="sumbar" class="sumbar"></div>
   <h3>Folio (archivo o foto)</h3>
   <div class="card">
     <div class="row"><button class="btn ghost sm" data-act="pickfolio">Adjuntar folio (un solo archivo para todos)</button><span id="folInfo" class="mut sm">${F.folioFiles.length ? F.folioFiles.length + ' archivo(s) listo(s) para subir' : 'Sin adjuntar'}</span><button class="lnk sm" data-act="quitaradj" data-k="folio" id="folQuitar" ${F.folioFiles.length ? '' : 'hidden'}>Quitar</button></div>
-    <div class="mut sm" style="margin-top:6px">Sube aquí el PDF o la foto de los folios que ya tienes: un solo archivo aunque el cheque cubra varios folios. Los folios que genera el sistema se guardan solos.</div>
+    <div class="mut sm" style="margin-top:6px">Un solo PDF o foto para todos los folios existentes; los folios generados por el sistema se guardan automáticamente.</div>
   </div>
   <h3>Factura</h3>
   <div class="card">
-    <div class="row"><button class="btn ghost sm" data-act="pickfac">Adjuntar factura (foto o PDF)</button><span id="facInfo" class="mut sm">${F.files.length ? F.files.length + ' archivo(s)' : (F.editId ? 'Puedes agregarla desde el detalle' : 'Sin adjuntar')}</span><button class="lnk sm" data-act="quitaradj" data-k="factura" id="facQuitar" ${F.files.length ? '' : 'hidden'}>Quitar</button></div>
+    <div class="row"><button class="btn ghost sm" data-act="pickfac">Adjuntar factura (foto o PDF)</button><span id="facInfo" class="mut sm">${F.files.length ? F.files.length + ' archivo(s)' : (F.editId ? 'Se puede agregar desde el detalle' : 'Sin adjuntar')}</span><button class="lnk sm" data-act="quitaradj" data-k="factura" id="facQuitar" ${F.files.length ? '' : 'hidden'}>Quitar</button></div>
     <label class="f">Nota sobre la factura (opcional)</label><input type="text" id="h_sin_factura_motivo" placeholder="Ej. el proveedor la entrega después, pago de nómina…" value="${esc(h.sin_factura_motivo)}">
-    <div class="mut sm" style="margin-top:6px">No es necesaria para autorizar: la puedes subir después desde el detalle del cheque.</div>
+    <div class="mut sm" style="margin-top:6px">No es requisito para autorizar; puede agregarse después desde el detalle del cheque.</div>
   </div>
   <div class="row" style="margin-top:12px"><button class="btn gold grow" id="btnGuardar" data-act="guardar">${F.editId ? 'Guardar cambios y reenviar a autorización' : 'Generar póliza y enviar a autorización'}</button>${F.editId ? '<button class="btn ghost" data-act="cancelarEdit">Cancelar</button>' : ''}</div>`;
   ['chequera_id', 'numero_cheque', 'fecha', 'monto', 'beneficiario', 'concepto', 'solicito', 'sin_factura_motivo'].forEach(k => {
@@ -2582,10 +2582,10 @@ function pintaAlertas() {
 function dlgHuecos() {
   const hs = S.huecos || [], cap = puedeOperar();
   openModal(`<h2 style="margin-top:0">Cheques sin dar de alta</h2>` + (hs.length ? hs.map((r, i) => `<div class="card"><div class="b">${esc(r.q.nombre)}</div>
-    ${r.nums.map(x => `<div class="warnbox"><b>${x.n}</b> — ${x.d ? 'DETENIDO: ' + esc(x.d.motivo) + `<div class="mut sm">Lo marcó ${esc(x.d.creado_por_nombre || '')} el ${fdate(fechaMty(x.d.creado_en))}</div>` : '<span class="mut">sin motivo registrado</span>'}</div>`).join('')}
-    ${cap && r.nums.some(x => !x.d) ? `<label class="f">Motivo para los que no tienen</label><input type="text" id="mh_${r.q.id}" placeholder="Ej. DETENIDO POR FALTA DE FIRMA"><div class="row" style="margin-top:8px"><button class="btn gold sm" data-act="motivohuecos" data-q="${r.q.id}">Guardar motivo</button></div>` : ''}
-    <div class="mut sm" style="margin-top:6px">Cuando lo captures con ese número, o lo registres como cancelado, la alerta se quita sola.</div></div>`).join('')
-    : '<div class="okbox">No hay huecos: todas las chequeras llevan numeración continua desde el primer cheque capturado.</div>') + '<div class="mut sm">Se revisa desde el primer cheque capturado en el sistema (el historial no cuenta).</div>');
+    ${r.nums.map(x => `<div class="warnbox"><b>${x.n}</b> — ${x.d ? 'DETENIDO: ' + esc(x.d.motivo) + `<div class="mut sm">Registrado por ${esc(x.d.creado_por_nombre || '')} el ${fdate(fechaMty(x.d.creado_en))}</div>` : '<span class="mut">sin motivo registrado</span>'}</div>`).join('')}
+    ${cap && r.nums.some(x => !x.d) ? `<label class="f">Motivo para los cheques sin motivo</label><input type="text" id="mh_${r.q.id}" placeholder="Ej. DETENIDO POR FALTA DE FIRMA"><div class="row" style="margin-top:8px"><button class="btn gold sm" data-act="motivohuecos" data-q="${r.q.id}">Guardar motivo</button></div>` : ''}
+    <div class="mut sm" style="margin-top:6px">La alerta se elimina al capturar el cheque con ese número o registrarlo como cancelado.</div></div>`).join('')
+    : '<div class="okbox">Sin huecos: todas las chequeras tienen numeración continua desde el primer cheque capturado.</div>') + '<div class="mut sm">La revisión inicia en el primer cheque capturado en el sistema (no incluye historial).</div>');
 }
 
 /* ===================== SEGUROS DE CAPTURA (numeración, duplicados, fechas, montos) ===================== */
@@ -2604,14 +2604,14 @@ async function revisarNumero(h, esEdit) {
   if (u.num != null) out.info = `Último cheque de ${nom}: ${u.num} (${fdate(u.fecha)}). Siguiente: ${u.num + 1}.`;
   if (!(n > 0)) return out;
   const { data: ex } = await sb.from('cheques').select('id,beneficiario,fecha').eq('chequera_id', id).eq('numero_cheque', n).limit(1);
-  if (ex && ex[0] && !(esEdit && ex[0].id === (S.F && S.F.editId))) { out.bloqueos.push(`El cheque ${n} de ${nom} YA EXISTE (${ex[0].beneficiario}, ${fdate(ex[0].fecha)}). No se puede repetir.`); return out; }
+  if (ex && ex[0] && !(esEdit && ex[0].id === (S.F && S.F.editId))) { out.bloqueos.push(`El cheque ${n} de ${nom} YA EXISTE (${ex[0].beneficiario}, ${fdate(ex[0].fecha)}). No se permite repetir el número.`); return out; }
   if (esEdit || u.num == null) return out;
   if (Math.abs(n - u.num) > 25) {
     const otras = [];
     for (const q of S.chequeras) { if (q.id === id) continue; const o = await ultimoChequera(q.id); if (o.num != null && Math.abs(n - o.num) <= 25) otras.push(q.nombre); }
-    out.avisos.push(`OJO: el ${n} está muy lejos del último de ${nom} (${u.num})${otras.length ? ` y se parece a la numeración de ${otras.join(' / ')}. ¿Elegiste bien la chequera?` : '. Revisa que el número esté bien.'}`);
+    out.avisos.push(`Atención: el ${n} está muy alejado del último de ${nom} (${u.num})${otras.length ? ` y coincide con la numeración de ${otras.join(' / ')}. Verificar la chequera seleccionada.` : '. Verificar el número.'}`);
   } else if (n > u.num + 1) {
-    out.avisos.push(`Te estás saltando números: el último es ${u.num} y capturas el ${n} (faltan ${n - u.num - 1 > 1 ? (u.num + 1) + ' al ' + (n - 1) : (u.num + 1)}).`);
+    out.avisos.push(`Números omitidos: el último es ${u.num} y se captura el ${n} (faltan ${n - u.num - 1 > 1 ? (u.num + 1) + ' al ' + (n - 1) : (u.num + 1)}).`);
     out.salta = { chequera: id, nums: Array.from({ length: n - u.num - 1 }, (_, i) => u.num + 1 + i) };
   } else if (n < u.num) {
     out.avisos.push(`El ${n} es menor que el último capturado (${u.num}).`);
@@ -2636,32 +2636,32 @@ async function revisionCaptura(h, tot, esEdit) {
   try {
     const rc = revisaNombreCat(h.beneficiario, await cargarProvs());
     if (rc.nuevo) r.avisos.push(rc.parecido
-      ? `"${h.beneficiario.trim().toUpperCase()}" no está en el catálogo y se parece a "${rc.parecido}". Si es el mismo, vuelve y escríbelo como "${rc.parecido}". Si es otro, confirma y se dará de alta como proveedor nuevo.`
-      : `"${h.beneficiario.trim().toUpperCase()}" es un beneficiario nuevo: al guardar quedará dado de alta en el catálogo de proveedores.`);
+      ? `"${h.beneficiario.trim().toUpperCase()}" no está en el catálogo y es similar a "${rc.parecido}". Si es el mismo, corregirlo como "${rc.parecido}"; de lo contrario, se dará de alta como proveedor nuevo.`
+      : `"${h.beneficiario.trim().toUpperCase()}" es un beneficiario nuevo; se dará de alta en el catálogo de proveedores al guardar.`);
   } catch (e) { /* aviso opcional */ }
   try {
     const ben = h.beneficiario.trim().toUpperCase();
     const desde = new Date(f.getTime() - 15 * 86400000).toISOString().slice(0, 10);
     const { data: dup } = await sb.from('cheques').select('numero_cheque,fecha,chequera_id').eq('beneficiario', ben).eq('monto', tot).gte('fecha', desde).neq('estatus', 'cancelado').limit(3);
-    if (dup && dup.length) r.avisos.push(`Ya hay un cheque a ${ben} por el mismo monto: ${dup.map(d => 'No. ' + d.numero_cheque + ' (' + chequeraNombre(d.chequera_id) + ', ' + fdate(d.fecha) + ')').join(', ')}. ¿Es un duplicado?`);
+    if (dup && dup.length) r.avisos.push(`Existe un cheque a ${ben} por el mismo monto: ${dup.map(d => 'No. ' + d.numero_cheque + ' (' + chequeraNombre(d.chequera_id) + ', ' + fdate(d.fecha) + ')').join(', ')}. Verificar posible duplicado.`);
     const { data: mx } = await sb.from('cheques').select('monto').eq('beneficiario', ben).neq('estatus', 'cancelado').order('monto', { ascending: false }).limit(1);
-    if (mx && mx[0] && Number(mx[0].monto) > 0 && tot >= 3 * Number(mx[0].monto) && tot >= 5000) r.avisos.push(`El monto ${fmt(tot)} es mucho mayor al cheque más grande que se le ha hecho a ${ben} (${fmt(mx[0].monto)}). Revisa los ceros.`);
+    if (mx && mx[0] && Number(mx[0].monto) > 0 && tot >= 3 * Number(mx[0].monto) && tot >= 5000) r.avisos.push(`El monto ${fmt(tot)} es muy superior al cheque más alto emitido a ${ben} (${fmt(mx[0].monto)}). Verificar el importe.`);
   } catch (e) { /* los avisos extra son opcionales */ }
-  if (tot >= 100000) r.avisos.push(`Monto alto: ${fmt(tot)}. Confirma que sea correcto.`);
+  if (tot >= 100000) r.avisos.push(`Monto alto: ${fmt(tot)}. Verificar que sea correcto.`);
   return r;
 }
 function dlgConfirmarCaptura(h, tot, r) {
   const nom = chequeraNombre(Number(h.chequera_id));
-  openModal(`<h2 style="margin-top:0">${r.bloqueos.length ? 'No se puede guardar' : 'Revisa antes de guardar'}</h2>
+  openModal(`<h2 style="margin-top:0">${r.bloqueos.length ? 'No es posible guardar' : 'Revisar antes de guardar'}</h2>
     <div class="card"><div class="kv"><div>Chequera</div><div class="b">${esc(nom)}</div><div>No. de cheque</div><div class="b big">${esc(h.numero_cheque)}</div><div>Fecha</div><div>${fdate(h.fecha)}</div><div>Beneficiario</div><div class="b">${esc(h.beneficiario.trim().toUpperCase())}</div><div>Monto</div><div class="money big">${fmt(tot)}</div></div></div>
     ${r.bloqueos.map(t => `<div class="warnbox" style="margin-top:8px;border-color:var(--bad)">${esc(t)}</div>`).join('')}
     ${r.avisos.map(t => `<div class="warnbox" style="margin-top:8px">${esc(t)}</div>`).join('')}
-    ${r.salta && !r.bloqueos.length ? `<label class="f">¿Por qué se salta el ${r.salta.nums.join(', ')}? (obligatorio)</label><input type="text" id="motSalta" placeholder="Ej. DETENIDO POR FALTA DE FIRMA" value="${esc((S.F && S.F.saltaMotivo) || '')}"><div class="mut sm" style="margin-top:4px">Quedará una alerta en la app hasta que lo des de alta.</div>` : ''}
-    <div class="row" style="margin-top:14px">${r.bloqueos.length ? '' : `<button class="btn gold grow" data-act="confirmguardar">${r.avisos.length ? 'Sí, lo reviso y está correcto' : 'Sí, es correcto — guardar'}</button>`}<button class="btn ghost ${r.bloqueos.length ? 'grow' : ''}" data-act="close">Volver a revisar</button></div>`);
+    ${r.salta && !r.bloqueos.length ? `<label class="f">Motivo por el que se omite el ${r.salta.nums.join(', ')} (obligatorio)</label><input type="text" id="motSalta" placeholder="Ej. DETENIDO POR FALTA DE FIRMA" value="${esc((S.F && S.F.saltaMotivo) || '')}"><div class="mut sm" style="margin-top:4px">La alerta permanecerá hasta dar de alta el cheque.</div>` : ''}
+    <div class="row" style="margin-top:14px">${r.bloqueos.length ? '' : `<button class="btn gold grow" data-act="confirmguardar">${r.avisos.length ? 'Confirmar y guardar' : 'Guardar'}</button>`}<button class="btn ghost ${r.bloqueos.length ? 'grow' : ''}" data-act="close">Volver a revisar</button></div>`);
 }
 function suggest() {
   // Los folios se capturan siempre a mano: la numeración se comparte con los gastos en efectivo, que la app no ve.
-  S.F.lines.forEach(l => { l._ph = 'Escribe el folio'; });
+  S.F.lines.forEach(l => { l._ph = 'Número de folio'; });
 }
 /* Nombre = beneficiario del cheque y, en "sin folio", Conceptos = descripción, mientras el usuario no los haya cambiado a mano */
 function syncAuto() {
@@ -2690,11 +2690,11 @@ function renderLines() {
     </div>
     <label class="f">Motivo (obligatorio)</label><input type="text" data-k="motivo_sf" list="dlAJ" placeholder="Ej. SALDO A FAVOR, NOTA DE CRÉDITO…" value="${esc(l.motivo_sf)}">
     <datalist id="dlAJ"><option value="SALDO A FAVOR"><option value="NOTA DE CRÉDITO"><option value="DESCUENTO"></datalist>
-    <div class="mut sm" style="margin-top:4px">Se muestra en negativo, sin cargo y sin folio: el folio conserva el importe completo y el cheque queda por la diferencia.</div>
+    <div class="mut sm" style="margin-top:4px">Se registra en negativo, sin cargo ni folio; el cheque queda por la diferencia.</div>
   </div>` : `<div class="line" data-i="${i}">
-    ${S.F.lines.filter(x => x.modo !== 'ajuste').length > 1 ? `<div class="row"><span class="grow"></span><button class="btn ghost sm" data-act="rmline" data-i="${i}">Quitar este folio</button></div>` : ''}
+    ${S.F.lines.filter(x => x.modo !== 'ajuste').length > 1 ? `<div class="row"><span class="grow"></span><button class="btn ghost sm" data-act="rmline" data-i="${i}">Quitar folio</button></div>` : ''}
     <div class="grid2">
-      <div><label class="f">Cargo</label><select data-k="cargo_id"><option value="">Elige…</option>${S.cargos.filter(c => !esSinCargo(c) || l.modo === 'sinfolio').map(c => `<option value="${c.id}" ${String(l.cargo_id) === String(c.id) ? 'selected' : ''}>${esc(c.nombre)}</option>`).join('')}</select></div>
+      <div><label class="f">Cargo</label><select data-k="cargo_id"><option value="">Seleccionar…</option>${S.cargos.filter(c => !esSinCargo(c) || l.modo === 'sinfolio').map(c => `<option value="${c.id}" ${String(l.cargo_id) === String(c.id) ? 'selected' : ''}>${esc(c.nombre)}</option>`).join('')}</select></div>
       ${l.modo === 'sinfolio' ? `<div><label class="f">No. de folio</label><input type="text" value="SIN FOLIO" disabled></div>` : `<div><label class="f">No. de folio</label><input type="text" inputmode="numeric" data-k="folio_numero" placeholder="${esc(l._ph || '')}" value="${esc(l.folio_numero)}"></div>`}
     </div>
     <div class="grid2">
@@ -2703,22 +2703,22 @@ function renderLines() {
     </div>
     <label class="f">Descripción</label><input type="text" data-k="descripcion" value="${esc(l.descripcion)}">
     <label class="f">Hoja de folio</label>
-    <div class="row seg"><button class="btn ${l.modo === 'archivo' ? 'gold' : 'ghost'} sm" data-act="modo" data-i="${i}" data-m="archivo">Ya tengo el folio (archivo o foto)</button>
-      <button class="btn ${l.modo === 'sistema' ? 'gold' : 'ghost'} sm" data-act="modo" data-i="${i}" data-m="sistema">Que lo genere el sistema${esCancun(l.cargo_id) ? ' (formato Cancún)' : ''}</button>
+    <div class="row seg"><button class="btn ${l.modo === 'archivo' ? 'gold' : 'ghost'} sm" data-act="modo" data-i="${i}" data-m="archivo">Folio existente (archivo o foto)</button>
+      <button class="btn ${l.modo === 'sistema' ? 'gold' : 'ghost'} sm" data-act="modo" data-i="${i}" data-m="sistema">Generar en el sistema${esCancun(l.cargo_id) ? ' (formato Cancún)' : ''}</button>
       <button class="btn ${l.modo === 'sinfolio' ? 'gold' : 'ghost'} sm" data-act="modo" data-i="${i}" data-m="sinfolio">Sin folio</button></div>
-    ${l.modo === 'sinfolio' ? `<label class="f">¿Por qué no lleva folio? (obligatorio)</label><input type="text" data-k="motivo_sf" list="dlSF" placeholder="Ej. NÓMINA, PAGO DE SERVICIO, REPOSICIÓN DE CAJA…" value="${esc(l.motivo_sf)}">
+    ${l.modo === 'sinfolio' ? `<label class="f">Motivo sin folio (obligatorio)</label><input type="text" data-k="motivo_sf" list="dlSF" placeholder="Ej. NÓMINA, PAGO DE SERVICIO, REPOSICIÓN DE CAJA…" value="${esc(l.motivo_sf)}">
       <datalist id="dlSF"><option value="NÓMINA"><option value="PAGO DE SERVICIO"><option value="REPOSICIÓN DE CAJA"><option value="ANTICIPO"><option value="IMPUESTOS"><option value="PAGO A PROVEEDOR CON FACTURA"></datalist>
-      <div class="mut sm" style="margin-top:4px">Se identifica por el proveedor, la descripción y este motivo. Elige el cargo al que corresponde (si no se carga a ningún lado, elige SIN CARGO). Queda marcado como SIN FOLIO.</div>` : ''}
-    ${l.modo === 'archivo' ? `<div class="mut sm" style="margin-top:4px">El archivo del folio se adjunta una sola vez, abajo, en “Folio (archivo o foto)”.</div>` : l.modo === 'sinfolio' ? `
-      <label class="f">Conceptos (un renglón por línea; se llena con la descripción, bórralo o cámbialo si hace falta)</label><textarea data-k="conceptos" rows="3" style="width:100%">${esc(l.conceptos)}</textarea>` : `
+      <div class="mut sm" style="margin-top:4px">Seleccionar el cargo correspondiente (SIN CARGO si no aplica). Se registra como SIN FOLIO.</div>` : ''}
+    ${l.modo === 'archivo' ? `<div class="mut sm" style="margin-top:4px">El archivo del folio se adjunta una sola vez en “Folio (archivo o foto)”.</div>` : l.modo === 'sinfolio' ? `
+      <label class="f">Conceptos (uno por línea; se toma de la descripción)</label><textarea data-k="conceptos" rows="3" style="width:100%">${esc(l.conceptos)}</textarea>` : `
       ${esCancun(l.cargo_id) ? `<div><label class="f">Vencimiento (opcional)</label><input type="date" data-k="venc" value="${esc(l.venc)}"></div>
-      <div class="mut sm">Formato Cancún: la hoja sale con el logo de Cancún, la villa (campo “Obra / villa”), el beneficiario (proveedor), la referencia (descripción) y el cheque. Todos los folios de Cancún de este cheque salen juntos en una sola hoja.</div>` : `
+      <div class="mut sm">Formato Cancún: los folios de Cancún del cheque se agrupan en una sola hoja.</div>` : `
       <div class="grid2"><div><label class="f">Vencimiento (opcional)</label><input type="date" data-k="venc" value="${esc(l.venc)}"></div>
       <div><label class="f">Periodo (opcional)</label><input type="text" data-k="periodo" placeholder="Ej. AGOSTO 2026" value="${esc(l.periodo)}"></div></div>
-      <label class="f">Conceptos (un renglón por línea; si lo dejas vacío usa la descripción)</label><textarea data-k="conceptos" rows="3" style="width:100%">${esc(l.conceptos)}</textarea>
-      <div class="mut sm">El nombre en el folio es el proveedor. Folios del mismo cargo y proveedor salen juntos en una sola hoja.</div>`}`}
+      <label class="f">Conceptos (uno por línea; si se omite, se usa la descripción)</label><textarea data-k="conceptos" rows="3" style="width:100%">${esc(l.conceptos)}</textarea>
+      <div class="mut sm">Los folios del mismo cargo y proveedor se agrupan en una sola hoja.</div>`}`}
     <label class="f">Monto del folio</label>
-    <div class="row"><input type="text" inputmode="decimal" data-k="monto" class="grow" placeholder="0.00" value="${esc(l.monto)}" style="flex:1"><button class="btn ghost sm" data-act="resto" data-i="${i}">Completar con lo que falta</button></div>
+    <div class="row"><input type="text" inputmode="decimal" data-k="monto" class="grow" placeholder="0.00" value="${esc(l.monto)}" style="flex:1"><button class="btn ghost sm" data-act="resto" data-i="${i}">Completar diferencia</button></div>
   </div>`).join('');
   $('#lines').oninput = $('#lines').onchange = ev => {
     const el = ev.target; const k = el.dataset.k; if (!k) return; const i = Number(el.closest('.line').dataset.i); const l = S.F.lines[i];
@@ -2743,24 +2743,24 @@ async function guardarCheque(confirmado = false) {
   const F = S.F, h = F.h; const btn = $('#btnGuardar');
   const tot = parseMoney(h.monto);
   const err = [];
-  if (!h.chequera_id) err.push('Elige la chequera.');
-  if (!(Number(h.numero_cheque) > 0)) err.push('Captura el número de cheque.');
-  if (!h.fecha) err.push('Captura la fecha.');
-  if (!h.beneficiario.trim()) err.push('Captura el beneficiario.');
-  if (!(tot > 0)) err.push('Captura el monto del cheque.');
+  if (!h.chequera_id) err.push('Se requiere la chequera.');
+  if (!(Number(h.numero_cheque) > 0)) err.push('Se requiere el número de cheque.');
+  if (!h.fecha) err.push('Se requiere la fecha.');
+  if (!h.beneficiario.trim()) err.push('Se requiere el beneficiario.');
+  if (!(tot > 0)) err.push('Se requiere el monto del cheque.');
   const dosDec = v => /^\s*\$?\s*[\d,]*(\.\d{0,2})?\s*$/.test(String(v ?? ''));
-  if (tot > 0 && !dosDec(h.monto)) err.push('El monto del cheque solo puede llevar 2 decimales.');
-  if (F.lines.some(l => parseMoney(l.monto) > 0 && !dosDec(l.monto))) err.push('Los montos de los folios solo pueden llevar 2 decimales.');
-  if (!F.editId && !F.chequeFiles.length) err.push('Toma o adjunta la foto del cheque (sin firmar).');
+  if (tot > 0 && !dosDec(h.monto)) err.push('El monto del cheque admite máximo 2 decimales.');
+  if (F.lines.some(l => parseMoney(l.monto) > 0 && !dosDec(l.monto))) err.push('Los montos de los folios admiten máximo 2 decimales.');
+  if (!F.editId && !F.chequeFiles.length) err.push('Se requiere la foto del cheque (sin firmar).');
   F.lines.forEach((l, i) => {
-    if (!l.cargo_id) err.push('Hay un folio sin cargo: elígelo.');
-    if (!(parseMoney(l.monto) > 0)) err.push('Hay un folio sin monto: captúralo.');
-    if (l.modo === 'ajuste') { if (!String(l.motivo_sf).trim()) err.push('Escribe el motivo del saldo a favor / ajuste.'); return; }
-    if (l.modo === 'sistema' && !String(l.proveedor).trim()) err.push('Hay un folio generado por el sistema sin proveedor (es el nombre que sale en el folio).');
+    if (!l.cargo_id) err.push('Hay un folio sin cargo.');
+    if (!(parseMoney(l.monto) > 0)) err.push('Hay un folio sin monto.');
+    if (l.modo === 'ajuste') { if (!String(l.motivo_sf).trim()) err.push('Se requiere el motivo del saldo a favor / ajuste.'); return; }
+    if (l.modo === 'sistema' && !String(l.proveedor).trim()) err.push('Hay un folio generado por el sistema sin proveedor (nombre que aparece en el folio).');
     if (l.modo === 'sinfolio') {
-      if (!String(l.motivo_sf).trim()) err.push('Escribe por qué ese cheque no lleva folio.');
-      if (!String(l.descripcion).trim() && !String(l.proveedor).trim()) err.push('Sin folio: escribe al menos el proveedor o la descripción para identificarlo.');
-    } else if (!String(l.folio_numero).trim()) err.push('Hay un folio sin número: escríbelo.');
+      if (!String(l.motivo_sf).trim()) err.push('Se requiere el motivo sin folio.');
+      if (!String(l.descripcion).trim() && !String(l.proveedor).trim()) err.push('Sin folio: se requiere el proveedor o la descripción.');
+    } else if (!String(l.folio_numero).trim()) err.push('Hay un folio sin número.');
   });
   if (!F.lines.some(l => l.modo !== 'ajuste')) err.push('Falta al menos un folio (no solo ajustes).');
   const sum = F.lines.reduce((a, l) => a + lineCents(l), 0);
@@ -2787,9 +2787,9 @@ async function guardarCheque(confirmado = false) {
     if (F.editId) c = await rpc('editar_cheque', { p_id: F.editId, p: payload });
     else { payload.clave_submision = F.clave; c = await rpc('capturar_cheque', { p: payload }); }
     let subidaErr = '';
-    if (!F.editId && F._salta && F.saltaMotivo) { try { await rpc('registrar_detenidos', { p_chequera: F._salta.chequera, p_numeros: F._salta.nums, p_motivo: F.saltaMotivo }); } catch (e) { subidaErr = 'no se pudo guardar la alerta del cheque saltado: ' + errMsg(e); } }
+    if (!F.editId && F._salta && F.saltaMotivo) { try { await rpc('registrar_detenidos', { p_chequera: F._salta.chequera, p_numeros: F._salta.nums, p_motivo: F.saltaMotivo }); } catch (e) { subidaErr = 'no fue posible guardar la alerta del cheque omitido: ' + errMsg(e); } }
     S.ult = {}; S.provs = null; cargarAlertas(true);
-    if (F.chequeFiles.length) { try { await subirArchivo(c.id, 'foto_cheque', F.chequeFiles, `Foto_cheque_${c.numero_cheque}.pdf`); } catch (e) { subidaErr = 'foto del cheque: ' + errMsg(e) + (puedeArchivos() ? ' (súbela desde el detalle: el Ing. no podrá autorizar sin ella)' : ' (pídele a Pedro que la suba: el Ing. no podrá autorizar sin ella)'); } }
+    if (F.chequeFiles.length) { try { await subirArchivo(c.id, 'foto_cheque', F.chequeFiles, `Foto_cheque_${c.numero_cheque}.pdf`); } catch (e) { subidaErr = 'foto del cheque: ' + errMsg(e) + (puedeArchivos() ? ' (cargarla desde el detalle; es requisito para autorizar)' : ' (solicitar a Pedro que la cargue; es requisito para autorizar)'); } }
     if (F.files.length) { try { await subirArchivo(c.id, 'factura', F.files); } catch (e) { subidaErr = (subidaErr ? subidaErr + ' · ' : '') + errMsg(e); } }
     if (F.folioFiles.length) {
       const par = emparejarFolios(F.lines, c.folios || []);
@@ -2801,7 +2801,7 @@ async function guardarCheque(confirmado = false) {
       for (const a of F.copia.arch.filter(x => x.on)) {
         try { const { data, error } = await sb.storage.from(BUCKET).download(a.path); if (error) throw error; await subirBlob(c.id, a.tipo, data, a.nombre); } catch (e) { fallos.push(a.nombre); }
       }
-      if (fallos.length) subidaErr = (subidaErr ? subidaErr + ' · ' : '') + 'no se pudo copiar: ' + fallos.join(', ') + (puedeArchivos() ? ' (súbelos desde el detalle)' : ' (pídele a Pedro que los suba)');
+      if (fallos.length) subidaErr = (subidaErr ? subidaErr + ' · ' : '') + 'no fue posible copiar: ' + fallos.join(', ') + (puedeArchivos() ? ' (cargarlos desde el detalle)' : ' (solicitar a Pedro que los cargue)');
     }
     S.hojas = []; let hojasErr = '';
     try { S.hojas = armarHojas(F.lines, c.folios || [], h); } catch (e) { hojasErr = errMsg(e); }
@@ -2810,9 +2810,9 @@ async function guardarCheque(confirmado = false) {
     openModal(`<h2 style="margin-top:0">${wasEdit ? 'Cheque actualizado' : 'Póliza generada'}</h2>
       <div class="card"><div class="kv"><div>Póliza = No. de cheque</div><div class="b big">${c.numero_cheque}</div><div>Beneficiario</div><div>${esc(c.beneficiario)}</div><div>Monto</div><div class="money">${fmt(c.monto)}</div>
         <div>Folios</div><div>${(c.folios || []).map(f => esc(cargoNombre(f.cargo_id)) + ' ' + esc(folioTxt(f))).join('<br>')}</div></div></div>
-      <div class="okbox">Quedó pendiente de autorización del Ing. Cristóbal.</div>
-      ${subidaErr ? `<div class="warnbox">El cheque se guardó, pero un archivo no se pudo subir: ${esc(subidaErr)}. ${puedeArchivos() ? 'Súbelo desde el detalle.' : 'Avísale a Pedro para que lo suba.'}</div>` : ''}
-      ${hojasErr ? `<div class="warnbox">El cheque se guardó, pero no se pudo generar o guardar un folio: ${esc(hojasErr)}.</div>` : ''}
+      <div class="okbox">Pendiente de autorización del Ing. Cristóbal.</div>
+      ${subidaErr ? `<div class="warnbox">El cheque se guardó, pero no fue posible cargar un archivo: ${esc(subidaErr)}. ${puedeArchivos() ? 'Cargarlo desde el detalle.' : 'Solicitar a Pedro que lo cargue.'}</div>` : ''}
+      ${hojasErr ? `<div class="warnbox">El cheque se guardó, pero no fue posible generar o guardar un folio: ${esc(hojasErr)}.</div>` : ''}
       ${S.hojas.length ? `<div class="okbox">Folios generados y guardados en el cheque:</div><div class="row" style="flex-wrap:wrap;gap:6px;margin:8px 0">${S.hojas.map((hj, k) => `<button class="btn ghost sm" data-act="dlfolio" data-i="${k}">Descargar folio ${esc(hj.nums)}</button>`).join('')}</div>` : ''}
       <div class="row" style="margin-top:12px"><button class="btn gold" data-act="poliza" data-id="${c.id}">Ver y imprimir póliza</button><button class="btn ghost" data-act="detalle" data-id="${c.id}">Ver cheque</button><button class="btn ghost" data-act="otro">Capturar otro</button></div>`);
   } catch (e) { toast(errMsg(e), 'err'); btn.disabled = false; btn.textContent = F.editId ? 'Guardar cambios y reenviar a autorización' : 'Generar póliza y enviar a autorización'; }
@@ -2828,7 +2828,7 @@ function cargarPdfJs() {
     sc.onload = async () => { try {
       const r = await fetch(V + 'pdf.worker.min.js', { integrity: 'sha384-SnzOobpRMLXZ52iJvZm/C0fYw0OQemTXzTjIsdsfMcrCtCEe9qgzxTd3RSklO5x2' });
       window.pdfjsLib.GlobalWorkerOptions.workerSrc = URL.createObjectURL(new Blob([await r.text()], { type: 'text/javascript' })); ok(window.pdfjsLib); } catch (e) { _pdfjsP = null; no(e); } };
-    sc.onerror = () => { _pdfjsP = null; no(new Error('No se pudo cargar el visor de PDF.')); }; document.head.appendChild(sc); });
+    sc.onerror = () => { _pdfjsP = null; no(new Error('No fue posible cargar el visor de PDF.')); }; document.head.appendChild(sc); });
   return _pdfjsP;
 }
 // Dibuja cada hoja del PDF como imagen (en el celular el navegador no sabe mostrar PDF dentro de la página).
@@ -2847,16 +2847,16 @@ function previewPDF(doc, nombre, titulo) {
   const blob = doc.output('blob'); const url = URL.createObjectURL(blob); S.prev = { blob, nombre, url };
   openModal(`<h2 style="margin-top:0">${esc(titulo)}</h2>
     <div id="pdfPages" class="pdfpages"><div class="mut sm" style="padding:30px;text-align:center">Preparando vista previa…</div></div>
-    <div class="row" style="margin-top:10px;flex-wrap:wrap;gap:8px"><button class="btn gold" data-act="prevprint">Imprimir</button><button class="btn ghost" data-act="prevdl">Descargar PDF</button><button class="btn ghost" data-act="prevopen">Compartir / abrir en otra app</button></div>
-    <div class="mut sm" style="margin-top:6px">Revisa cómo quedó antes de imprimir. En el celular, “Imprimir” abre el PDF en tu visor para mandarlo a la impresora.</div>`);
+    <div class="row" style="margin-top:10px;flex-wrap:wrap;gap:8px"><button class="btn gold" data-act="prevprint">Imprimir</button><button class="btn ghost" data-act="prevdl">Descargar PDF</button><button class="btn ghost" data-act="prevopen">Compartir / abrir en otra aplicación</button></div>
+    <div class="mut sm" style="margin-top:6px">En el celular, “Imprimir” abre el PDF en el visor del dispositivo.</div>`);
   const cont = $('#pdfPages');
-  pintarPdf(blob, cont).catch(e => { cont.innerHTML = `<iframe id="pdfFrame" src="${url}" title="Vista previa" style="width:100%;height:60vh;border:0;background:#fff"></iframe><div class="warnbox" style="margin:8px">No se pudo dibujar la vista previa aquí (${esc(errMsg(e))}). Usa “Descargar PDF”.</div>`; });
+  pintarPdf(blob, cont).catch(e => { cont.innerHTML = `<iframe id="pdfFrame" src="${url}" title="Vista previa" style="width:100%;height:60vh;border:0;background:#fff"></iframe><div class="warnbox" style="margin:8px">No fue posible mostrar la vista previa (${esc(errMsg(e))}). Usar “Descargar PDF”.</div>`; });
 }
 const esMovil = () => /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && window.innerWidth < 900);
 async function compartirPrev() {
   const f = new File([S.prev.blob], S.prev.nombre, { type: 'application/pdf' });
   try { if (navigator.canShare && navigator.canShare({ files: [f] })) { await navigator.share({ files: [f], title: S.prev.nombre }); return; } } catch (e) { if (e && e.name === 'AbortError') return; }
-  bajarBlob(S.prev.blob, S.prev.nombre); toast('PDF descargado. Ábrelo desde tus descargas.', 'ok');
+  bajarBlob(S.prev.blob, S.prev.nombre); toast('PDF descargado en la carpeta de descargas.', 'ok');
 }
 function imprimirPrev() {
   if (esMovil()) return compartirPrev();
@@ -2906,7 +2906,7 @@ async function polizaPDF(id) {
 async function viewSeries() {
   await loadCatalogs();
   $('#view').innerHTML = `<h2>Series de folios por cargo</h2>
-  <div class="mut sm" style="margin-bottom:10px">Último folio usado en cada cargo. Cancún se asigna automático; los demás se sugieren y puedes cambiarlos (hay folios que se pagan en efectivo).</div>
+  <div class="mut sm" style="margin-bottom:10px">Último folio usado por cargo. Cancún se asigna automáticamente; los demás son sugeridos y editables.</div>
   ${S.cargos.filter(c => !esSinCargo(c)).map(c => { const s = S.series[c.id] || { ultimo_numero: 0, modo: 'sugerida' }; return `<div class="card row">
     <div class="grow"><div class="b">${esc(c.nombre)}</div><div class="mut sm">${s.modo === 'automatica' ? 'Automático' : 'Sugerido'}</div></div>
     ${puedeOperar() ? `<input type="number" inputmode="numeric" style="width:110px" id="ser_${c.id}" value="${s.ultimo_numero}"><button class="btn sm" data-act="saveserie" data-id="${c.id}">Guardar</button>` : `<div class="money big">${s.ultimo_numero}</div>`}
@@ -2961,7 +2961,7 @@ function leerEstadoBanco(filas) {
   const esFecha = h => h.startsWith('fecha') || h === 'dia';
   const esDesc = h => ['concepto', 'descripcion', 'descripcionmovimiento', 'movimiento', 'detalle', 'leyenda', 'conceptodelmovimiento'].some(k => h === k || h.startsWith(k));
   const hi = filas.slice(0, 40).findIndex(r => { const h = r.map(normCol); return h.some(esFecha) && h.some(esDesc) && h.some(x => /^(cargos?|retiros?|debitos?|importe|monto|cargoabono)$/.test(x)); });
-  if (hi < 0) throw new Error('No reconozco el archivo: necesito el estado de cuenta en CSV o Excel con columnas de Fecha, Concepto/Descripción y Cargo (o Importe).');
+  if (hi < 0) throw new Error('Formato de archivo no reconocido. Se requiere el estado de cuenta en CSV o Excel con columnas de Fecha, Concepto/Descripción y Cargo (o Importe).');
   const h = filas[hi].map(normCol), idx = f => h.findIndex(f);
   const iF = idx(x => x === 'fecha' || x === 'fechaoperacion' || x === 'fechadeoperacion') >= 0 ? idx(x => x === 'fecha' || x === 'fechaoperacion' || x === 'fechadeoperacion') : idx(esFecha);
   const iCs = h.map((x, i) => esDesc(x) ? i : -1).filter(i => i >= 0), iR = idx(x => x.startsWith('referencia') || x === 'ref'), iK = idx(x => x === 'codigo' || x === 'cdigo');
@@ -2969,7 +2969,7 @@ function leerEstadoBanco(filas) {
   const iI = idx(x => x === 'importe' || x === 'monto'), iS = idx(x => x === 'cargoabono' || x === 'tipo' || x === 'signo' || x === 'naturaleza' || x === 'tipomovimiento');
   const iN = idx(x => ['cheque', 'nocheque', 'numcheque', 'numerocheque', 'numerodecheque', 'chequeno'].includes(x));
   const iQ = idx(x => x === 'cuenta' || x === 'nocuenta' || x === 'numerodecuenta' || x === 'numerocuenta' || x === 'cuentacontrato');
-  if (iF < 0 || (iG < 0 && iI < 0)) throw new Error('Al archivo le faltan las columnas de Fecha o de Cargo/Importe.');
+  if (iF < 0 || (iG < 0 && iI < 0)) throw new Error('El archivo no contiene las columnas de Fecha o de Cargo/Importe.');
   const cuentas = new Set();
   if (iQ < 0) filas.slice(0, hi).forEach(r => { const m = r.join(' ').match(/cuenta[^0-9]{0,25}([0-9][0-9\- ]{5,})/i); if (m) cuentas.add(m[1].replace(/\D/g, '')); });
   const movs = [], devs = new Set(); let desde = null, hasta = null, nTot = 0;
@@ -2991,7 +2991,7 @@ function leerEstadoBanco(filas) {
     if (!n || !(cargo > 0)) continue;
     movs.push({ n, fecha: f, cargo: Math.round(cargo * 100) / 100, concepto: con.trim() });
   }
-  if (!nTot) throw new Error('El archivo no trae movimientos con fecha que pueda leer.');
+  if (!nTot) throw new Error('El archivo no contiene movimientos con fecha legible.');
   movs.forEach(m => { if (devs.has(m.n)) m.dev = true; });
   return { cuentas: [...cuentas], movs, desde, hasta, nTot };
 }
@@ -3007,7 +3007,7 @@ async function leerArchivoBanco(file) {
       const filas = XLSX.utils.sheet_to_json(wb.Sheets[nom], { header: 1, raw: true, defval: '' }).map(r => r.map(x => x instanceof Date ? ymd(x) : String(x ?? '')));
       try { return leerEstadoBanco(filas); } catch (e) { err = e; }
     }
-    throw err || new Error('El Excel no trae hojas.');
+    throw err || new Error('El archivo de Excel no contiene hojas.');
   }
   let txt; try { txt = new TextDecoder('utf-8', { fatal: true }).decode(buf); } catch (er) { txt = new TextDecoder('windows-1252').decode(buf); }
   return leerEstadoBanco(txt);
@@ -3015,7 +3015,7 @@ async function leerArchivoBanco(file) {
 function dlgConciliar() {
   S.conc = null;
   openModal(`<h2 style="margin-top:0">Conciliar con el banco</h2>
-    <div class="mut sm">Sube el estado de cuenta (CSV o Excel) que bajas del banco: Afirme, Santander, Scotiabank… La app busca cada cheque por su número, te enseña qué va a marcar como cobrado y no cambia nada hasta que confirmes.</div>
+    <div class="mut sm">Estado de cuenta en CSV o Excel (Afirme, Santander, Scotiabank u otros). Los cambios se aplican solo después de confirmar.</div>
     <label class="f">Estado de cuenta</label><input type="file" id="concFile" accept=".csv,.txt,.xlsx,.xls,text/csv">
     <div id="concPaso"></div>`);
   $('#concFile').onchange = async e => {
@@ -3023,25 +3023,25 @@ function dlgConciliar() {
     const box = $('#concPaso'); box.innerHTML = '<div class="spin">Leyendo archivo…</div>';
     try {
       const ed = await leerArchivoBanco(file);
-      if (ed.cuentas.length > 1) throw new Error(`El archivo trae movimientos de varias cuentas (${ed.cuentas.join(', ')}). Baja un archivo por cuenta.`);
+      if (ed.cuentas.length > 1) throw new Error(`El archivo contiene movimientos de varias cuentas (${ed.cuentas.join(', ')}). Se requiere un archivo por cuenta.`);
       const cuenta = ed.cuentas[0] || null, ligada = cuenta ? S.chequeras.find(c => String(c.cuenta_banco || '') === cuenta) : null;
       S.conc = { ...ed, cuenta, nombre: file.name, chequeraId: ligada ? ligada.id : null };
       const opciones = cuenta ? S.chequeras.filter(c => !c.cuenta_banco) : S.chequeras;
       box.innerHTML = `<div class="card" style="margin-top:12px">
         <div><b>${cuenta ? 'Cuenta ' + esc(cuenta) : 'Cuenta sin número en el archivo'}</b> · del ${fdate(ed.desde)} al ${fdate(ed.hasta)}</div>
         <div class="mut sm">${ed.nTot} movimientos, de ellos ${ed.movs.length} cheques cobrados.</div>
-        ${!ed.movs.length ? '<div class="warnbox">No encontré cheques cobrados en este archivo. Si sí trae cheques, mándale una copia a Pedro para ajustar la lectura de este banco.</div>' : ''}
+        ${!ed.movs.length ? '<div class="warnbox">No se encontraron cheques cobrados en el archivo. Si el archivo sí contiene cheques, enviar una copia a Pedro para ajustar la lectura de este banco.</div>' : ''}
         ${ligada ? `<div class="okbox">Esta cuenta es de la chequera <b>${esc(ligada.nombre)}</b>.</div>`
-          : `<div class="warnbox">${cuenta ? 'Esta cuenta todavía no está ligada a ninguna chequera. Elige de cuál es; la app lo recordará para la próxima vez.' : 'El archivo no trae el número de cuenta. Elige con cuidado la chequera a la que corresponde.'}</div>
-             <label class="f">Chequera</label><select id="concCh"><option value="">Elige…</option>${opciones.map(c => `<option value="${c.id}">${esc(c.nombre)}</option>`).join('')}</select>`}
-        <div class="row" style="margin-top:12px"><button class="btn gold grow" data-act="concrevisar">Revisar contra la app</button></div></div><div id="concRes"></div>`;
+          : `<div class="warnbox">${cuenta ? 'La cuenta no está ligada a ninguna chequera. Seleccionar la chequera correspondiente; la relación quedará guardada.' : 'El archivo no contiene el número de cuenta. Seleccionar la chequera correspondiente.'}</div>
+             <label class="f">Chequera</label><select id="concCh"><option value="">Seleccionar…</option>${opciones.map(c => `<option value="${c.id}">${esc(c.nombre)}</option>`).join('')}</select>`}
+        <div class="row" style="margin-top:12px"><button class="btn gold grow" data-act="concrevisar">Comparar con el sistema</button></div></div><div id="concRes"></div>`;
     } catch (er) { box.innerHTML = `<div class="warnbox">${esc(errMsg(er))}</div>`; }
   };
 }
 async function concRevisar() {
   const C = S.conc; if (!C) return;
-  if (!C.chequeraId || !S.chequeras.find(c => c.id === C.chequeraId && c.cuenta_banco)) { const v = $('#concCh') && $('#concCh').value; if (!v) return toast('Elige la chequera de esta cuenta.', 'err'); C.chequeraId = Number(v); }
-  const res = $('#concRes'); res.innerHTML = '<div class="spin">Comparando con la app…</div>';
+  if (!C.chequeraId || !S.chequeras.find(c => c.id === C.chequeraId && c.cuenta_banco)) { const v = $('#concCh') && $('#concCh').value; if (!v) return toast('Seleccionar la chequera de esta cuenta.', 'err'); C.chequeraId = Number(v); }
+  const res = $('#concRes'); res.innerHTML = '<div class="spin">Comparando con el sistema…</div>';
   const nums = C.movs.map(m => m.n), mn = Math.min(...nums), mx = Math.max(...nums), campos = 'id,numero_cheque,fecha,beneficiario,monto,estatus,cobrado,fecha_cobro';
   let enRango, sinCob;
   try {
@@ -3072,7 +3072,7 @@ function renderConc() {
   const tab = (rows, cols) => `<div style="overflow:auto"><table style="font-size:13px"><tr>${cols.map(c => `<th style="text-align:left;white-space:nowrap">${c[0]}</th>`).join('')}</tr>${rows.map(r => `<tr>${cols.map(c => `<td style="white-space:nowrap">${c[1](r)}</td>`).join('')}</tr>`).join('')}</table></div>`;
   const corto = t => `<span style="display:inline-block;max-width:150px;overflow:hidden;text-overflow:ellipsis;vertical-align:bottom" title="${esc(t)}">${esc(t)}</span>`;
   const sec = (titulo, xs, cols, abierto, cls) => xs.length ? `<details class="fol" ${abierto ? 'open' : ''}><summary><b>${titulo}</b> <span class="chip ${cls || ''}">${xs.length}</span></summary>${tab(xs, cols)}</details>` : '';
-  const cM = ['Cheque', x => x.m.n], cFB = ['Cobro banco', x => fdate(x.m.fecha)], cB = ['Beneficiario', x => corto(x.c ? x.c.beneficiario : '')], cCa = ['Cargo banco', x => fmt(x.m.cargo)], cMo = ['Monto app', x => fmt(x.c.monto)];
+  const cM = ['Cheque', x => x.m.n], cFB = ['Cobro banco', x => fdate(x.m.fecha)], cB = ['Beneficiario', x => corto(x.c ? x.c.beneficiario : '')], cCa = ['Cargo banco', x => fmt(x.m.cargo)], cMo = ['Monto sistema', x => fmt(x.c.monto)];
   $('#concRes').innerHTML = `<div class="card" style="margin-top:12px">
     <div class="b">${esc(nom)} · ${fdate(C.desde)} al ${fdate(C.hasta)}</div>
     <div class="kpis" style="margin-top:10px">
@@ -3081,15 +3081,15 @@ function renderConc() {
       <div class="kpi"><div class="mut sm">Por revisar</div><div class="big">${A.pend.length + A.alerta.length + A.noexiste.length + difs.length}</div></div>
       <div class="kpi"><div class="mut sm">Sin cobrar al corte</div><div class="big">${A.sincobrar.length}</div><div class="mut sm">${fmt(sum(A.sincobrar, c => c.monto))}</div></div>
     </div>
-    ${A.alerta.length ? `<div class="warnbox"><b>Atención:</b> el banco cobró ${A.alerta.length} cheque(s) que en la app están cancelados o rechazados.</div>` : ''}
-    ${sec('Cancelados o rechazados en la app, pero cobrados en el banco', A.alerta, [cM, cFB, cB, cCa, ['Estatus app', x => esc(x.c.estatus)]], true, 'cancelado')}
-    ${sec('Diferencia de importe (se marcan igual, revisa el monto)', difs, [cM, cFB, cB, cMo, cCa, ['Diferencia', x => fmt(x.dif)]], true, 'warn')}
-    ${sec('Cobrados en el banco pero Pendientes de autorizar en la app (no se marcan)', A.pend, [cM, cFB, cB, cCa], true, 'warn')}
-    ${sec('Cobrados en el banco que no existen en la app', A.noexiste, [cM, cFB, cCa, ['Concepto', x => corto(x.m.concepto)]], true, 'warn')}
+    ${A.alerta.length ? `<div class="warnbox"><b>Atención:</b> el banco cobró ${A.alerta.length} cheque(s) que en el sistema están cancelados o rechazados.</div>` : ''}
+    ${sec('Cancelados o rechazados en el sistema, pero cobrados en el banco', A.alerta, [cM, cFB, cB, cCa, ['Estatus sistema', x => esc(x.c.estatus)]], true, 'cancelado')}
+    ${sec('Diferencia de importe (se marcan como cobrados; verificar el monto)', difs, [cM, cFB, cB, cMo, cCa, ['Diferencia', x => fmt(x.dif)]], true, 'warn')}
+    ${sec('Cobrados en el banco y pendientes de autorización en el sistema (no se marcan)', A.pend, [cM, cFB, cB, cCa], true, 'warn')}
+    ${sec('Cobrados en el banco que no existen en el sistema', A.noexiste, [cM, cFB, cCa, ['Concepto', x => corto(x.m.concepto)]], true, 'warn')}
     ${sec('Se marcarán como cobrados', A.marcar, [cM, cFB, cB, cCa], false, 'cobrado')}
-    ${sec('Ya estaban marcados como cobrados', A.ya, [cM, cFB, cB, ['Cobro en app', x => fdate(x.c.fecha_cobro)]], false)}
-    ${sec('Autorizados que aún no cobra el banco', A.sincobrar, [['Cheque', c => c.numero_cheque], ['Fecha', c => fdate(c.fecha)], ['Beneficiario', c => corto(c.beneficiario)], ['Monto', c => fmt(c.monto)]], false)}
-    ${sec('Cobrados y luego devueltos por el banco (no se marcan)', A.dev, [cM, cFB, cB, cCa, ['Estatus app', x => esc(x.c ? x.c.estatus : 'no existe')]], false, 'warn')}
+    ${sec('Ya estaban marcados como cobrados', A.ya, [cM, cFB, cB, ['Cobro en sistema', x => fdate(x.c.fecha_cobro)]], false)}
+    ${sec('Autorizados sin cobro en el banco', A.sincobrar, [['Cheque', c => c.numero_cheque], ['Fecha', c => fdate(c.fecha)], ['Beneficiario', c => corto(c.beneficiario)], ['Monto', c => fmt(c.monto)]], false)}
+    ${sec('Cobrados y luego devueltos por el banco (no se marcan)', A.dev, [cM, cFB, cB, cCa, ['Estatus sistema', x => esc(x.c ? x.c.estatus : 'no existe')]], false, 'warn')}
     ${sec('Movimientos repetidos en el archivo (se ignoran)', A.dup, [cM, cFB, cCa], false)}
     <div class="row" style="margin-top:14px">
       ${A.marcar.length ? `<button class="btn ok grow" data-act="okconc">Marcar ${A.marcar.length} como cobrado${A.marcar.length === 1 ? '' : 's'}</button>` : '<div class="okbox grow">No hay cheques nuevos por marcar.</div>'}
@@ -3102,7 +3102,7 @@ async function concAplicar() {
   const resumen = { marcar: items.length, ya: A.ya.length, pendientes_app: A.pend.map(x => x.m.n), cancelados_app: A.alerta.map(x => x.m.n), no_existen: A.noexiste.map(x => ({ n: x.m.n, fecha: x.m.fecha, cargo: x.m.cargo })), diferencias: A.marcar.filter(x => Math.abs(x.dif) >= 1).map(x => ({ n: x.m.n, dif: x.dif })), sin_cobrar: A.sincobrar.map(c => c.numero_cheque), cheques_banco: C.movs.map(m => [m.n, m.fecha, m.cargo]) };
   const r = await rpc('conciliar_cobros', { p_chequera: C.chequeraId, p_cuenta: C.cuenta, p_items: items, p_desde: C.desde, p_hasta: C.hasta, p_archivo_path: null, p_archivo_nombre: C.nombre, p_resumen: resumen });
   const q = S.chequeras.find(c => c.id === C.chequeraId); if (q && !q.cuenta_banco) q.cuenta_banco = C.cuenta;
-  toast(`Listo: ${r.marcados} cheque(s) marcados como cobrados.`, 'ok');
+  toast(`${r.marcados} cheque(s) marcados como cobrados.`, 'ok');
   A.ya = A.ya.concat(A.marcar); A.marcar = []; renderConc(); refreshView(true);
 }
 async function concExcel() {
@@ -3128,7 +3128,7 @@ async function concExcel() {
 /* ===================== RESPALDO EN EXCEL ===================== */
 function cargarSheetJS() {
   if (window.XLSX) return Promise.resolve();
-  return new Promise((ok, no) => { const sc = document.createElement('script'); sc.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js'; sc.integrity = 'sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw'; sc.crossOrigin = 'anonymous'; sc.onload = ok; sc.onerror = () => no(new Error('No se pudo cargar el generador de Excel. Revisa tu internet.')); document.head.appendChild(sc); });
+  return new Promise((ok, no) => { const sc = document.createElement('script'); sc.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js'; sc.integrity = 'sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw'; sc.crossOrigin = 'anonymous'; sc.onload = ok; sc.onerror = () => no(new Error('No fue posible cargar el generador de Excel. Verificar la conexión a internet.')); document.head.appendChild(sc); });
 }
 async function traerTodo(tabla, sel, orden) {
   let out = [], from = 0; const N = 1000;
@@ -3164,7 +3164,7 @@ async function respaldoExcel() {
     add('BITACORA', bita, [18, 30, 22, 22, 11, 40], []);
     const d = new Date(); const f = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     XLSX.writeFile(wb, `RESPALDO_CONTROL_CHEQUES_${f}.xlsx`);
-    toast(`Respaldo listo: ${cheques.length} cheques, ${folios.length} folios.`, 'ok');
+    toast(`Respaldo generado: ${cheques.length} cheques, ${folios.length} folios.`, 'ok');
   } catch (e) { toast(errMsg(e), 'err'); }
   if (btn) { btn.disabled = false; btn.textContent = 'Descargar respaldo en Excel'; }
 }
@@ -3178,14 +3178,14 @@ function menuCuenta() {
   <h3>Apariencia</h3><div class="tema">${[['auto', 'Automático'], ['light', 'Claro'], ['dark', 'Oscuro']].map(([v, t]) => `<button class="btn ghost sm ${temaPref() === v ? 'on' : ''}" data-act="tema" data-v="${v}">${t}</button>`).join('')}</div>
   <details class="mas"><summary>Accesos</summary><div style="${R};margin-top:4px">${veCaja() ? '<button class="btn ghost" data-act="modulo" data-mod="caja">Abrir Acumulado</button>' : ''}${veBitacora() ? '<button class="btn ghost" data-act="verbit">Bitácora de Cheques</button>' : ''}${veBitacora() && veCaja() ? '<button class="btn ghost" data-act="verbitcaja">Bitácora de Acumulado</button>' : ''}<button class="btn ghost" data-act="firma">${S.firma ? 'Cambiar mi firma' : 'Agregar mi firma'}</button></div></details>
   <details class="mas"><summary>Seguridad</summary>
-  <h3>Cambiar contraseña</h3><label class="f">Contraseña actual</label>${pwField('np0', 'current-password')}<label class="f">Nueva contraseña (mínimo 8 caracteres)</label>${pwField('np1', 'new-password')}<label class="f">Repítela</label>${pwField('np2', 'new-password')}
+  <h3>Cambiar contraseña</h3><label class="f">Contraseña actual</label>${pwField('np0', 'current-password')}<label class="f">Nueva contraseña (mínimo 8 caracteres)</label>${pwField('np1', 'new-password')}<label class="f">Confirmar contraseña</label>${pwField('np2', 'new-password')}
   <div class="row" style="margin-top:12px"><button class="btn" data-act="cambiarpass">Guardar contraseña</button></div>
   <h3>Sesión por inactividad</h3><div id="dispSegBox">${htmlDispSeguro()}</div>
   </details>
   <details class="mas"><summary>Herramientas</summary>
-  <h3>Respaldo</h3><div class="mut sm" style="margin-bottom:6px">Descarga todos los cheques, folios, archivos y la bitácora en un Excel. Se recomienda hacerlo cada semana y guardarlo en tu computadora o en Drive.</div><div style="${R}"><button class="btn ghost" id="btnRespaldo" data-act="respaldo">Respaldo de Cheques en Excel</button>${veCaja() ? '<button class="btn ghost" data-act="cajaresp">Respaldo del Acumulado en Excel</button>' : ''}</div>
-  ${puedeArchivos() ? `<h3>Facturas del SAT (carga masiva)</h3><div class="mut sm" style="margin-bottom:6px">Elige los PDF de la carpeta de facturas. Cada archivo ya trae el cheque al que pertenece. Se omiten los cheques cancelados y los que ya tienen factura.</div><input type="file" id="satFiles" accept="application/pdf,.pdf" multiple style="margin-bottom:8px"><div id="satOut"></div>` : ''}
-  <h3>Instalar en el celular</h3><button class="btn ghost" data-act="instalar">Instalar app</button>
+  <h3>Respaldo</h3><div class="mut sm" style="margin-bottom:6px">Cheques, folios, archivos y bitácora en Excel. Se recomienda un respaldo semanal.</div><div style="${R}"><button class="btn ghost" id="btnRespaldo" data-act="respaldo">Respaldo de Cheques en Excel</button>${veCaja() ? '<button class="btn ghost" data-act="cajaresp">Respaldo del Acumulado en Excel</button>' : ''}</div>
+  ${puedeArchivos() ? `<h3>Facturas del SAT (carga masiva)</h3><div class="mut sm" style="margin-bottom:6px">Seleccionar los PDF de la carpeta de facturas. Se omiten los cheques cancelados y los que ya tienen factura.</div><input type="file" id="satFiles" accept="application/pdf,.pdf" multiple style="margin-bottom:8px"><div id="satOut"></div>` : ''}
+  <h3>Instalar en el celular</h3><button class="btn ghost" data-act="instalar">Instalar aplicación</button>
   </details>`);
   htmlPush().then(h => { const b = $('#pushBox'); if (b) b.innerHTML = h; });
   const satInp = $('#satFiles'); if (satInp) satInp.onchange = () => satPrepara(Array.from(satInp.files));
@@ -3196,9 +3196,9 @@ async function satPrepara(files) {
   const out = $('#satOut'); if (!out) return;
   const items = [];
   for (const f of files) { const m = /^c(\d+)-n(\d+)__(.*?)__([0-9a-f]{8})\.pdf$/i.exec(f.name); if (m) items.push({ f, ch: +m[1], num: +m[2], em: m[3].replace(/_/g, ' '), u: m[4] }); }
-  if (!items.length) { out.innerHTML = '<div class="mut sm">Ningún archivo tiene el nombre esperado.</div>'; return; }
+  if (!items.length) { out.innerHTML = '<div class="mut sm">Ningún archivo tiene el formato de nombre esperado.</div>'; return; }
   S.satItems = items;
-  out.innerHTML = `<div class="sm" style="margin-bottom:6px">${items.length} facturas listas${files.length > items.length ? ` (${files.length - items.length} archivos ignorados por su nombre)` : ''}.</div><button class="btn" id="satGo">Subir ${items.length} facturas</button><div id="satLog" class="sm" style="margin-top:8px"></div>`;
+  out.innerHTML = `<div class="sm" style="margin-bottom:6px">${items.length} facturas listas${files.length > items.length ? ` (${files.length - items.length} archivos omitidos por nombre no válido)` : ''}.</div><button class="btn" id="satGo">Subir ${items.length} facturas</button><div id="satLog" class="sm" style="margin-top:8px"></div>`;
   $('#satGo').onclick = () => satSube();
 }
 async function satSube() {
@@ -3217,7 +3217,7 @@ async function satSube() {
       if (!c) { omit.sin++; continue; }
       if (c.estatus === 'cancelado') { omit.canc++; continue; }
       if (con.has(c.id)) { omit.ya++; continue; }
-      say(`Subiendo ${n} de ${items.length}… (${ok} listas)`);
+      say(`Subiendo ${n} de ${items.length}… (${ok} cargadas)`);
       try {
         const path = `${c.id}/factura-${Date.now()}-${n}.pdf`;
         const up = await sb.storage.from(BUCKET).upload(path, it.f, { contentType: 'application/pdf' });
@@ -3227,8 +3227,8 @@ async function satSube() {
       } catch (e) { fallas.push(`${it.ch === 1 ? 'Excer' : 'chequera ' + it.ch} ${it.num}: ${errMsg(e)}`); if (fallas.length >= 5) break; }
     }
   } catch (e) { fallas.push(errMsg(e)); }
-  log.innerHTML = `<b>Listo: ${ok} facturas subidas.</b> Omitidas: ${omit.ya} ya tenían factura, ${omit.canc} cancelados, ${omit.sin} sin cheque en la app.` + (fallas.length ? `<br>Con error: ${esc(fallas.join(' | '))}` : '') + '<br>Recarga la app para ver los cambios.';
-  toast(`${ok} facturas subidas.`, ok ? 'ok' : 'err'); btn.disabled = false; S.satItems = [];
+  log.innerHTML = `<b>${ok} facturas cargadas.</b> Omitidas: ${omit.ya} con factura previa, ${omit.canc} cancelados, ${omit.sin} sin cheque en el sistema.` + (fallas.length ? `<br>Con error: ${esc(fallas.join(' | '))}` : '') + '<br>Recargar la aplicación para ver los cambios.';
+  toast(`${ok} facturas cargadas.`, ok ? 'ok' : 'err'); btn.disabled = false; S.satItems = [];
 }
 
 /* ===================== EVENTOS ===================== */
@@ -3265,16 +3265,16 @@ document.addEventListener('click', async ev => {
       case 'menu': menuCuenta(); break;
       case 'respaldo': respaldoExcel(); break;
       case 'tema': { try { localStorage.setItem('jocris_tema', el.dataset.v); } catch (e) { } aplicaTema(); document.querySelectorAll('.tema .btn').forEach(b => b.classList.toggle('on', b.dataset.v === el.dataset.v)); break; }
-      case 'dispseg': { try { localStorage.setItem('jocris_disp_seguro', el.dataset.v); } catch (e) { } if (window.__rearma) window.__rearma(); const bds = $('#dispSegBox'); if (bds) bds.innerHTML = htmlDispSeguro(); toast(el.dataset.v === '1' ? 'Listo: aquí ya no se cerrará la sesión por inactividad.' : 'Listo: aquí la sesión volverá a cerrarse por inactividad.', 'ok'); break; }
+      case 'dispseg': { try { localStorage.setItem('jocris_disp_seguro', el.dataset.v); } catch (e) { } if (window.__rearma) window.__rearma(); const bds = $('#dispSegBox'); if (bds) bds.innerHTML = htmlDispSeguro(); toast(el.dataset.v === '1' ? 'Dispositivo marcado como seguro: la sesión no se cerrará por inactividad.' : 'La sesión volverá a cerrarse por inactividad en este dispositivo.', 'ok'); break; }
       case 'verpass': { const inp = document.getElementById(el.dataset.for); const ver = inp.type === 'password'; inp.type = ver ? 'text' : 'password'; el.innerHTML = ver ? EYE_OFF : EYE; inp.focus(); break; }
       case 'instalar': {
         if (window.__pwaPrompt) { window.__pwaPrompt.prompt(); await window.__pwaPrompt.userChoice; window.__pwaPrompt = null; break; }
         const ios = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-        if (ios) { if (esInstalada()) toast('La app ya está instalada en este iPhone.', 'ok'); else guiaInstalarIOS(); break; }
-        openModal(`<h2 style="margin-top:0">Instalar la app</h2>` + (ios
-          ? '<div class="card">En iPhone: abre esta página en <b>Safari</b>, toca el botón <b>Compartir</b> (cuadro con flecha hacia arriba) y elige <b>Agregar a pantalla de inicio</b>.</div>'
-          : '<div class="card">En Android (Chrome): toca los <b>tres puntos</b> de arriba a la derecha y elige <b>Instalar app</b> o <b>Agregar a pantalla principal</b>.<br><br>En computadora (Chrome): ícono de instalar al final de la barra de direcciones.</div>')
-          + '<div class="mut sm">Si ya está instalada, ábrela desde su ícono en la pantalla de inicio.</div>'); break; }
+        if (ios) { if (esInstalada()) toast('La aplicación ya está instalada en este iPhone.', 'ok'); else guiaInstalarIOS(); break; }
+        openModal(`<h2 style="margin-top:0">Instalar la aplicación</h2>` + (ios
+          ? '<div class="card">En iPhone: abrir esta página en <b>Safari</b>, seleccionar <b>Compartir</b> (cuadro con flecha hacia arriba) y luego <b>Agregar a pantalla de inicio</b>.</div>'
+          : '<div class="card">En Android (Chrome): menú de <b>tres puntos</b> (arriba a la derecha) → <b>Instalar app</b> o <b>Agregar a pantalla principal</b>.<br><br>En computadora (Chrome): ícono de instalar al final de la barra de direcciones.</div>')
+          + '<div class="mut sm">Si ya está instalada, abrirla desde su ícono en la pantalla de inicio.</div>'); break; }
       case 'modulo': closeModal(); abrirModulo(el.dataset.mod); break;
       case 'verbit': closeModal(); if (document.body.classList.contains('modo-caja')) abrirModulo('cheques'); go('bit'); break;
       case 'verbitcaja': { closeModal(); abrirModulo('caja'); const f = cajaFrame(); await f._listo; for (let i = 0; i < 50 && !f.contentDocument.querySelector('nav.tabs'); i++) await new Promise(r => setTimeout(r, 200));
@@ -3283,7 +3283,7 @@ document.addEventListener('click', async ev => {
         if (f.contentWindow.respaldoExcel) await f.contentWindow.respaldoExcel(); break; }
       case 'salir': if (S.dif) await flushDiferido(); try { await desactivarPush(); } catch (e) { } await cerrarSesion(); break;
       case 'cambiarpass': {
-        const a0 = $('#np0').value, a = $('#np1').value, b = $('#np2').value; if (!a0) return toast('Escribe tu contraseña actual.', 'err'); if (a.length < 8) return toast('Mínimo 8 caracteres.', 'err'); if (a !== b) return toast('No coinciden.', 'err');
+        const a0 = $('#np0').value, a = $('#np1').value, b = $('#np2').value; if (!a0) return toast('Se requiere la contraseña actual.', 'err'); if (a.length < 8) return toast('Mínimo 8 caracteres.', 'err'); if (a !== b) return toast('Las contraseñas no coinciden.', 'err');
         el.disabled = true; const v = await sb.auth.signInWithPassword({ email: S.perfil.correo, password: a0 }); el.disabled = false;
         if (v.error) return toast('La contraseña actual no es correcta.', 'err');
         const { error } = await sb.auth.updateUser({ password: a }); if (error) return toast(errMsg(error), 'err'); toast('Contraseña actualizada.', 'ok'); closeModal(); break; }
@@ -3298,13 +3298,13 @@ document.addEventListener('click', async ev => {
         if (L.monto != null) set('monto', Number(L.monto).toFixed(2));
         if (L.beneficiario) set('beneficiario', String(L.beneficiario).toUpperCase());
         if (L.fecha && /^\d{4}-\d{2}-\d{2}$/.test(L.fecha)) set('fecha', L.fecha);
-        updateSum(); programarNumInfo(); pintaLectura(); toast('Datos llenados con la foto. Revísalos.', 'ok'); break;
+        updateSum(); programarNumInfo(); pintaLectura(); toast('Datos tomados de la foto. Verificar antes de guardar.', 'ok'); break;
       }
-      case 'pushon': { await activarPush(); toast('Notificaciones activadas. Te llegará un aviso de prueba.', 'ok'); const a = $('#pushAviso'); if (a) a.innerHTML = ''; const b = $('#pushBox'); if (b) b.innerHTML = await htmlPush(); break; }
+      case 'pushon': { await activarPush(); toast('Notificaciones activadas. Se enviará un aviso de prueba.', 'ok'); const a = $('#pushAviso'); if (a) a.innerHTML = ''; const b = $('#pushBox'); if (b) b.innerHTML = await htmlPush(); break; }
       case 'pushoff': { await desactivarPush(); toast('Notificaciones desactivadas en este dispositivo.'); const b = $('#pushBox'); if (b) b.innerHTML = await htmlPush(); break; }
-      case 'pushtest': { const sub = await pushActual(); if (sub) await guardarSub(sub); await rpc('probar_push', {}); toast('Aviso de prueba enviado. Debe llegar en unos segundos.', 'ok'); break; }
+      case 'pushtest': { const sub = await pushActual(); if (sub) await guardarSub(sub); await rpc('probar_push', {}); toast('Aviso de prueba enviado.', 'ok'); break; }
       case 'iosno': { try { localStorage.setItem('jocris_ios_aviso', 'no'); } catch (e) { } const a = $('#pushAviso'); if (a) a.innerHTML = ''; break; }
-      case 'pushno': { try { localStorage.setItem('jocris_push_aviso', 'no'); } catch (e) { } const a = $('#pushAviso'); if (a) a.innerHTML = ''; toast('Puedes activarlas cuando quieras en Mi cuenta.'); break; }
+      case 'pushno': { try { localStorage.setItem('jocris_push_aviso', 'no'); } catch (e) { } const a = $('#pushAviso'); if (a) a.innerHTML = ''; toast('Las notificaciones pueden activarse en Mi cuenta.'); break; }
       case 'copiardocs': {
         openModal('<div class="spin">Buscando cheques cancelados…</div>');
         const c = await loadCheque(id);
@@ -3312,8 +3312,8 @@ document.addEventListener('click', async ev => {
         const docs = x => archActivos(x).filter(a => a.tipo !== 'foto_cheque');
         const lst = (data || []).filter(x => docs(x).length);
         openModal(`<h2 style="margin-top:0">Copiar documentos al cheque ${c.numero_cheque}</h2>
-          <div class="mut sm" style="margin-bottom:8px">Se copian todos los documentos (factura, folio, contrato…) menos la foto del cheque. Los que ya tiene este cheque no se repiten.</div>
-          ${lst.length ? lst.map(x => `<div class="card"><div class="b">Cheque ${x.numero_cheque} cancelado · ${esc(x.beneficiario)}</div><div class="mut sm" style="margin:4px 0 8px">${docs(x).map(a => esc(a.nombre || a.tipo)).join(' · ')}</div><button class="btn gold sm" data-act="cpdgo" data-id="${id}" data-q="${x.id}">Copiar estos ${docs(x).length} documento(s)</button></div>`).join('') : '<div class="warnbox">No hay cheques cancelados de esta chequera con documentos.</div>'}
+          <div class="mut sm" style="margin-bottom:8px">Se copian todos los documentos excepto la foto del cheque; no se duplican los existentes.</div>
+          ${lst.length ? lst.map(x => `<div class="card"><div class="b">Cheque ${x.numero_cheque} cancelado · ${esc(x.beneficiario)}</div><div class="mut sm" style="margin:4px 0 8px">${docs(x).map(a => esc(a.nombre || a.tipo)).join(' · ')}</div><button class="btn gold sm" data-act="cpdgo" data-id="${id}" data-q="${x.id}">Copiar ${docs(x).length} documento(s)</button></div>`).join('') : '<div class="warnbox">No hay cheques cancelados de esta chequera con documentos.</div>'}
           <div class="row" style="margin-top:10px"><button class="btn ghost" data-act="detalle" data-id="${id}">Volver</button></div>`);
         break;
       }
@@ -3337,27 +3337,27 @@ document.addEventListener('click', async ev => {
       case 'autorizar': { const c = await loadCheque(id); dlgAutorizar(id, c); break; }
       case 'okautorizar': { const cm = $('#cmt').value; closeModal(); diferir('Autorizando cheque…', async () => { await rpc('autorizar_cheque', { p_id: id, p_comentario: cm }); toast('Cheque autorizado.', 'ok'); refreshView(); }, [id]); break; }
       case 'deshacer': deshacerDiferido(); break;
-      case 'comentar': { const inp = $('#cmtTxt'), t = (inp.value || '').trim(); if (!t) return toast('Escribe el comentario.', 'err'); el.disabled = true; try { await rpc('comentar_cheque', { p_cheque: id, p_texto: t }); inp.value = ''; $('#cmtList').innerHTML = comsHtml(await cargaComs(id)); } finally { el.disabled = false; } break; }
+      case 'comentar': { const inp = $('#cmtTxt'), t = (inp.value || '').trim(); if (!t) return toast('Se requiere el comentario.', 'err'); el.disabled = true; try { await rpc('comentar_cheque', { p_cheque: id, p_texto: t }); inp.value = ''; $('#cmtList').innerHTML = comsHtml(await cargaComs(id)); } finally { el.disabled = false; } break; }
       case 'selall': document.querySelectorAll('[data-sel]').forEach(i => i.checked = true); updateSel(); break;
       case 'selquitar': document.querySelectorAll('[data-sel]').forEach(i => i.checked = false); updateSel(); break;
       case 'autsel': dlgAutSel(); break;
       case 'okautsel': { const ids = S.selIds || [], cm = $('#cmt').value; closeModal(); diferir(`Autorizando ${ids.length} cheque${ids.length === 1 ? '' : 's'}…`, () => autorizarLote(ids, cm), ids); document.querySelectorAll('[data-sel]').forEach(i => i.checked = false); updateSel(); break; }
       case 'sinfoto': dlgMotivo('Cheque sin foto', 'oksinfoto', id, 'gold', 'Marcar sin foto'); break;
-      case 'oksinfoto': { const m = $('#mot').value.trim(); if (m.length < 5) return toast('Escribe el motivo (por qué no hay foto).', 'err'); await rpc('marcar_sin_foto', { p_id: id, p_motivo: m }); closeModal(); toast('Marcado sin foto; el Ing. ya puede autorizarlo.', 'ok'); refreshView(true); break; }
-      case 'quitarsf': { await rpc('quitar_sin_foto', { p_id: id }); toast('Marca quitada.', 'ok'); openDetail(id); refreshView(true); break; }
+      case 'oksinfoto': { const m = $('#mot').value.trim(); if (m.length < 5) return toast('Se requiere el motivo por el que no hay foto.', 'err'); await rpc('marcar_sin_foto', { p_id: id, p_motivo: m }); closeModal(); toast('Marcado sin foto; disponible para autorización.', 'ok'); refreshView(true); break; }
+      case 'quitarsf': { await rpc('quitar_sin_foto', { p_id: id }); toast('Marca eliminada.', 'ok'); openDetail(id); refreshView(true); break; }
       case 'rechazar': dlgMotivo('Cancelar cheque', 'okrechazar', id, 'bad', 'Cancelar'); break;
-      case 'okrechazar': { const m = $('#mot').value.trim(); if (!m) return toast('Escribe el motivo.', 'err'); await rpc('rechazar_cheque', { p_id: id, p_motivo: m }); closeModal(); toast('Cheque rechazado.', 'ok'); refreshView(); break; }
+      case 'okrechazar': { const m = $('#mot').value.trim(); if (!m) return toast('Se requiere el motivo.', 'err'); await rpc('rechazar_cheque', { p_id: id, p_motivo: m }); closeModal(); toast('Cheque rechazado.', 'ok'); refreshView(); break; }
       case 'cancelar': dlgMotivo('Cancelar cheque', 'okcancelar', id, 'bad', 'Cancelar cheque'); break;
-      case 'okcancelar': { const m = $('#mot').value.trim(); if (!m) return toast('Escribe el motivo.', 'err'); await rpc('cancelar_cheque', { p_id: id, p_motivo: m }); closeModal(); toast('Cheque cancelado; sus folios quedaron libres.', 'ok'); refreshView(); break; }
+      case 'okcancelar': { const m = $('#mot').value.trim(); if (!m) return toast('Se requiere el motivo.', 'err'); await rpc('cancelar_cheque', { p_id: id, p_motivo: m }); closeModal(); toast('Cheque cancelado; sus folios quedaron liberados.', 'ok'); refreshView(); break; }
       case 'cobrar': {
         const c = await loadCheque(id);
-        if (!archActivos(c, 'comprobante_cobro').length) { openModal(`<h2 style="margin-top:0">Falta el ticket o ficha de depósito</h2><div class="warnbox">Sube primero el ticket o la ficha de depósito del cheque cobrado.${puedeArchivos() ? '' : ' Pídeselo a Pedro.'}</div><div class="row">${puedeArchivos() ? `<button class="btn gold" data-act="subir" data-id="${id}" data-tipo="comprobante_cobro">Subir ticket / ficha</button>` : ''}<button class="btn ghost" data-act="close">Cerrar</button></div>`); break; }
+        if (!archActivos(c, 'comprobante_cobro').length) { openModal(`<h2 style="margin-top:0">Falta el ticket o ficha de depósito</h2><div class="warnbox">Se requiere el ticket o la ficha de depósito del cheque cobrado.${puedeArchivos() ? '' : ' Solicitarlo a Pedro.'}</div><div class="row">${puedeArchivos() ? `<button class="btn gold" data-act="subir" data-id="${id}" data-tipo="comprobante_cobro">Subir ticket / ficha</button>` : ''}<button class="btn ghost" data-act="close">Cerrar</button></div>`); break; }
         openModal(`<h2 style="margin-top:0">Marcar como cobrado</h2><label class="f">Fecha de cobro</label><input type="date" id="fc" value="${today()}"><div class="row" style="margin-top:14px"><button class="btn ok grow" data-act="okcobrar" data-id="${id}">Confirmar</button><button class="btn ghost" data-act="close">Volver</button></div>`); break; }
-      case 'okcobrar': if (!$('#fc').value) return toast('Escribe la fecha de cobro.', 'err'); await rpc('marcar_cobrado', { p_id: id, p_fecha_cobro: $('#fc').value, p_cobrado: true }); closeModal(); toast('Cheque marcado como cobrado.', 'ok'); refreshView(); break;
+      case 'okcobrar': if (!$('#fc').value) return toast('Se requiere la fecha de cobro.', 'err'); await rpc('marcar_cobrado', { p_id: id, p_fecha_cobro: $('#fc').value, p_cobrado: true }); closeModal(); toast('Cheque marcado como cobrado.', 'ok'); refreshView(); break;
       case 'descobrar': await rpc('marcar_cobrado', { p_id: id, p_fecha_cobro: null, p_cobrado: false }); toast('Cobro desmarcado.', 'ok'); openDetail(id); refreshView(true); break;
       case 'subir': {
         const c = await loadCheque(id); const hay = archActivos(c, el.dataset.tipo).length > 0;
-        if (hay) { dlgMotivoArch('Agregar documento', 'oksubir', id, { tipo: el.dataset.tipo }, 'Elegir archivo…'); break; }
+        if (hay) { dlgMotivoArch('Agregar documento', 'oksubir', id, { tipo: el.dataset.tipo }, 'Seleccionar archivo…'); break; }
         const files = await pickFuenteT(await tipoEscaneo(id, el.dataset.tipo)); if (!files.length) break; toast('Subiendo…');
         await subirArchivo(id, el.dataset.tipo, files, null, { agregar: true }); toast('Documento guardado.', 'ok'); openDetail(id); refreshView(true); break; }
       case 'subircanc': {
@@ -3367,12 +3367,12 @@ document.addEventListener('click', async ev => {
         else await subirArchivo(id, 'foto_cheque', files, 'Foto cheque cancelado.pdf', { agregar: true });
         toast('Foto del cheque cancelado guardada.', 'ok'); openDetail(id); refreshView(true); break; }
       case 'oksubir': {
-        const m = ($('#mot').value || '').trim(); if (m.length < 5) return toast('Escribe el motivo (mín. 5 letras).', 'err');
+        const m = ($('#mot').value || '').trim(); if (m.length < 5) return toast('Se requiere el motivo (mínimo 5 caracteres).', 'err');
         const files = await pickFuenteT(await tipoEscaneo(id, el.dataset.tipo)); if (!files.length) break; toast('Subiendo…');
         await subirArchivo(id, el.dataset.tipo, files, null, { agregar: true, motivo: m }); toast('Documento guardado.', 'ok'); openDetail(id); refreshView(true); break; }
-      case 'reemplazar': dlgMotivoArch('Reemplazar documento', 'okreemplazar', el.dataset.id, { cheque: el.dataset.cheque, tipo: el.dataset.tipo || 'otro' }, 'Elegir el archivo nuevo…'); break;
+      case 'reemplazar': dlgMotivoArch('Reemplazar documento', 'okreemplazar', el.dataset.id, { cheque: el.dataset.cheque, tipo: el.dataset.tipo || 'otro' }, 'Seleccionar archivo nuevo…'); break;
       case 'okreemplazar': {
-        const m = ($('#mot').value || '').trim(); if (m.length < 5) return toast('Escribe el motivo (mín. 5 letras).', 'err');
+        const m = ($('#mot').value || '').trim(); if (m.length < 5) return toast('Se requiere el motivo (mínimo 5 caracteres).', 'err');
         const files = await pickFuenteT(el.dataset.tipo || 'otro'); if (!files.length) break; toast('Subiendo…');
         const ch = el.dataset.cheque; const blob = await filesToPdf(files);
         await reemplazarConBlob(el.dataset.id, ch, blob, files.length === 1 ? files[0].name.replace(/\.(jpe?g|png|webp|heic)$/i, '.pdf') : null, m);
@@ -3380,23 +3380,23 @@ document.addEventListener('click', async ev => {
       case 'horizontal': dlgMotivoArch('Pasar a hoja horizontal', 'okhorizontal', el.dataset.id, { cheque: el.dataset.cheque, rot: 0 }, 'Ajustar', 'Ajuste de hoja a horizontal (el documento es ancho)'); break;
       case 'girar': dlgMotivoArch('Girar documento 90°', 'okhorizontal', el.dataset.id, { cheque: el.dataset.cheque, rot: 90 }, 'Girar', 'Documento escaneado de lado'); break;
       case 'okhorizontal': {
-        const m = ($('#mot').value || '').trim(); if (m.length < 5) return toast('Escribe el motivo (mín. 5 letras).', 'err');
+        const m = ($('#mot').value || '').trim(); if (m.length < 5) return toast('Se requiere el motivo (mínimo 5 caracteres).', 'err');
         el.disabled = true; const ch = el.dataset.cheque; const a = await archivoPorId(el.dataset.id);
         const nb = await pdfReorientar(await bajarPath(a.path), Number(el.dataset.rot || 0), true);
-        if (!nb) { toast('No se cambió: el PDF ya está en horizontal, tiene varias hojas o no es de una sola imagen. Si hace falta, usa "Reemplazar archivo".', 'err'); openDetail(ch); break; }
-        await reemplazarConBlob(a.id, ch, nb, a.nombre, m); toast('Listo: hoja ajustada.', 'ok'); openDetail(ch); refreshView(true); break; }
+        if (!nb) { toast('Sin cambios: el PDF ya está en horizontal, tiene varias hojas o no es de una sola imagen. En su caso, usar "Reemplazar archivo".', 'err'); openDetail(ch); break; }
+        await reemplazarConBlob(a.id, ch, nb, a.nombre, m); toast('Hoja ajustada.', 'ok'); openDetail(ch); refreshView(true); break; }
       case 'horiztodos': dlgHorizTodos(); break;
-      case 'okhoriztodos': { const m = ($('#mot').value || '').trim(); if (m.length < 5) return toast('Escribe el motivo (mín. 5 letras).', 'err'); await horizTodos(m); break; }
+      case 'okhoriztodos': { const m = ($('#mot').value || '').trim(); if (m.length < 5) return toast('Se requiere el motivo (mínimo 5 caracteres).', 'err'); await horizTodos(m); break; }
       case 'quitar': dlgMotivo('Quitar documento', 'okquitar', id, 'bad', 'Quitar'); break;
-      case 'okquitar': { const m = $('#mot').value.trim(); if (m.length < 5) return toast('Escribe el motivo (mín. 5 letras).', 'err'); await rpc('quitar_archivo', { p_archivo: id, p_motivo: m }); toast('Documento quitado.', 'ok'); closeModal(); refreshView(true); break; }
+      case 'okquitar': { const m = $('#mot').value.trim(); if (m.length < 5) return toast('Se requiere el motivo (mínimo 5 caracteres).', 'err'); await rpc('quitar_archivo', { p_archivo: id, p_motivo: m }); toast('Documento quitado.', 'ok'); closeModal(); refreshView(true); break; }
       case 'editar': { const c = await loadCheque(id); closeModal(); S.F = null; S.tab = 'nuevo'; { const sb_ = $('#selbar'); if (sb_) sb_.classList.add('hidden'); } document.querySelectorAll('nav.tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === 'nuevo')); await viewNuevo(c); window.scrollTo(0, 0); break; }
       case 'cancelado': dlgCancelado(); break;
       case 'okcancelado': {
         const ch = Number($('#cc_ch').value), num = Number($('#cc_num').value), fe = $('#cc_fecha').value, mo = $('#cc_mot').value.trim();
-        if (!ch || !num || !fe || !mo) return toast('Llena chequera, número, fecha y motivo.', 'err');
+        if (!ch || !num || !fe || !mo) return toast('Se requieren chequera, número, fecha y motivo.', 'err');
         el.disabled = true; const c = await rpc('registrar_cheque_cancelado', { p_chequera: ch, p_numero: num, p_fecha: fe, p_motivo: mo });
         let warn = ''; if (ccFiles.length) { try { await subirArchivo(c.id, 'foto_cheque', ccFiles, 'Foto cheque cancelado.pdf'); } catch (e) { warn = errMsg(e); } }
-        ccFiles = []; closeModal(); toast(`Cheque ${num} registrado como cancelado.` + (warn ? ' La foto no se pudo subir.' : ''), warn ? 'err' : 'ok'); cargarAlertas(true); refreshView(); break; }
+        ccFiles = []; closeModal(); toast(`Cheque ${num} registrado como cancelado.` + (warn ? ' No fue posible cargar la foto.' : ''), warn ? 'err' : 'ok'); cargarAlertas(true); refreshView(); break; }
       case 'ccfoto': { const nf = await pickFuenteT('foto_cheque'); if (nf.length) ccFiles = nf; $('#ccInfo').textContent = ccFiles.length ? ccFiles.length + ' archivo(s)' : 'Sin foto'; break; }
       case 'conciliar': dlgConciliar(); break;
       case 'concrevisar': await concRevisar(); break;
@@ -3405,7 +3405,7 @@ document.addEventListener('click', async ev => {
       case 'huecos': { openModal('<div class="spin">Revisando…</div>'); await cargarAlertas(true); dlgHuecos(); break; }
       case 'motivohuecos': {
         const q = Number(el.dataset.q), inp = $('#mh_' + q), m = inp ? inp.value.trim() : '';
-        if (m.length < 3) return toast('Escribe el motivo.', 'err');
+        if (m.length < 3) return toast('Se requiere el motivo.', 'err');
         const h = (S.huecos || []).find(x => x.q.id === q); if (!h) break;
         await rpc('registrar_detenidos', { p_chequera: q, p_numeros: h.nums.filter(x => !x.d).map(x => x.n), p_motivo: m });
         await cargarAlertas(true); dlgHuecos(); toast('Motivo guardado.', 'ok'); break;
@@ -3416,7 +3416,7 @@ document.addEventListener('click', async ev => {
         { const fl = foliosDeCancelado(c).filter(f => !f.sin_folio && f.folio_numero);
           if (fl.length) { const { data: ya } = await sb.from('cheque_folios').select('cargo_id,folio_numero,cheques(numero_cheque)').eq('activo', true).in('folio_numero', fl.map(f => f.folio_numero));
             const m = (ya || []).find(x => fl.some(f => Number(f.cargo_id) === Number(x.cargo_id) && String(f.folio_numero) === String(x.folio_numero)));
-            if (m) { toast(`Este cheque ya se volvió a hacer: sus folios están en el cheque ${m.cheques ? m.cheques.numero_cheque : ''}.`, 'err'); break; } } }
+            if (m) { toast(`Este cheque ya fue reexpedido: sus folios están en el cheque ${m.cheques ? m.cheques.numero_cheque : ''}.`, 'err'); break; } } }
         closeModal(); S.F = null; S.tab = 'nuevo'; { const sb_ = $('#selbar'); if (sb_) sb_.classList.add('hidden'); } document.querySelectorAll('nav.tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === 'nuevo')); await viewNuevo(null, c); window.scrollTo(0, 0); break; }
       case 'copiaarch': { if (S.F && S.F.copia) S.F.copia.arch[Number(el.dataset.i)].on = el.checked; return; }
       case 'modo': {
@@ -3431,18 +3431,18 @@ document.addEventListener('click', async ev => {
       case 'firma': dlgFirma(); break;
       case 'firmalimpiar': { const cv = $('#firmaPad'); cv.getContext('2d').clearRect(0, 0, cv.width, cv.height); break; }
       case 'firmaguardar': { await guardarFirma(normalizarFirma($('#firmaPad'))); break; }
-      case 'firmafoto': { const fs = await pickFiles(false); if (!fs.length) break; if (!/^image\//.test(fs[0].type)) return toast('Elige una imagen (foto o PNG).', 'err'); await guardarFirma(await firmaDesdeImagen(fs[0])); break; }
+      case 'firmafoto': { const fs = await pickFiles(false); if (!fs.length) break; if (!/^image\//.test(fs[0].type)) return toast('Seleccionar una imagen (foto o PNG).', 'err'); await guardarFirma(await firmaDesdeImagen(fs[0])); break; }
       case 'addline': S.F.lines.push(newLine()); renderLines(); break;
       case 'verlineas': { const abre = () => { const d = document.querySelector('.sheet details[data-lin]'); if (d) { d.open = true; d.scrollIntoView({ block: 'start', behavior: 'smooth' }); } }; if (document.querySelector('.sheet details[data-lin]')) { abre(); break; } await openDetail(el.dataset.id); abre(); break; }
-      case 'addajuste': { const F = S.F; if (F.lines.some(l => l.modo === 'ajuste')) { toast('Ya agregaste el ajuste.', 'err'); break; } const base = F.lines.find(l => l.modo !== 'ajuste' && l.cargo_id); const sum = F.lines.reduce((a, l) => a + lineCents(l), 0), tot = cents(parseMoney(F.h.monto) || 0); const dif = sum - tot; const n = newLine(); n.modo = 'ajuste'; n.cargo_id = (S.cargos.find(esSinCargo) || {}).id || ''; n.motivo_sf = 'SALDO A FAVOR'; if (dif > 0) n.monto = (dif / 100).toFixed(2); F.lines.push(n); renderLines(); break; }
+      case 'addajuste': { const F = S.F; if (F.lines.some(l => l.modo === 'ajuste')) { toast('El ajuste ya fue agregado.', 'err'); break; } const base = F.lines.find(l => l.modo !== 'ajuste' && l.cargo_id); const sum = F.lines.reduce((a, l) => a + lineCents(l), 0), tot = cents(parseMoney(F.h.monto) || 0); const dif = sum - tot; const n = newLine(); n.modo = 'ajuste'; n.cargo_id = (S.cargos.find(esSinCargo) || {}).id || ''; n.motivo_sf = 'SALDO A FAVOR'; if (dif > 0) n.monto = (dif / 100).toFixed(2); F.lines.push(n); renderLines(); break; }
       case 'rmline': S.F.lines.splice(Number(el.dataset.i), 1); renderLines(); break;
       case 'resto': {
         const F = S.F, i = Number(el.dataset.i); const tot = cents(parseMoney(F.h.monto) || 0);
         const otros = F.lines.reduce((a, l, j) => j === i ? a : a + lineCents(l), 0); const falta = tot - otros;
-        if (falta > 0) { F.lines[i].monto = (falta / 100).toFixed(2); renderLines(); } else toast('No falta nada por repartir.', 'err'); break; }
+        if (falta > 0) { F.lines[i].monto = (falta / 100).toFixed(2); renderLines(); } else toast('No hay diferencia por distribuir.', 'err'); break; }
       case 'pickfac': { const nf = await pickFuenteT('factura'); if (nf.length) S.F.files = nf; const files = S.F.files; $('#facInfo').textContent = files.length ? files.length + ' archivo(s) listo(s) para subir' : 'Sin adjuntar'; $('#facQuitar').hidden = !files.length; break; }
       case 'guardar': guardarCheque(); break;
-      case 'confirmguardar': { const ms = $('#motSalta'); if (ms) { if (ms.value.trim().length < 3) return toast('Escribe por qué se salta el cheque (queda como alerta).', 'err'); if (S.F) S.F.saltaMotivo = ms.value.trim(); } closeModal(); guardarCheque(true); break; }
+      case 'confirmguardar': { const ms = $('#motSalta'); if (ms) { if (ms.value.trim().length < 3) return toast('Se requiere el motivo por el que se omite el cheque.', 'err'); if (S.F) S.F.saltaMotivo = ms.value.trim(); } closeModal(); guardarCheque(true); break; }
       case 'saveserie': {
         const v = Number($('#ser_' + id).value); await rpc('ajustar_serie', { p_cargo_id: Number(id), p_ultimo: v }); toast('Serie actualizada.', 'ok'); await loadCatalogs(); break; }
     }
