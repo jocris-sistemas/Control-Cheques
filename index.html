@@ -927,11 +927,13 @@ async function viewCancun() {
   $('#view').querySelectorAll('[data-cnvista]').forEach(b => b.onclick = () => { S.cnVista = b.dataset.cnvista; viewCancun(); });
   if (S.cnVista === 'cuadre') return viewCnCuadre();
   try {
-    const [mov, rep, gc] = await Promise.all([
+    const [mov, rep, gc, bco] = await Promise.all([
       fetchAll(() => sb.from('cancun_movimientos').select('id,fecha,folio,concepto,monto,pago,tipo,categoria,villa,depto,comentarios,sync_en')),
       fetchAll(() => sb.from('cancun_reparto').select('id,id_gasto,villa,depto,monto,categoria')),
-      fetchAll(() => sb.from('cancun_gastos_comp').select('id,id_mov'))]);
+      fetchAll(() => sb.from('cancun_gastos_comp').select('id,id_mov')),
+      fetchAll(() => sb.from('ingresos').select('fecha,monto').eq('categoria', 'CANCUN')).catch(() => null)]);
     if (S.tab !== 'cancun' || tok !== S.cnTok) return;
+    const banco = {}; (bco || []).forEach(r => { const k = String(r.fecha).slice(0, 7); banco[k] = (banco[k] || 0) + cents(r.monto); });
     const gMov = new Map(gc.map(g => [g.id, g.id_mov])), porMov = new Map();
     rep.forEach(r => { const m = gMov.get(r.id_gasto); if (!m) return; if (!porMov.has(m)) porMov.set(m, []); porMov.get(m).push(r); });
     mov.forEach(m => { if (m.categoria === 'IMPUESTO HOSPEDAJE') { m.villa = CN_IMP; porMov.delete(m.id); } });
@@ -942,7 +944,7 @@ async function viewCancun() {
       if (rr && rr.length) rr.forEach(r => parts.push({ m, villa: r.villa, monto: cents(r.monto), cat: r.categoria || m.categoria }));
       else parts.push({ m, villa: m.villa || 'Sin villa', monto: cents(m.monto), cat: m.categoria });
     });
-    S.cnD = { mov, parts, porMov, sync: mov.reduce((s, m) => m.sync_en && m.sync_en > s ? m.sync_en : s, '') };
+    S.cnD = { mov, parts, porMov, banco: bco ? banco : null, sync: mov.reduce((s, m) => m.sync_en && m.sync_en > s ? m.sync_en : s, '') };
     if (S.cnVista === 'rent') pintaRent(); else pintaCn();
   } catch (e) { if (tok === S.cnTok && $('#cnBody')) $('#cnBody').innerHTML = `<div class="warnbox">${esc(errMsg(e))}</div>`; }
 }
@@ -966,7 +968,10 @@ function pintaCn() {
   const filaV = v => { const a = base.filter(p => p.villa === v && (!f.mes || ym(p) === f.mes)); const i = ing(a), e = egr(a); return `<tr data-cnvilla="${esc(v)}" class="${f.villa === v ? 'on' : ''}"><td>${esc(v)}</td><td class="r">${sg(i / 100, fmtK)}</td><td class="r">${sg(e / 100, fmtK)}</td>${neto(i - e)}</tr>`; };
   const vl = villas.filter(v => base.some(p => p.villa === v && (!f.mes || ym(p) === f.mes)));
   const tV = (() => { const a = base.filter(p => !f.mes || ym(p) === f.mes); return `<tr><td><b>Total</b></td><td class="r"><b>${sg(ing(a) / 100, fmtK)}</b></td><td class="r"><b>${sg(egr(a) / 100, fmtK)}</b></td>${neto(ing(a) - egr(a))}</tr>`; })();
-  const filaM = m => { const a = base.filter(p => ym(p) === m && (!f.villa || p.villa === f.villa)); const i = ing(a), e = egr(a); return `<tr data-cnmes="${m}" class="${f.mes === m ? 'on' : ''}"><td>${mesLbl(m)}</td><td class="r">${sg(i / 100, fmtK)}</td><td class="r">${sg(e / 100, fmtK)}</td>${neto(i - e)}</tr>`; };
+  const BC = D.banco, bcOk = BC && !f.villa && !f.cat;   // el banco no distingue villa ni categoría
+  const celdaB = (b, e) => bcOk ? `<td class="r">${sg(b / 100, fmtK)}</td>` : '<td class="r mut">–</td>';
+  const filaM = m => { const a = base.filter(p => ym(p) === m && (!f.villa || p.villa === f.villa)); const i = ing(a), e = egr(a), b = BC ? (BC[m] || 0) : 0; return `<tr data-cnmes="${m}" class="${f.mes === m ? 'on' : ''}"><td>${mesLbl(m)}</td><td class="r">${sg(i / 100, fmtK)}</td>${celdaB(b, e)}<td class="r">${sg(e / 100, fmtK)}</td>${neto(i - e)}${bcOk ? neto(b - e) : '<td class="r mut">–</td>'}</tr>`; };
+  const tM = (() => { const a = base.filter(p => !f.villa || p.villa === f.villa), i = ing(a), e = egr(a), b = BC ? Object.values(BC).reduce((x, y) => x + y, 0) : 0; return `<tr><td><b>Total</b></td><td class="r"><b>${sg(i / 100, fmtK)}</b></td>${bcOk ? `<td class="r"><b>${sg(b / 100, fmtK)}</b></td>` : '<td class="r mut">–</td>'}<td class="r"><b>${sg(e / 100, fmtK)}</b></td>${neto(i - e)}${bcOk ? neto(b - e) : '<td class="r mut">–</td>'}</tr>`; })();
   const sy = D.sync ? new Date(D.sync).toLocaleString('es-MX', { timeZone: 'America/Monterrey', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
   $('#cnBody').innerHTML = `
     <div class="mut sm" style="margin:-4px 0 10px">Copia del Google Sheet${sy ? ' · actualizada el ' + esc(sy).replace(/\.$/, '') : ''}. Mientras sigas capturando en el Sheet, la app se actualiza copiándolo de nuevo.</div>
@@ -981,7 +986,7 @@ function pintaCn() {
     <div class="kpis">${kp('Ingresos', fmt(I / 100), esc(ambito), 'var(--ok)')}${kp('Egresos', fmt(E / 100), esc(ambito))}${kp('Neto', sg(N / 100, fmt), esc(ambito), N < 0 ? 'var(--bad,#c0392b)' : '')}</div>
     <div class="repgrid">
       <div class="card" style="overflow:auto"><h3 class="rh">Por villa${f.mes ? ' · ' + esc(mesLbl(f.mes)) : ''}</h3><table class="ingtbl cn"><thead><tr><th>Villa</th><th class="r">Ingresos</th><th class="r">Egresos</th><th class="r">Neto</th></tr></thead><tbody>${vl.map(filaV).join('')}</tbody><tfoot>${tV}</tfoot></table><div class="mut sm" style="margin-top:6px">Los gastos compartidos ya van repartidos entre sus villas. Toca una villa para filtrar.</div></div>
-      <div class="card" style="overflow:auto"><h3 class="rh">Por mes${f.villa ? ' · ' + esc(f.villa) : ''}</h3><table class="ingtbl cn"><thead><tr><th>Mes</th><th class="r">Ingresos</th><th class="r">Egresos</th><th class="r">Neto</th></tr></thead><tbody>${meses.map(filaM).join('')}</tbody></table></div>
+      <div class="card" style="overflow:auto"><h3 class="rh">Por mes${f.villa ? ' · ' + esc(f.villa) : ''}</h3><table class="ingtbl cn"><thead><tr><th>Mes</th><th class="r">Ingresos Airbnb</th><th class="r">Depósitos banco</th><th class="r">Egresos</th><th class="r">Neto vs Airbnb</th><th class="r">Neto vs banco</th></tr></thead><tbody>${meses.map(filaM).join('')}</tbody><tfoot>${tM}</tfoot></table><div class="mut sm" style="margin-top:6px">${BC ? (bcOk ? 'Depósitos banco: lo que entró a la cuenta de Excer clasificado como Cancún (Ingresos). Neto vs banco = depósitos − egresos.' : 'El banco no distingue villa ni categoría: quita esos filtros para ver las columnas del banco.') : 'No se pudieron leer los depósitos del banco.'}</div></div>
     </div>
     <div id="cnLista"></div>`;
   const B = $('#cnBody');
