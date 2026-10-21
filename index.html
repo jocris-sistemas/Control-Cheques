@@ -1117,6 +1117,19 @@ const TIPO_TXT = { factura: 'Factura', folio: 'Folio', comprobante_cobro: 'Ficha
 /* Botón único "Ver documentos": despliega foto del cheque, folio, factura, ficha, póliza, etc. (Detalle queda aparte). */
 /* En un cheque cancelado, la foto del cheque es la del cheque cancelado; otro documento sueltos son el folio (salvo cheques viejos sin foto) */
 const docLabel = (c, t) => c.estatus !== 'cancelado' ? (TIPO_TXT[t] || t) : t === 'foto_cheque' ? 'Foto del cheque cancelado' : t === 'otro' ? (archActivos(c, 'foto_cheque').length ? 'Folio' : 'Foto del cheque cancelado') : (TIPO_TXT[t] || t);
+/* Menú "Ver documentos": se fija a la ventana para que no lo recorte la tarjeta ni el final de la lista */
+document.addEventListener('toggle', e => {
+  const d = e.target;
+  if (!d || !d.matches || !d.matches('details.dd')) return;
+  const m = d.querySelector('.ddm'), s = d.querySelector('summary');
+  if (!m || !s) return;
+  if (!d.open) { m.style.cssText = ''; return; }
+  m.style.position = 'fixed';
+  const r = s.getBoundingClientRect(), h = m.offsetHeight, w = m.offsetWidth;
+  m.style.left = Math.max(8, Math.min(r.left, window.innerWidth - w - 8)) + 'px';
+  m.style.top = (window.innerHeight - r.bottom > h + 12 ? r.bottom + 4 : Math.max(8, r.top - h - 4)) + 'px';
+}, true);
+window.addEventListener('scroll', () => document.querySelectorAll('details.dd[open]').forEach(d => { d.open = false; }), true);
 function docsMenu(c) {
   const orden = ['foto_cheque', 'folio', 'factura', 'comprobante_cobro', 'otro'];
   const items = [];
@@ -2861,9 +2874,10 @@ async function compartirPrev() {
 }
 function imprimirPrev() {
   if (esMovil()) return compartirPrev();
-  const fr = document.createElement('iframe'); fr.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0'; fr.src = S.prev.url;
-  fr.onload = () => { try { fr.contentWindow.focus(); fr.contentWindow.print(); } catch (e) { bajarBlob(S.prev.blob, S.prev.nombre); } setTimeout(() => fr.remove(), 60000); };
-  document.body.appendChild(fr);
+  /* Se abre el PDF en su propia pestaña (visor del navegador) para imprimir a tamaño real, sin pasar por un marco oculto */
+  const w = window.open(S.prev.url, '_blank');
+  if (!w) { bajarBlob(S.prev.blob, S.prev.nombre); return toast('El navegador bloqueó la ventana. PDF descargado; abrirlo para imprimir.', 'ok'); }
+  toast('PDF abierto en otra pestaña. Imprimir con Ctrl+P, escala 100 % y sin encabezados.', 'ok');
 }
 /* ===================== POLIZA PDF ===================== */
 async function polizaPDF(id) {
