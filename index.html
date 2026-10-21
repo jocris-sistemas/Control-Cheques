@@ -74,6 +74,8 @@ details.dd[open]>summary{background:#eef2f9}
 details.dd .ddm{position:absolute;left:0;top:calc(100% + 4px);z-index:30;background:#fff;border:1px solid #c5cddb;border-radius:10px;box-shadow:0 8px 24px rgba(20,52,92,.18);min-width:230px;max-width:86vw;padding:6px;display:flex;flex-direction:column;gap:2px}
 details.dd .ddm button{background:none;border:0;text-align:left;padding:10px 12px;border-radius:8px;font:inherit;font-size:14px;color:var(--navy);cursor:pointer;width:100%}
 details.dd .ddm button:hover,details.dd .ddm button:active{background:#eef2f9}
+.selp{display:inline-flex;align-items:center;gap:5px;font-size:13px;color:var(--navy);cursor:pointer;padding:0 4px}
+.selp input{width:17px;height:17px;cursor:pointer}
 details.dd .ddm button.bad{color:var(--bad)}
 details.dd .ddm .sep{height:1px;background:#e3e7ef;margin:3px 4px}
 .btn:disabled{opacity:.45;cursor:not-allowed}
@@ -1513,7 +1515,7 @@ function viewCheques() {
     <input type="text" id="fq" placeholder="Buscar beneficiario, cheque o folio" value="${esc(f.q)}">
     <button class="btn ghost sm flimpia" id="flimpia" data-act="flimpia" title="Quitar todos los filtros" ${f.ch.length || f.mes.length || f.st.length || f.q || f.tr ? '' : 'hidden'}><span class="lt">Limpiar</span><span class="lx">✕</span></button><div class="fdds">${fddHtml('ch')}${fddHtml('mes')}${fddHtml('st')}<button type="button" class="btn ${f.tr ? 'gold' : 'ghost'} sm" id="ftr" data-act="ftr" title="Cheques de traspaso entre cuentas propias o fondeo">Traspaso/fondeo</button></div>
   </div></div>
-  <div class="row" style="margin-bottom:12px"><button class="btn ghost sm" data-act="huecos">Huecos de numeración</button>${puedeCapturar() ? '<button class="btn ghost sm" data-act="conciliar">Conciliar banco</button>' : ''}${puedeOperar() ? '<button class="btn ghost sm" data-act="cancelado">Registrar cancelado</button>' : ''}</div><div id="resumen"></div><div id="lst" class="spin">Cargando…</div><div id="more" class="r"></div>`;
+  <div class="row" style="margin-bottom:12px"><button class="btn ghost sm" data-act="huecos">Huecos de numeración</button>${puedeCapturar() ? '<button class="btn ghost sm" data-act="conciliar">Conciliar banco</button>' : ''}${puedeOperar() ? '<button class="btn ghost sm" data-act="cancelado">Registrar cancelado</button>' : ''}<button class="btn ghost sm" data-act="selvis" title="Marcar la póliza de todos los cheques mostrados">Marcar pólizas visibles</button><button class="btn gold sm" id="bselpol" data-act="selpol" ${selPolSet().size ? '' : 'hidden'}>Imprimir pólizas (${selPolSet().size})</button><button class="btn ghost sm" id="bselnada" data-act="selnada" ${selPolSet().size ? '' : 'hidden'}>Quitar selección</button></div><div id="resumen"></div><div id="lst" class="spin">Cargando…</div><div id="more" class="r"></div>`;
   let t; $('#fq').oninput = e => { clearTimeout(t); t = setTimeout(() => { f.q = e.target.value.trim(); fddResumenes(); loadList(true); }, 350); };
   $('.fbar').addEventListener('change', e => {
     const cb = e.target.closest('input[type=checkbox][data-fk]'); if (!cb) return;
@@ -1617,7 +1619,7 @@ function cardHist(c) {
     ${c.estatus === 'rechazado' && c.motivo_rechazo ? `<div class="cd-meta">Rechazo: ${esc(c.motivo_rechazo)}</div>` : ''}
     ${hist && c.nota_historial ? `<div class="cd-meta">Nota: ${esc(c.nota_historial)}</div>` : ''}
     </div>
-    <div class="cd-side"><div class="cd-tools">${docsMenu(c)}<button class="btn ghost sm" data-act="detalle" data-id="${c.id}">Detalle</button></div></div>
+    <div class="cd-side"><div class="cd-tools">${canc || c.estatus === 'rechazado' ? '' : `<label class="selp" title="Seleccionar para imprimir la póliza (2 por hoja)"><input type="checkbox" data-selpol="${c.id}" ${selPolSet().has(c.id) ? 'checked' : ''}> Póliza</label>`}${docsMenu(c)}<button class="btn ghost sm" data-act="detalle" data-id="${c.id}">Detalle</button></div></div>
   </div>`;
 }
 function rowCheque(c) {
@@ -2880,15 +2882,35 @@ function imprimirPrev() {
   toast('PDF abierto en otra pestaña. Imprimir con Ctrl+P, escala 100 % y sin encabezados.', 'ok');
 }
 /* ===================== POLIZA PDF ===================== */
-async function polizaPDF(id) {
-  let c; try { c = await loadCheque(id); } catch (e) { return toast(errMsg(e), 'err'); }
+/* Pólizas en lote: 2 por hoja carta (la segunda en la mitad inferior), ordenadas por chequera y número */
+function selPolSet() { return S.selPol || (S.selPol = new Set()); }
+function selPolActualiza() {
+  const n = selPolSet().size, b = $('#bselpol'), q = $('#bselnada');
+  if (b) { b.hidden = !n; b.textContent = `Imprimir pólizas (${n})`; }
+  if (q) q.hidden = !n;
+}
+document.addEventListener('change', e => {
+  const cb = e.target && e.target.matches && e.target.matches('input[data-selpol]') ? e.target : null; if (!cb) return;
+  if (cb.checked) selPolSet().add(cb.dataset.selpol); else selPolSet().delete(cb.dataset.selpol);
+  selPolActualiza();
+});
+async function polizasLote() {
+  const ids = [...selPolSet()]; if (!ids.length) return;
+  const cs = []; try { for (const id of ids) cs.push(await loadCheque(id)); } catch (e) { return toast(errMsg(e), 'err'); }
+  cs.sort((a, b) => (a.chequera_id - b.chequera_id) || (a.numero_cheque - b.numero_cheque));
   const { jsPDF } = window.jspdf; const doc = new jsPDF({ unit: 'mm', format: 'letter' });
+  for (let i = 0; i < cs.length; i++) { if (i > 0 && i % 2 === 0) doc.addPage(); await polizaPDF(null, { doc, c: cs[i], dy: i % 2 ? 139.7 : 0 }); }
+  previewPDF(doc, `Polizas_${cs.length}_cheques.pdf`, `Pólizas · ${cs.length} cheque(s), 2 por hoja`);
+}
+async function polizaPDF(id, ctx) {
+  let c; if (ctx) c = ctx.c; else { try { c = await loadCheque(id); } catch (e) { return toast(errMsg(e), 'err'); } }
+  const { jsPDF } = window.jspdf; const doc = ctx ? ctx.doc : new jsPDF({ unit: 'mm', format: 'letter' });
   const LIL = [241, 208, 236], PW = 215.9, FX = 5.5, FW = PW - 2 * 5.5, BX = 13.6, BW = PW - 2 * 13.6, RH = 4.8, FONT = 'times';
   const fechaLarga = (() => { const [y, m, d] = String(c.fecha).slice(0, 10).split('-'); const M = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']; return `${Number(d)} de ${M[Number(m) - 1]} de ${y}`; })();
   const letra = montoLetra(c.monto);
   const importe = Number(c.monto || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const parts = String(chequeraNombre(c.chequera_id) || '').trim().split(/\s+/); const banco = parts.length > 1 ? parts.pop() : ''; const empresa = parts.join(' ');
-  let y = 8.8, pageTop = 4.2;
+  const dyP = ctx ? ctx.dy : 0; let y = 8.8 + dyP, pageTop = 4.2 + dyP;
   const box = (rows, draw) => { // rows: array of heights; draw(i, yTop, h)
     const top = y, tot = rows.reduce((a, b) => a + b, 0); let yy = top;
     rows.forEach((h, i) => { if (i % 2 === 0) { doc.setFillColor(...LIL); doc.rect(BX, yy, BW, h, 'F'); } if (draw) draw(i, yy, h); yy += h; });
@@ -2914,6 +2936,7 @@ async function polizaPDF(id) {
   y += 4.6;
   box(Array(6).fill(RH), null);
   frame(y);
+  if (ctx) return;
   previewPDF(doc, `Poliza_${c.numero_cheque}_${String(chequeraNombre(c.chequera_id)).replace(/[^A-Za-z0-9]+/g, '_')}_${c.beneficiario.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z0-9]+/g, '_').slice(0, 25)}.pdf`, `Póliza · Cheque ${c.numero_cheque}`);
 }
 
@@ -3346,6 +3369,9 @@ document.addEventListener('click', async ev => {
       case 'fddnada': { const k = el.dataset.k; S.filt[k] = []; pintaFdd(k); onFiltroCambio(k); break; }
       case 'ftr': { S.filt.tr = !S.filt.tr; const b = $('#ftr'); if (b) b.className = 'btn ' + (S.filt.tr ? 'gold' : 'ghost') + ' sm'; fddResumenes(); loadList(true); break; }
       case 'flimpia': { S.filt.ch = []; S.filt.mes = []; S.filt.st = []; S.filt.q = ''; S.filt.tr = false; { const b = $('#ftr'); if (b) b.className = 'btn ghost sm'; } const fq = $('#fq'); if (fq) fq.value = ''; await cargarMeses(); ['ch', 'st'].forEach(pintaFdd); fddResumenes(); loadList(true); break; }
+      case 'selvis': { S.list.forEach(c => { if (c.estatus !== 'cancelado' && c.estatus !== 'rechazado') selPolSet().add(c.id); }); document.querySelectorAll('input[data-selpol]').forEach(cb => { cb.checked = selPolSet().has(cb.dataset.selpol); }); selPolActualiza(); break; }
+      case 'selnada': { selPolSet().clear(); document.querySelectorAll('input[data-selpol]').forEach(cb => { cb.checked = false; }); selPolActualiza(); break; }
+      case 'selpol': polizasLote(); break;
       case 'poliza': { const dd = el.closest('details.dd'); if (dd) dd.removeAttribute('open'); polizaPDF(id); break; }
       case 'verarch': { const c = await loadCheque(id); const a = archActivos(c, el.dataset.tipo)[0]; if (a) abrirPath(a.path); break; }
       case 'verpath': { const dd = el.closest('details.dd'); if (dd) dd.removeAttribute('open'); abrirPath(el.dataset.path); break; }
