@@ -747,7 +747,12 @@ async function loadCatalogs() {
   if (a.error || b.error || c.error) { const e = a.error || b.error || c.error; if (S.chequeras.length && S.cargos.length) { toast('No fue posible actualizar los catálogos: ' + errMsg(e), 'err'); return; } toast('No fue posible cargar chequeras y cargos: ' + errMsg(e), 'err'); }
   S.chequeras = a.data || []; S.cargos = b.data || [];
   S.series = {}; (c.data || []).forEach(s => S.series[s.cargo_id] = s);
+  try {
+    const { data: cf } = await sb.from('folio_pago').select('cargo_id,folio,semana_efectivo,monto_efectivo').eq('conflicto', true);
+    S.fpConf = {}; (cf || []).forEach(x => S.fpConf[x.cargo_id + '|' + x.folio] = x);
+  } catch (e) { S.fpConf = {}; }
 }
+const fpChip = f => { const x = f && !f.es_ajuste && !f.sin_folio && S.fpConf && S.fpConf[f.cargo_id + '|' + f.folio_numero]; if (!x || !x.semana_efectivo) return ''; return ` <span class="chip warn" title="Este folio también figura como pagado en efectivo${x.monto_efectivo != null ? ' por ' + fmt(x.monto_efectivo) : ''}">También en efectivo · semana del ${x.semana_efectivo.slice(8, 10)}/${x.semana_efectivo.slice(5, 7)}</span>`; };
 async function refreshPendCount() {
   const [r1, r2] = await Promise.all([
     sb.from('cheques').select('id', { count: 'exact', head: true }).eq('estatus', 'pendiente').eq('es_historial', false),
@@ -1206,7 +1211,7 @@ function cardPend(c, rechazado = false) {
     ${alertas ? `<div class="alerts">${alertas}</div>` : ''}
     <details class="fol"><summary>${folResumen(fol, resumen)}</summary>
       <table><thead><tr><th>Cargo</th><th>Folio</th><th>Detalle</th><th class="r">Monto</th></tr></thead><tbody>
-      ${fol.map(f => `<tr><td>${f.es_ajuste ? '' : esc(cargoNombre(f.cargo_id))}</td><td>${f.es_ajuste ? '' : f.sin_folio ? '<span class="chip warn">SIN FOLIO</span>' : esc(f.folio_numero)}</td><td>${esc([f.proveedor, f.descripcion, f.obra].filter(Boolean).join(' · '))}${detLin(c, f)}${f.sin_folio && f.sin_folio_motivo ? `<div class="mut sm">Motivo: ${esc(f.sin_folio_motivo)}</div>` : ''}</td><td class="r money">${fmt(f.monto)}</td></tr>`).join('')}
+      ${fol.map(f => `<tr><td>${f.es_ajuste ? '' : esc(cargoNombre(f.cargo_id))}</td><td>${f.es_ajuste ? '' : f.sin_folio ? '<span class="chip warn">SIN FOLIO</span>' : esc(f.folio_numero)}${fpChip(f)}</td><td>${esc([f.proveedor, f.descripcion, f.obra].filter(Boolean).join(' · '))}${detLin(c, f)}${f.sin_folio && f.sin_folio_motivo ? `<div class="mut sm">Motivo: ${esc(f.sin_folio_motivo)}</div>` : ''}</td><td class="r money">${fmt(f.monto)}</td></tr>`).join('')}
       </tbody></table></details>
     <div class="cd-meta">Capturó: ${esc(c.capturado_por_nombre || '')}${c.solicito ? ' · Solicitó: ' + esc(c.solicito) : ''}</div>
     ${!hayFoto && c.sin_foto_motivo ? `<div class="cd-meta">Sin foto: ${esc(c.sin_foto_motivo)}${c.sin_foto_por_nombre ? ' (' + esc(c.sin_foto_por_nombre) + ')' : ''}</div>` : ''}
@@ -1608,7 +1613,7 @@ function cardHist(c) {
     <div class="alerts">${estadoChip(c)}${alertas}</div>
     ${fol.length ? `<details class="fol"><summary>${folResumen(fol, resumen)}</summary>
       <table><thead><tr><th>Cargo</th><th>Folio</th><th>Detalle</th><th class="r">Monto</th></tr></thead><tbody>
-      ${fol.map(f => `<tr><td>${f.es_ajuste ? '' : esc(cargoNombre(f.cargo_id))}</td><td>${f.es_ajuste ? '' : f.sin_folio ? '<span class="chip warn">SIN FOLIO</span>' : esc(f.folio_numero)}</td><td>${esc([f.proveedor, f.descripcion, f.obra].filter(Boolean).join(' · '))}${detLin(c, f)}${f.sin_folio && f.sin_folio_motivo ? `<div class="mut sm">Motivo: ${esc(f.sin_folio_motivo)}</div>` : ''}</td><td class="r money">${fmt(f.monto)}</td></tr>`).join('')}
+      ${fol.map(f => `<tr><td>${f.es_ajuste ? '' : esc(cargoNombre(f.cargo_id))}</td><td>${f.es_ajuste ? '' : f.sin_folio ? '<span class="chip warn">SIN FOLIO</span>' : esc(f.folio_numero)}${fpChip(f)}</td><td>${esc([f.proveedor, f.descripcion, f.obra].filter(Boolean).join(' · '))}${detLin(c, f)}${f.sin_folio && f.sin_folio_motivo ? `<div class="mut sm">Motivo: ${esc(f.sin_folio_motivo)}</div>` : ''}</td><td class="r money">${fmt(f.monto)}</td></tr>`).join('')}
       </tbody></table></details>` : ''}
     ${c.capturado_por_nombre || c.solicito ? `<div class="cd-meta">${c.capturado_por_nombre ? 'Capturó: ' + esc(c.capturado_por_nombre) : ''}${c.capturado_por_nombre && c.solicito ? ' · ' : ''}${c.solicito ? 'Solicitó: ' + esc(c.solicito) : ''}</div>` : ''}
     ${c.autorizado_por_nombre && !hist ? `<div class="cd-meta">Autorizó: ${esc(c.autorizado_por_nombre)}${c.fecha_autorizacion ? ' · ' + fdate(fechaMty(c.fecha_autorizacion)) : ''}</div>` : ''}
@@ -1699,7 +1704,7 @@ async function openDetail(id) {
       </div></div>
       ${hist ? '<div class="warnbox">Cheque del historial (archivo), sin folios del sistema. La póliza se genera con los datos del cheque.</div>' : (c.estatus === 'cancelado' && !fol.length) ? '<div class="warnbox">Cheque cancelado, sin monto ni folios.</div>' : `
       <h3>Folios</h3><div class="card" style="padding:6px 10px"><table><thead><tr><th>Cargo</th><th>Folio</th><th>Detalle</th><th class="r">Monto</th></tr></thead><tbody>
-        ${fol.map(f => `<tr><td>${f.es_ajuste ? '' : esc(cargoNombre(f.cargo_id))}</td><td>${f.es_ajuste ? '' : f.sin_folio ? '<span class="chip warn">SIN FOLIO</span>' : esc(f.folio_numero)}</td><td>${esc([f.proveedor, f.descripcion, f.obra].filter(Boolean).join(' · '))}${detLin(c, f)}${f.sin_folio && f.sin_folio_motivo ? `<div class="mut sm">Motivo: ${esc(f.sin_folio_motivo)}</div>` : ''}</td><td class="r money">${fmt(f.monto)}</td></tr>`).join('') || '<tr><td colspan="4" class="mut">Sin folios</td></tr>'}
+        ${fol.map(f => `<tr><td>${f.es_ajuste ? '' : esc(cargoNombre(f.cargo_id))}</td><td>${f.es_ajuste ? '' : f.sin_folio ? '<span class="chip warn">SIN FOLIO</span>' : esc(f.folio_numero)}${fpChip(f)}</td><td>${esc([f.proveedor, f.descripcion, f.obra].filter(Boolean).join(' · '))}${detLin(c, f)}${f.sin_folio && f.sin_folio_motivo ? `<div class="mut sm">Motivo: ${esc(f.sin_folio_motivo)}</div>` : ''}</td><td class="r money">${fmt(f.monto)}</td></tr>`).join('') || '<tr><td colspan="4" class="mut">Sin folios</td></tr>'}
       </tbody></table></div>
       ${cuadra ? '' : `<div class="warnbox">No cuadra: folios ${fmt(sumFolios(c) / 100)} vs cheque ${fmt(c.monto)}.</div>`}`}
       ${lineasHtml}
