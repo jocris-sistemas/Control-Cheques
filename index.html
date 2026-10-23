@@ -935,11 +935,12 @@ async function viewCancun() {
   if (S.cnVista === 'cuadre') return viewCnCuadre();
   try {
     const [mov, rep, gc, bco] = await Promise.all([
-      fetchAll(() => sb.from('cancun_movimientos').select('id,fecha,folio,concepto,monto,pago,tipo,categoria,villa,depto,comentarios,sync_en')),
+      fetchAll(() => sb.from('cancun_movimientos').select('id,fecha,folio,concepto,monto,pago,tipo,categoria,villa,depto,comentarios,sync_en,pagado,pagado_nota')),
       fetchAll(() => sb.from('cancun_reparto').select('id,id_gasto,villa,depto,monto,categoria')),
       fetchAll(() => sb.from('cancun_gastos_comp').select('id,id_mov')),
       fetchAll(() => sb.from('ingresos').select('fecha,monto').eq('categoria', 'CANCUN')).catch(() => null)]);
     if (S.tab !== 'cancun' || tok !== S.cnTok) return;
+    { const canc = new Set(mov.filter(m => m.pagado === false && /^CANCELADO/i.test(m.pagado_nota || '')).map(m => m.id)); if (canc.size) { for (let i = mov.length - 1; i >= 0; i--) if (canc.has(mov[i].id)) mov.splice(i, 1); for (let i = gc.length - 1; i >= 0; i--) if (canc.has(gc[i].id_mov)) { const g = gc[i].id; gc.splice(i, 1); for (let j = rep.length - 1; j >= 0; j--) if (rep[j].id_gasto === g) rep.splice(j, 1); } } }
     const banco = {}; (bco || []).forEach(r => { const k = String(r.fecha).slice(0, 7); banco[k] = (banco[k] || 0) + cents(r.monto); });
     const gMov = new Map(gc.map(g => [g.id, g.id_mov])), porMov = new Map();
     rep.forEach(r => { const m = gMov.get(r.id_gasto); if (!m) return; if (!porMov.has(m)) porMov.set(m, []); porMov.get(m).push(r); });
