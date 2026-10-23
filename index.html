@@ -2926,7 +2926,7 @@ async function polizaPDF(id, ctx) {
   const frame = (bottom) => { doc.setDrawColor(0); doc.setLineWidth(0.5); doc.rect(FX, pageTop, FW, bottom - pageTop + 4.2); };
   // --- Recuadro 1: datos de la póliza ---
   box(Array(10).fill(RH), (i, yy, h) => {
-    if (i === 0) txt('CHEQUE POLIZA', BX + 8, yy, h, 11, true);
+    if (i === 0) txt('CHEQUE PÓLIZA', BX + 8, yy, h, 11, true);
     if (i === 1) { txt('FECHA', 126.5, yy, h, 10, true); txt(fechaLarga, 150.6, yy, h, 9.5, true); }
     if (i === 3) { txt(c.beneficiario, BX + 0.8, yy, h, c.beneficiario.length > 55 ? 7.5 : 9, true); txt('$', 148.5, yy, h, 9, true); txt(importe, 190, yy, h, 9, true, { align: 'right' }); }
     if (i === 5) { doc.setFont(FONT, 'bold'); doc.setFontSize(8.5); const w = doc.getTextWidth('(' + letra + ')'); txt('(' + letra + ')', BX + 0.8, yy, h, w > BW - 2 ? 8.5 * (BW - 2) / w : 8.5, true); }
@@ -3165,7 +3165,7 @@ async function concExcel() {
   add('PENDIENTES EN APP', A.pend.map(fila));
   add('CANCELADOS EN APP', A.alerta.map(fila));
   add('NO EXISTEN EN APP', A.noexiste.map(x => ({ 'CHEQUE': x.m.n, 'COBRO BANCO': x.m.fecha, 'CARGO BANCO': x.m.cargo, 'CONCEPTO': x.m.concepto })));
-  add('SIN COBRAR', A.sincobrar.map(c => ({ 'CHEQUE': c.numero_cheque, 'FECHA': c.fecha, 'BENEFICIARIO': c.beneficiario, 'MONTO': Number(c.monto), 'DIAS AL CORTE': Math.round((new Date(C.hasta) - new Date(c.fecha)) / 86400000) })));
+  add('SIN COBRAR', A.sincobrar.map(c => ({ 'CHEQUE': c.numero_cheque, 'FECHA': c.fecha, 'BENEFICIARIO': c.beneficiario, 'MONTO': Number(c.monto), 'DÍAS AL CORTE': Math.round((new Date(C.hasta) - new Date(c.fecha)) / 86400000) })));
   XLSX.writeFile(wb, `CONCILIACION_${nom.replace(/\s+/g, '_')}_${C.hasta}.xlsx`);
 }
 
