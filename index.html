@@ -668,7 +668,7 @@ const archActivos = (c, tipo) => (c.archivos || []).filter(a => a.activo && (!ti
 
 /* ===================== NUMERO A LETRA ===================== */
 function montoLetra(n) {
-  const U = ['', 'UN', 'DOS', 'TRES', 'CUATRO', 'CINCO', 'SEIS', 'SIETE', 'OCHO', 'NUEVE', 'DIEZ', 'ONCE', 'DOCE', 'TRECE', 'CATORCE', 'QUINCE', 'DIECISEIS', 'DIECISIETE', 'DIECIOCHO', 'DIECINUEVE', 'VEINTE', 'VEINTIUN', 'VEINTIDOS', 'VEINTITRES', 'VEINTICUATRO', 'VEINTICINCO', 'VEINTISEIS', 'VEINTISIETE', 'VEINTIOCHO', 'VEINTINUEVE'];
+  const U = ['', 'UN', 'DOS', 'TRES', 'CUATRO', 'CINCO', 'SEIS', 'SIETE', 'OCHO', 'NUEVE', 'DIEZ', 'ONCE', 'DOCE', 'TRECE', 'CATORCE', 'QUINCE', 'DIECISÉIS', 'DIECISIETE', 'DIECIOCHO', 'DIECINUEVE', 'VEINTE', 'VEINTIÚN', 'VEINTIDÓS', 'VEINTITRÉS', 'VEINTICUATRO', 'VEINTICINCO', 'VEINTISÉIS', 'VEINTISIETE', 'VEINTIOCHO', 'VEINTINUEVE'];
   const D = ['', '', '', 'TREINTA', 'CUARENTA', 'CINCUENTA', 'SESENTA', 'SETENTA', 'OCHENTA', 'NOVENTA'];
   const C = ['', 'CIENTO', 'DOSCIENTOS', 'TRESCIENTOS', 'CUATROCIENTOS', 'QUINIENTOS', 'SEISCIENTOS', 'SETECIENTOS', 'OCHOCIENTOS', 'NOVECIENTOS'];
   const m1000 = x => { if (x === 100) return 'CIEN'; let s = ''; const c = Math.floor(x / 100), r = x % 100; if (c) s += C[c] + ' '; if (r < 30) s += U[r]; else { const d = Math.floor(r / 10), u = r % 10; s += D[d] + (u ? ' Y ' + U[u] : ''); } return s.trim(); };
@@ -677,7 +677,7 @@ function montoLetra(n) {
   if (ent === 0) s = 'CERO';
   else {
     const mill = Math.floor(ent / 1e6), mil = Math.floor((ent % 1e6) / 1000), r = ent % 1000;
-    if (mill) s += (mill === 1 ? 'UN MILLON' : m1000(mill) + ' MILLONES') + ' ';
+    if (mill) s += (mill === 1 ? 'UN MILLÓN' : m1000(mill) + ' MILLONES') + ' ';
     if (mil) s += (mil === 1 ? 'MIL' : m1000(mil) + ' MIL') + ' ';
     if (r) s += m1000(r);
     s = s.trim();
@@ -2342,7 +2342,7 @@ function folioPDF(jsPDF, d) {
   const fY = bottom; const footH = 38;
   if (d.firma) { try { doc.addImage(d.firma, 'PNG', X + 8, fY + 3, 38, 23.2); } catch (e) {} }
   txt('SOLICITO: ' + String(d.solicito || '').toUpperCase(), X + 4, fY + 32, 11.5, false);
-  txt('AUTORIZO: ' + String(d.autorizo || 'ING. JOSE CRISTOBAL GARCIA PERALES').toUpperCase(), X + W - 4, fY + 32, 11.5, false, { align: 'right' });
+  txt('AUTORIZO: ' + String(d.autorizo || 'ING. JOSÉ CRISTÓBAL GARCÍA PERALES').toUpperCase(), X + W - 4, fY + 32, 11.5, false, { align: 'right' });
   doc.setDrawColor(0); doc.setLineWidth(0.8); doc.rect(X, y0 - 18, W, (fY + footH) - (y0 - 18));
   return doc;
 }
@@ -2391,7 +2391,7 @@ function cancunPDF(jsPDF, d) {
   y += 4; doc.setDrawColor(NAVY[0], NAVY[1], NAVY[2]); doc.setLineWidth(0.4); doc.line(L, y, R, y); y += 7;
   ink(NAVY); font(true, 11); doc.text('TOTAL', R - 62, y); ink([0, 0, 0]); doc.text(money(total / 100), R, y, { align: 'right' });
   y += 20; ink([0, 0, 0]); font(true, 9.5); doc.text('SOLICITÓ: ' + String(d.solicito || '').toUpperCase(), L, y);
-  ink(GRAY); font(false, 9); doc.text('AUTORIZÓ: ' + String(d.autorizo || 'ING. JOSE CRISTOBAL GARCIA PERALES').toUpperCase(), R, y, { align: 'right' });
+  ink(GRAY); font(false, 9); doc.text('AUTORIZÓ: ' + String(d.autorizo || 'ING. JOSÉ CRISTÓBAL GARCÍA PERALES').toUpperCase(), R, y, { align: 'right' });
   return doc;
 }
 const esCancun = id => /canc[uú]n/i.test(cargoNombre(Number(id)) || '');
@@ -2425,7 +2425,7 @@ function armarHojas(lines, folios, h) {
       const mm = d0 => { if (!d0) return '—'; const [y, m, dd] = d0.split('-'); return `${dd}- ${['ENE','FEB','MAR','ABR','MAY','JUN','JUL','AGO','SEP','OCT','NOV','DIC'][Number(m) - 1]}- ${y}`; };
       const doc = cancunPDF(window.jspdf.jsPDF, {
         logo: LOGO_CANCUN, fecha: h.fecha || today(), titulo: provs.length === 1 ? provs[0] : String(h.beneficiario || '').trim(),
-        cheque: `CHEQUE ${chequeraNombre(Number(h.chequera_id)).replace(/\s+AFIRME$/i, '')} ${h.numero_cheque}`, solicito: h.solicito || S.perfil.nombre, autorizo: 'ING. JOSE CRISTOBAL GARCIA PERALES',
+        cheque: `CHEQUE ${chequeraNombre(Number(h.chequera_id)).replace(/\s+AFIRME$/i, '')} ${h.numero_cheque}`, solicito: h.solicito || S.perfil.nombre, autorizo: 'ING. JOSÉ CRISTÓBAL GARCÍA PERALES',
         filas: g.map(x => ({ folio: x.f.folio_numero, villa: (x.l.obra || '').trim().toUpperCase() || 'CANCUN', beneficiario: (x.l.proveedor || '').trim().toUpperCase(),
           vence: mm(x.l.venc), referencia: String(conceptosDe(x.l).join(' ') || x.l.descripcion || '').toUpperCase(), monto: Number(x.f.monto) }))
       });
@@ -2436,7 +2436,7 @@ function armarHojas(lines, folios, h) {
     const firmaOk = S.firma && String(h.solicito || '').trim().toLowerCase() === String(S.perfil.nombre || '').trim().toLowerCase();
     const doc = folioPDF(window.jspdf.jsPDF, {
       logo: LOGO_JOCRIS, logoRatio: 0.262, fecha: today(), cargo, nombre: mismoNombre, periodo, solicito: h.solicito || S.perfil.nombre,
-      firma: firmaOk ? S.firma : null, autorizo: 'ING. JOSE CRISTOBAL GARCIA PERALES',
+      firma: firmaOk ? S.firma : null, autorizo: 'ING. JOSÉ CRISTÓBAL GARCÍA PERALES',
       folios: g.map(x => ({ folio: x.f.folio_numero, vencimiento: x.l.venc || '', monto: Number(x.f.monto),
         conceptos: conceptosDe(x.l) }))
     });
