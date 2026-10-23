@@ -1685,7 +1685,7 @@ async function openDetail(id) {
       if (c.estatus !== 'cancelado') acciones += `<button class="btn ghost" data-act="poliza" data-id="${id}">Ver póliza</button>`;
       if (puedeReexpedir(c)) acciones += `<button class="btn gold" data-act="reexpedir" data-id="${id}">Reexpedir cheque</button>`;
     }
-    const puedeSubir = !hist && (c.estatus !== 'cancelado' || puedeCapturar());
+    const puedeSubir = (!hist || c.estatus === 'cancelado') && (c.estatus !== 'cancelado' || puedeCapturar());
     openModal(`
       <div style="margin:0 40px 8px 0"><div class="hl" style="font-size:18px">${esc(c.beneficiario)}</div><div class="hl2" style="font-size:18px">Cheque ${c.numero_cheque} · ${esc(chequeraNombre(c.chequera_id))}</div></div>
       <div class="row" style="margin-bottom:8px">${estadoChip(c)}<span class="money big grow r">${fmt(c.monto)}</span></div>
@@ -1704,7 +1704,7 @@ async function openDetail(id) {
         ${c.cobrado ? `<div>Cobrado</div><div>${fdate(c.fecha_cobro)}</div>` : ''}
         ${c.nota_historial ? `<div>Nota</div><div>${esc(c.nota_historial)}</div>` : ''}
       </div></div>
-      ${hist ? '<div class="warnbox">Cheque del historial (archivo), sin folios del sistema. La póliza se genera con los datos del cheque.</div>' : (c.estatus === 'cancelado' && !fol.length) ? '<div class="warnbox">Cheque cancelado, sin monto ni folios.</div>' : `
+      ${(hist && c.estatus !== 'cancelado') ? '<div class="warnbox">Cheque del historial (archivo), sin folios del sistema. La póliza se genera con los datos del cheque.</div>' : (c.estatus === 'cancelado' && !fol.length) ? '<div class="warnbox">Cheque cancelado, sin monto ni folios.</div>' : `
       <h3>Folios</h3><div class="card" style="padding:6px 10px"><table><thead><tr><th>Cargo</th><th>Folio</th><th>Detalle</th><th class="r">Monto</th></tr></thead><tbody>
         ${fol.map(f => `<tr><td>${f.es_ajuste ? '' : esc(cargoNombre(f.cargo_id))}</td><td>${f.es_ajuste ? '' : f.sin_folio ? '<span class="chip warn">SIN FOLIO</span>' : esc(f.folio_numero)}${fpChip(f)}</td><td>${esc([f.proveedor, f.descripcion, f.obra].filter(Boolean).join(' · '))}${detLin(c, f)}${f.sin_folio && f.sin_folio_motivo ? `<div class="mut sm">Motivo: ${esc(f.sin_folio_motivo)}</div>` : ''}</td><td class="r money">${fmt(f.monto)}</td></tr>`).join('') || '<tr><td colspan="4" class="mut">Sin folios</td></tr>'}
       </tbody></table></div>
