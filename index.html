@@ -929,7 +929,8 @@ function pintaCnCuadre() {
 async function viewCancun() {
   const tok = S.cnTok = (S.cnTok || 0) + 1;
   S.cn = S.cn || { mes: '', villa: '', cat: '', tipo: '', q: '', lim: 100, abierto: '' };
-  $('#view').innerHTML = `<div class="pagehead"><h2>Cancún</h2><span class="sub">Villas de renta · 2026</span></div><div class="cnseg" role="tablist"><button data-cnvista="mov" class="${!S.cnVista || S.cnVista === 'mov' ? 'on' : ''}">Movimientos</button><button data-cnvista="rent" class="${S.cnVista === 'rent' ? 'on' : ''}">Rentabilidad</button><button data-cnvista="cuadre" class="${S.cnVista === 'cuadre' ? 'on' : ''}">Cuadre con Caja</button></div><div id="cnBody"><div class="sk"></div><div class="sk"></div></div>`;
+  S.cnVista = 'mov';   // Rentabilidad y Cuadre con Caja ocultos por el momento
+  $('#view').innerHTML = `<div class="pagehead"><h2>Cancún</h2><span class="sub">Villas de renta · 2026</span></div><div id="cnBody"><div class="sk"></div><div class="sk"></div></div>`;
   $('#view').querySelectorAll('[data-cnvista]').forEach(b => b.onclick = () => { S.cnVista = b.dataset.cnvista; viewCancun(); });
   if (S.cnVista === 'cuadre') return viewCnCuadre();
   try {
@@ -1564,8 +1565,8 @@ async function loadList(reset) {
     return q;
   };
   let q = conFiltros(sb.from('cheques').select(SEL, { count: 'exact' }));
-  // Siempre por número de cheque, del más alto al más bajo (sin importar estatus ni fecha).
-  q = q.order('numero_cheque', { ascending: false }).order('fecha', { ascending: false }).order('creado_en', { ascending: false }).order('id').range(S.page * PAGE, S.page * PAGE + PAGE - 1);
+  // Agrupado por chequera y, dentro de cada una, por número de cheque del más alto al más bajo (sin importar estatus ni fecha).
+  q = q.order('chequera_id', { ascending: true }).order('numero_cheque', { ascending: false }).order('fecha', { ascending: false }).order('creado_en', { ascending: false }).order('id').range(S.page * PAGE, S.page * PAGE + PAGE - 1);
   const { data, error, count } = await q;
   if (tok !== S.listTok || !$('#lst')) return;
   if (error) { $('#lst').innerHTML = `<div class="warnbox">${esc(errMsg(error))}</div>`; return; }
@@ -1584,7 +1585,7 @@ async function loadList(reset) {
     if (tok !== S.listTok || !$('#resumen')) return;
     $('#resumen').innerHTML = (pc || []).length ? `<div class="card summary"><div class="ico">${ICON.money}</div><div class="grow"><div class="mut sm">Autorizados por cobrar</div><div class="money big">${fmt(tot)}</div></div><div class="mut sm">${(pc || []).length} cheque(s)</div></div>` : '';
   } else $('#resumen').innerHTML = '';
-  const html = S.list.map(c => cardHist(c)).join('');
+  const html = S.list.map((c, i) => (i === 0 || S.list[i - 1].chequera_id !== c.chequera_id ? `<div class="grpch" style="grid-column:1/-1;margin:${i ? 16 : 2}px 0 2px;padding:7px 12px;border-left:4px solid #c9a227;border-radius:6px;background:rgba(127,127,127,.13);font-weight:700">Chequera: ${esc(chequeraNombre(c.chequera_id))}</div>` : '') + cardHist(c)).join('');
   $('#lst').outerHTML = `<div id="lst" class="cards">${S.list.length ? html : `<div class="card empty">${ICON.empty}<div>Sin resultados.</div></div>`}</div>`;
   $('#more').innerHTML = S.list.length < S.count ? `<button class="btn ghost" data-act="mas">Ver más (${S.list.length} de ${S.count})</button>` : '';
 }
