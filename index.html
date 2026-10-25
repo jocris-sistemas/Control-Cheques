@@ -12,8 +12,9 @@
 <meta name="apple-mobile-web-app-title" content="JOCRIS">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>JOCRIS · Cheques y Acumulado</title>
+<link rel="preconnect" href="https://hbttxvanyqczspljtqpz.supabase.co" crossorigin>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js" integrity="sha384-Rj26LVGvoeRVR6+mwQmFfcR3QOBEwT+ZmuCWpuiqeTzJpCs0ER4ITAWGb4Hiy3Ok" crossorigin="anonymous"></script>
-<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js" integrity="sha384-JcnsjUPPylna1s1fvi1u12X5qjY5OL56iySh75FdtrwhO/SWXgMjoVqcKyIIWOLk" crossorigin="anonymous"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js" integrity="sha384-JcnsjUPPylna1s1fvi1u12X5qjY5OL56iySh75FdtrwhO/SWXgMjoVqcKyIIWOLk" crossorigin="anonymous"></script>
 <style>
 :root{
   --navy:#14345c; --navy2:#1d4577; --gold:#c99a3c; --bg:#f3f5f9; --card:#fff; --ink:#1b2430; --mut:#6b7482;
@@ -732,24 +733,24 @@ async function boot() {
   if (!p || !p.activo) return cerrarSesion('El usuario no está activo en el sistema. Contactar a Pedro.');
   S.perfil = p;
   $('#app').innerHTML = '<div class="spin">Cargando…</div>';
-  await loadCatalogs();
-  try { const { data: fr } = await sb.from('firmas').select('imagen').maybeSingle(); S.firma = fr ? fr.imagen : null; } catch (e) { S.firma = null; }
+  const tFirma = sb.from('firmas').select('imagen').maybeSingle().then(r => { S.firma = r && r.data ? r.data.imagen : null; }, () => { S.firma = null; });
+  await Promise.all([loadCatalogs(), tFirma]);
   S.tab = ['pend', 'cheques', 'rep', 'ing'].includes(navGet('jc_tab')) ? navGet('jc_tab') : 'pend'; // al recargar vuelve a la última pestaña (si no, Pendientes)
   renderShell();
   refreshPendCount(); cargarAlertas(true); resincronizarPush(); selloActualiza();
   if (!boot._iv) boot._iv = setInterval(() => { if (S.perfil) refreshPendCount(); }, 60000);
 }
 async function loadCatalogs() {
-  const [a, b, c] = await Promise.all([
+  const [a, b, c, cfR] = await Promise.all([
     sb.from('chequeras').select('*').eq('activa', true).order('nombre'),
     sb.from('cargos').select('*').eq('activo', true).order('id'),
-    sb.from('series_folio').select('*')]);
+    sb.from('series_folio').select('*'),
+    sb.from('folio_pago').select('cargo_id,folio,semana_efectivo,monto_efectivo').eq('conflicto', true).then(r => r, () => ({ data: null }))]);
   if (a.error || b.error || c.error) { const e = a.error || b.error || c.error; if (S.chequeras.length && S.cargos.length) { toast('No fue posible actualizar los catálogos: ' + errMsg(e), 'err'); return; } toast('No fue posible cargar chequeras y cargos: ' + errMsg(e), 'err'); }
   S.chequeras = a.data || []; S.cargos = b.data || [];
   S.series = {}; (c.data || []).forEach(s => S.series[s.cargo_id] = s);
   try {
-    const { data: cf } = await sb.from('folio_pago').select('cargo_id,folio,semana_efectivo,monto_efectivo').eq('conflicto', true);
-    S.fpConf = {}; (cf || []).forEach(x => S.fpConf[x.cargo_id + '|' + x.folio] = x);
+    S.fpConf = {}; ((cfR && cfR.data) || []).forEach(x => S.fpConf[x.cargo_id + '|' + x.folio] = x);
   } catch (e) { S.fpConf = {}; }
 }
 const fpChip = f => { const x = f && !f.es_ajuste && !f.sin_folio && S.fpConf && S.fpConf[f.cargo_id + '|' + f.folio_numero]; if (!x || !x.semana_efectivo) return ''; return ` <span class="chip warn" title="Este folio también figura como pagado en efectivo${x.monto_efectivo != null ? ' por ' + fmt(x.monto_efectivo) : ''}">También en efectivo · semana del ${x.semana_efectivo.slice(8, 10)}/${x.semana_efectivo.slice(5, 7)}</span>`; };
@@ -1089,15 +1090,17 @@ async function viewPend() {
   try { let oculto = false; try { oculto = localStorage.getItem('jocris_push_aviso') === 'no'; } catch (e) { }
     if (esAdmin() && !oculto && pushSoportado() && Notification.permission === 'default' && !$('#pushAviso').innerHTML) $('#pushAviso').innerHTML = `<div class="card" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><div class="grow"><b>Avisos en el celular</b><div class="mut sm">Notificación de cheques por autorizar, aun con la aplicación cerrada.</div></div><button class="btn gold sm" data-act="pushon">Activar</button><button class="btn ghost sm" data-act="pushno">Omitir</button></div>`;
   } catch (e) { }
+  const tCanc = sb.from('cheques').select(SEL).eq('estatus', 'cancelado').eq('es_historial', false).is('cancelacion_enterada_en', null).order('actualizado_en', { ascending: true });
+  const tRech = sb.from('cheques').select(SEL).eq('estatus', 'rechazado').eq('es_historial', false).order('actualizado_en', { ascending: false }).limit(20);
   const { data, error } = await sb.from('cheques').select(SEL).eq('estatus', 'pendiente').eq('es_historial', false).order('creado_en', { ascending: true });
   if (tok !== S.pendTok || S.tab !== 'pend' || !$('#pendList')) return;
   if (error) return $('#pendList').innerHTML = `<div class="warnbox">${esc(errMsg(error))}</div>`;
-  const canc = (await sb.from('cheques').select(SEL).eq('estatus', 'cancelado').eq('es_historial', false).is('cancelacion_enterada_en', null).order('actualizado_en', { ascending: true })).data || [];
-  S.pendCount = data.length + canc.length; refreshPendCount();
+  const canc = (await tCanc).data || [];
+  S.pendCount = data.length + canc.length; { const b = $('#bPend'); if (b) { b.textContent = S.pendCount; b.classList.toggle('hidden', !S.pendCount); } }
   S.avisos = await calcAvisos(data);
   if (tok !== S.pendTok || S.tab !== 'pend' || !$('#pendList')) return;
   S.pendMap = new Map(data.map(c => [c.id, c])); const bar0 = $('#selbar'); if (bar0) bar0.classList.add('hidden');
-  const rech = (await sb.from('cheques').select(SEL).eq('estatus', 'rechazado').eq('es_historial', false).order('actualizado_en', { ascending: false }).limit(20)).data || [];
+  const rech = (await tRech).data || [];
   let html = '';
   if (data.length || canc.length) {
     const tot = data.reduce((a, c) => a + cents(c.monto), 0) / 100;
@@ -1268,9 +1271,12 @@ function dlgMotivo(titulo, act, id, btnClass = 'bad', btnTxt = 'Confirmar') {
 
 /* ===================== VISTA: REPORTES ===================== */
 async function fetchAll(mk) {
-  let all = [], from = 0;
-  for (;;) { const { data, error } = await mk().order('id').range(from, from + 999); if (error) throw error; all = all.concat(data || []); if (!data || data.length < 1000) break; from += 1000; }
-  return all;
+  const all = []; let from = 0, n = 1;
+  for (;;) {
+    const rs = await Promise.all(Array.from({ length: n }, (_, i) => mk().order('id').range(from + i * 1000, from + i * 1000 + 999)));
+    for (const r of rs) { if (r.error) throw r.error; const d = r.data || []; for (let i = 0; i < d.length; i++) all.push(d[i]); if (d.length < 1000) return all; }
+    from += n * 1000; n = 3;
+  }
 }
 const isoD = d => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 const diaD = iso => new Date(String(iso).slice(0, 10) + 'T12:00:00');
@@ -1573,6 +1579,10 @@ async function loadList(reset) {
   if (error) { $('#lst').innerHTML = `<div class="warnbox">${esc(errMsg(error))}</div>`; return; }
   S.count = count; S.list = S.list.concat(data); S.page++;
   const hc = $('#hcount'); if (hc) hc.textContent = (count || 0) + ' cheque(s)';
+  const html = S.list.map((c, i) => (i === 0 || S.list[i - 1].chequera_id !== c.chequera_id ? `<div class="grpch" style="grid-column:1/-1;margin:${i ? 16 : 2}px 0 2px;padding:7px 12px;border-left:4px solid #c9a227;border-radius:6px;background:rgba(127,127,127,.13);font-weight:700">Chequera: ${esc(chequeraNombre(c.chequera_id))}</div>` : '') + cardHist(c)).join('');
+  $('#lst').outerHTML = `<div id="lst" class="cards">${S.list.length ? html : `<div class="card empty">${ICON.empty}<div>Sin resultados.</div></div>`}</div>`;
+  $('#more').innerHTML = S.list.length < S.count ? `<button class="btn ghost" data-act="mas">Ver más (${S.list.length} de ${S.count})</button>` : '';
+  if (S.page === 1) (async () => {
   if (f.q || f.ch.length || f.mes.length || f.st.length || f.tr) {
     let fr = []; try { fr = await fetchAll(() => conFiltros(sb.from('cheques').select('id,monto,estatus,cobrado'))); } catch (e) { fr = []; }
     if (tok !== S.listTok || !$('#resumen')) return;
@@ -1586,9 +1596,7 @@ async function loadList(reset) {
     if (tok !== S.listTok || !$('#resumen')) return;
     $('#resumen').innerHTML = (pc || []).length ? `<div class="card summary"><div class="ico">${ICON.money}</div><div class="grow"><div class="mut sm">Autorizados por cobrar</div><div class="money big">${fmt(tot)}</div></div><div class="mut sm">${(pc || []).length} cheque(s)</div></div>` : '';
   } else $('#resumen').innerHTML = '';
-  const html = S.list.map((c, i) => (i === 0 || S.list[i - 1].chequera_id !== c.chequera_id ? `<div class="grpch" style="grid-column:1/-1;margin:${i ? 16 : 2}px 0 2px;padding:7px 12px;border-left:4px solid #c9a227;border-radius:6px;background:rgba(127,127,127,.13);font-weight:700">Chequera: ${esc(chequeraNombre(c.chequera_id))}</div>` : '') + cardHist(c)).join('');
-  $('#lst').outerHTML = `<div id="lst" class="cards">${S.list.length ? html : `<div class="card empty">${ICON.empty}<div>Sin resultados.</div></div>`}</div>`;
-  $('#more').innerHTML = S.list.length < S.count ? `<button class="btn ghost" data-act="mas">Ver más (${S.list.length} de ${S.count})</button>` : '';
+  })().catch(e => console.warn('resumen', e));
 }
 /* Tarjeta del Historial: misma información que en Pendientes (folios, documentos, detalle), sin botones de autorizar. */
 function cardHist(c) {
