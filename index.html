@@ -3248,7 +3248,7 @@ function menuCuenta() {
   </details>
   <details class="mas"><summary>Herramientas</summary>
   <h3>Respaldo</h3><div class="mut sm" style="margin-bottom:6px">Cheques, folios, archivos y bitácora en Excel. Se recomienda un respaldo semanal.</div><div style="${R}"><button class="btn ghost" id="btnRespaldo" data-act="respaldo">Respaldo de Cheques en Excel</button>${veCaja() ? '<button class="btn ghost" data-act="cajaresp">Respaldo del Acumulado en Excel</button>' : ''}</div>
-  ${puedeArchivos() ? `<h3>Facturas del SAT (carga masiva)</h3><div class="mut sm" style="margin-bottom:6px">Seleccionar los PDF de la carpeta de facturas. Se omiten los cheques cancelados y los que ya tienen factura.</div><input type="file" id="satFiles" accept="application/pdf,.pdf" multiple style="margin-bottom:8px"><div id="satOut"></div>` : ''}
+  ${puedeArchivos() ? `<h3>Facturas del SAT y comprobantes (carga masiva)</h3><div class="mut sm" style="margin-bottom:6px">Seleccionar el tipo de documento y los PDF de la carpeta. Se omiten los cheques cancelados; en facturas, los que ya tienen factura; en comprobantes, los que ya tienen el mismo archivo.</div><select id="satTipo" style="margin-bottom:8px"><option value="factura">Facturas</option><option value="otro">Otros comprobantes</option></select><br><input type="file" id="satFiles" accept="application/pdf,.pdf" multiple style="margin-bottom:8px"><div id="satOut"></div>` : ''}
   <h3>Instalar en el celular</h3><button class="btn ghost" data-act="instalar">Instalar aplicación</button>
   </details>`);
   htmlPush().then(h => { const b = $('#pushBox'); if (b) b.innerHTML = h; });
@@ -3262,37 +3262,38 @@ async function satPrepara(files) {
   for (const f of files) { const m = /^c(\d+)-n(\d+)__(.*?)__([0-9a-f]{8})\.pdf$/i.exec(f.name); if (m) items.push({ f, ch: +m[1], num: +m[2], em: m[3].replace(/_/g, ' '), u: m[4] }); }
   if (!items.length) { out.innerHTML = '<div class="mut sm">Ningún archivo tiene el formato de nombre esperado.</div>'; return; }
   S.satItems = items;
-  out.innerHTML = `<div class="sm" style="margin-bottom:6px">${items.length} facturas listas${files.length > items.length ? ` (${files.length - items.length} archivos omitidos por nombre no válido)` : ''}.</div><button class="btn" id="satGo">Subir ${items.length} facturas</button><div id="satLog" class="sm" style="margin-top:8px"></div>`;
+  out.innerHTML = `<div class="sm" style="margin-bottom:6px">${items.length} archivos listos${files.length > items.length ? ` (${files.length - items.length} archivos omitidos por nombre no válido)` : ''}.</div><button class="btn" id="satGo">Subir ${items.length} archivos</button><div id="satLog" class="sm" style="margin-top:8px"></div>`;
   $('#satGo').onclick = () => satSube();
 }
 async function satSube() {
   const items = S.satItems || [], btn = $('#satGo'), log = $('#satLog'); if (!items.length || !btn) return;
-  btn.disabled = true; const say = t => { log.textContent = t; };
+  btn.disabled = true; const say = t => { log.textContent = t; }; const tipo = ($('#satTipo') || {}).value === 'otro' ? 'otro' : 'factura';
   const pagina = async (tabla, cols, filtro) => { let all = [], d = 0; for (;;) { let q = sb.from(tabla).select(cols).range(d, d + 999); q = filtro(q); const r = await q; if (r.error) throw r.error; all = all.concat(r.data); if (r.data.length < 1000) break; d += 1000; } return all; };
   let ok = 0; const omit = { sin: 0, canc: 0, ya: 0 }, fallas = [];
   try {
     say('Revisando cheques…');
     const mapa = {};
     for (const ch of [...new Set(items.map(i => i.ch))]) for (const c of await pagina('cheques', 'id,numero_cheque,estatus', q => q.eq('chequera_id', ch))) mapa[ch + '-' + c.numero_cheque] = c;
-    const con = new Set((await pagina('archivos', 'cheque_id', q => q.eq('tipo', 'factura').eq('activo', true))).map(a => a.cheque_id));
+    const con = new Set((await pagina('archivos', 'cheque_id,nombre', q => q.eq('tipo', tipo).eq('activo', true))).map(a => tipo === 'factura' ? a.cheque_id : a.cheque_id + '|' + a.nombre));
     let n = 0;
     for (const it of items) {
       n++; const c = mapa[it.ch + '-' + it.num];
       if (!c) { omit.sin++; continue; }
       if (c.estatus === 'cancelado') { omit.canc++; continue; }
-      if (con.has(c.id)) { omit.ya++; continue; }
+      const nombre = tipo === 'factura' ? `Factura ${it.em} SAT ${it.u}.pdf` : `Comprobante ${it.em} ${it.u}.pdf`, clave = tipo === 'factura' ? c.id : c.id + '|' + nombre;
+      if (con.has(clave)) { omit.ya++; continue; }
       say(`Subiendo ${n} de ${items.length}… (${ok} cargadas)`);
       try {
-        const path = `${c.id}/factura-${Date.now()}-${n}.pdf`;
+        const path = `${c.id}/${tipo}-${Date.now()}-${n}.pdf`;
         const up = await sb.storage.from(BUCKET).upload(path, it.f, { contentType: 'application/pdf' });
         if (up.error) throw up.error;
-        await rpc('registrar_archivo', { p_cheque: c.id, p_tipo: 'factura', p_path: path, p_nombre: `Factura ${it.em} SAT ${it.u}.pdf` });
-        con.add(c.id); ok++;
+        await rpc('registrar_archivo', { p_cheque: c.id, p_tipo: tipo, p_path: path, p_nombre: nombre });
+        con.add(clave); ok++;
       } catch (e) { fallas.push(`${it.ch === 1 ? 'Excer' : 'chequera ' + it.ch} ${it.num}: ${errMsg(e)}`); if (fallas.length >= 5) break; }
     }
   } catch (e) { fallas.push(errMsg(e)); }
-  log.innerHTML = `<b>${ok} facturas cargadas.</b> Omitidas: ${omit.ya} con factura previa, ${omit.canc} cancelados, ${omit.sin} sin cheque en el sistema.` + (fallas.length ? `<br>Con error: ${esc(fallas.join(' | '))}` : '') + '<br>Recargar la aplicación para ver los cambios.';
-  toast(`${ok} facturas cargadas.`, ok ? 'ok' : 'err'); btn.disabled = false; S.satItems = [];
+  log.innerHTML = `<b>${ok} archivos cargados.</b> Omitidos: ${omit.ya} ya cargados, ${omit.canc} cancelados, ${omit.sin} sin cheque en el sistema.` + (fallas.length ? `<br>Con error: ${esc(fallas.join(' | '))}` : '') + '<br>Recargar la aplicación para ver los cambios.';
+  toast(`${ok} archivos cargados.`, ok ? 'ok' : 'err'); btn.disabled = false; S.satItems = [];
 }
 
 /* ===================== EVENTOS ===================== */
