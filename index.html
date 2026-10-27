@@ -3248,7 +3248,7 @@ function menuCuenta() {
   </details>
   <details class="mas"><summary>Herramientas</summary>
   <h3>Respaldo</h3><div class="mut sm" style="margin-bottom:6px">Cheques, folios, archivos y bitácora en Excel. Se recomienda un respaldo semanal.</div><div style="${R}"><button class="btn ghost" id="btnRespaldo" data-act="respaldo">Respaldo de Cheques en Excel</button>${veCaja() ? '<button class="btn ghost" data-act="cajaresp">Respaldo del Acumulado en Excel</button>' : ''}</div>
-  ${puedeArchivos() ? `<h3>Facturas del SAT y comprobantes (carga masiva)</h3><div class="mut sm" style="margin-bottom:6px">Seleccionar el tipo de documento y los PDF de la carpeta. Se omiten los cheques cancelados; en facturas, los que ya tienen factura; en comprobantes, los que ya tienen el mismo archivo.</div><select id="satTipo" style="margin-bottom:8px"><option value="factura">Facturas</option><option value="otro">Otros comprobantes</option></select><br><input type="file" id="satFiles" accept="application/pdf,.pdf" multiple style="margin-bottom:8px"><div id="satOut"></div>` : ''}
+  ${puedeArchivos() ? `<h3>Facturas del SAT y comprobantes (carga masiva)</h3><div class="mut sm" style="margin-bottom:6px">Seleccionar el tipo de documento y los PDF de la carpeta. Se omiten los cheques cancelados; en facturas y fotos de cheque, los que ya tienen ese documento; en comprobantes y folios, los que ya tienen el mismo archivo.</div><select id="satTipo" style="margin-bottom:8px"><option value="factura">Facturas</option><option value="otro">Otros comprobantes</option><option value="foto_cheque">Fotos de cheque</option><option value="folio">Folios / órdenes de compra</option></select><br><input type="file" id="satFiles" accept="application/pdf,.pdf" multiple style="margin-bottom:8px"><div id="satOut"></div>` : ''}
   <h3>Instalar en el celular</h3><button class="btn ghost" data-act="instalar">Instalar aplicación</button>
   </details>`);
   htmlPush().then(h => { const b = $('#pushBox'); if (b) b.innerHTML = h; });
@@ -3267,20 +3267,20 @@ async function satPrepara(files) {
 }
 async function satSube() {
   const items = S.satItems || [], btn = $('#satGo'), log = $('#satLog'); if (!items.length || !btn) return;
-  btn.disabled = true; const say = t => { log.textContent = t; }; const tipo = ($('#satTipo') || {}).value === 'otro' ? 'otro' : 'factura';
+  btn.disabled = true; const say = t => { log.textContent = t; }; const tv = ($('#satTipo') || {}).value, tipo = ['otro', 'foto_cheque', 'folio'].includes(tv) ? tv : 'factura', unico = tipo === 'factura' || tipo === 'foto_cheque';
   const pagina = async (tabla, cols, filtro) => { let all = [], d = 0; for (;;) { let q = sb.from(tabla).select(cols).range(d, d + 999); q = filtro(q); const r = await q; if (r.error) throw r.error; all = all.concat(r.data); if (r.data.length < 1000) break; d += 1000; } return all; };
   let ok = 0; const omit = { sin: 0, canc: 0, ya: 0 }, fallas = [];
   try {
     say('Revisando cheques…');
     const mapa = {};
     for (const ch of [...new Set(items.map(i => i.ch))]) for (const c of await pagina('cheques', 'id,numero_cheque,estatus', q => q.eq('chequera_id', ch))) mapa[ch + '-' + c.numero_cheque] = c;
-    const con = new Set((await pagina('archivos', 'cheque_id,nombre', q => q.eq('tipo', tipo).eq('activo', true))).map(a => tipo === 'factura' ? a.cheque_id : a.cheque_id + '|' + a.nombre));
+    const con = new Set((await pagina('archivos', 'cheque_id,nombre', q => q.eq('tipo', tipo).eq('activo', true))).map(a => unico ? a.cheque_id : a.cheque_id + '|' + a.nombre));
     let n = 0;
     for (const it of items) {
       n++; const c = mapa[it.ch + '-' + it.num];
       if (!c) { omit.sin++; continue; }
       if (c.estatus === 'cancelado') { omit.canc++; continue; }
-      const nombre = tipo === 'factura' ? `Factura ${it.em} SAT ${it.u}.pdf` : `Comprobante ${it.em} ${it.u}.pdf`, clave = tipo === 'factura' ? c.id : c.id + '|' + nombre;
+      const nombre = tipo === 'factura' ? `Factura ${it.em} SAT ${it.u}.pdf` : tipo === 'foto_cheque' ? `Foto_cheque_${it.num}.pdf` : tipo === 'folio' ? `Folio ${it.em} ${it.u}.pdf` : `Comprobante ${it.em} ${it.u}.pdf`, clave = unico ? c.id : c.id + '|' + nombre;
       if (con.has(clave)) { omit.ya++; continue; }
       say(`Subiendo ${n} de ${items.length}… (${ok} cargadas)`);
       try {
