@@ -852,7 +852,8 @@ window.addEventListener('message', ev => {
   if (d.caja === 'sesion') sb.auth.getSession().then(({ data }) => { if (!data.session && S.perfil) { S.perfil = null; location.reload(); } });
 });
 /* ===================== CANCÚN (copia del Google Sheet REPORTE CANCUN 2026) ===================== */
-const veCancun = () => !!S.perfil?.puede_cancun;   // solo quien tenga perfiles.puede_cancun (hoy: Pedro)
+const veCancun = () => false;   // módulo Cancún oculto en esta app (se gestiona desde Folios); para reactivar: !!S.perfil?.puede_cancun
+/* const veCancunOrig = () => !!S.perfil?.puede_cancun; */   // solo quien tenga perfiles.puede_cancun (hoy: Pedro)
 const CN_COMP = 'VARIAS / COMPARTIDO';
 const CN_IMP = 'IMPUESTOS (HOSPEDAJE)';   // el impuesto sobre hospedaje no se reparte entre villas: va aparte
 /* Rentabilidad por villa: ingresos, gastos directos y parte de gastos compartidos de cada villa */
