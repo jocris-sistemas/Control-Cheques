@@ -3297,6 +3297,65 @@ async function satSube() {
   log.innerHTML = `<b>${ok} archivos cargados.</b> Omitidos: ${omit.ya} ya cargados, ${omit.canc} cancelados, ${omit.sin} sin cheque en el sistema.` + (fallas.length ? `<br>Con error: ${esc(fallas.join(' | '))}` : '') + '<br>Recargar la aplicación para ver los cambios.';
   toast(`${ok} archivos cargados.`, ok ? 'ok' : 'err'); btn.disabled = false; S.satItems = [];
 }
+/* Carga masiva por nombre de archivo (version ampliada). Formatos reconocidos:
+   Cheque_6668_EXCER_AFIRME.pdf (foto del cheque)
+   Folio_OFICINA_118_Cheque_6667_EXCER_AFIRME.pdf, Factura_..._Cheque_N_CHEQUERA.pdf, Hoja_pago_..._Cheque_N_CHEQUERA.pdf, Comprobante_..._Cheque_N_CHEQUERA.pdf
+   y el formato anterior c1-n6637__EMISOR__1a2b3c4d.pdf (el tipo se toma de la lista). */
+async function satPrepara(files) {
+  const out = $('#satOut'); if (!out) return;
+  const chq = {}, norm = s => String(s).trim().toUpperCase().replace(/[^A-Z0-9]+/g, '_');
+  try { const r = await sb.from('chequeras').select('id,nombre'); (r.data || []).forEach(q => { chq[norm(q.nombre)] = q.id; }); } catch (e) { }
+  const hash8 = s => { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h * 33) ^ s.charCodeAt(i)) >>> 0; return h.toString(16).padStart(8, '0'); };
+  const TIPOS = { folio: 'folio', factura: 'factura', hoja_pago: 'otro', comprobante: 'otro', otro: 'otro' };
+  const items = [];
+  for (const f of files) {
+    let m = /^c(\d+)-n(\d+)__(.*?)__([0-9a-f]{8})\.pdf$/i.exec(f.name);
+    if (m) { items.push({ f, ch: +m[1], num: +m[2], em: m[3].replace(/_/g, ' '), u: m[4] }); continue; }
+    m = /^(?:(Folio|Factura|Hoja_pago|Comprobante|Otro)_(.+?)_)?Cheque_(\d+)_(.+?)\.pdf$/i.exec(f.name);
+    if (!m) continue;
+    const ch = chq[norm(m[4])]; if (!ch) continue;
+    items.push({ f, ch, num: +m[3], em: (m[2] || '').replace(/_/g, ' '), u: hash8(f.name), tipo: m[1] ? TIPOS[m[1].toLowerCase()] : 'foto_cheque' });
+  }
+  if (!items.length) { out.innerHTML = '<div class="mut sm">Ningún archivo tiene el formato de nombre esperado.</div>'; return; }
+  S.satItems = items;
+  const nT = t => items.filter(i => i.tipo === t).length, nPre = items.filter(i => !i.tipo).length;
+  const rs = [nT('foto_cheque') ? nT('foto_cheque') + ' fotos de cheque' : '', nT('folio') ? nT('folio') + ' folios' : '', nT('factura') ? nT('factura') + ' facturas' : '', nT('otro') ? nT('otro') + ' comprobantes' : '', nPre ? nPre + ' según el tipo seleccionado' : ''].filter(Boolean).join(', ');
+  out.innerHTML = '<div class="sm" style="margin-bottom:6px">' + items.length + ' archivos listos (' + rs + ')' + (files.length > items.length ? '; ' + (files.length - items.length) + ' omitidos por nombre no válido' : '') + '.</div><button class="btn" id="satGo">Subir ' + items.length + ' archivos</button><div id="satLog" class="sm" style="margin-top:8px"></div>';
+  $('#satGo').onclick = () => satSube();
+}
+async function satSube() {
+  const items = S.satItems || [], btn = $('#satGo'), log = $('#satLog'); if (!items.length || !btn) return;
+  btn.disabled = true; const say = t => { log.textContent = t; };
+  const tv = ($('#satTipo') || {}).value, tdef = ['otro', 'foto_cheque', 'folio'].includes(tv) ? tv : 'factura';
+  items.forEach(i => { if (!i.tipo) i.tipo = tdef; });
+  const pagina = async (tabla, cols, filtro) => { let all = [], d = 0; for (;;) { let q = sb.from(tabla).select(cols).range(d, d + 999); q = filtro(q); const r = await q; if (r.error) throw r.error; all = all.concat(r.data); if (r.data.length < 1000) break; d += 1000; } return all; };
+  let ok = 0; const omit = { sin: 0, canc: 0, ya: 0 }, fallas = [];
+  try {
+    say('Revisando cheques…');
+    const mapa = {};
+    for (const ch of [...new Set(items.map(i => i.ch))]) for (const c of await pagina('cheques', 'id,numero_cheque,estatus', q => q.eq('chequera_id', ch))) mapa[ch + '-' + c.numero_cheque] = c;
+    const con = {};
+    for (const t of [...new Set(items.map(i => i.tipo))]) { const un = t === 'factura' || t === 'foto_cheque'; con[t] = new Set((await pagina('archivos', 'cheque_id,nombre', q => q.eq('tipo', t).eq('activo', true))).map(a => un ? a.cheque_id : a.cheque_id + '|' + a.nombre)); }
+    let n = 0;
+    for (const it of items) {
+      n++; const c = mapa[it.ch + '-' + it.num], tipo = it.tipo, un = tipo === 'factura' || tipo === 'foto_cheque';
+      if (!c) { omit.sin++; continue; }
+      if (c.estatus === 'cancelado') { omit.canc++; continue; }
+      const nombre = tipo === 'factura' ? 'Factura ' + it.em + ' SAT ' + it.u + '.pdf' : tipo === 'foto_cheque' ? 'Foto_cheque_' + it.num + '.pdf' : tipo === 'folio' ? 'Folio ' + it.em + ' ' + it.u + '.pdf' : 'Comprobante ' + it.em + ' ' + it.u + '.pdf', clave = un ? c.id : c.id + '|' + nombre;
+      if (con[tipo].has(clave)) { omit.ya++; continue; }
+      say('Subiendo ' + n + ' de ' + items.length + '… (' + ok + ' cargadas)');
+      try {
+        const path = c.id + '/' + tipo + '-' + Date.now() + '-' + n + '.pdf';
+        const up = await sb.storage.from(BUCKET).upload(path, it.f, { contentType: 'application/pdf' });
+        if (up.error) throw up.error;
+        await rpc('registrar_archivo', { p_cheque: c.id, p_tipo: tipo, p_path: path, p_nombre: nombre });
+        con[tipo].add(clave); ok++;
+      } catch (e) { fallas.push((it.ch === 1 ? 'Excer' : 'chequera ' + it.ch) + ' ' + it.num + ': ' + errMsg(e)); if (fallas.length >= 5) break; }
+    }
+  } catch (e) { fallas.push(errMsg(e)); }
+  log.innerHTML = '<b>' + ok + ' archivos cargados.</b> Omitidos: ' + omit.ya + ' ya cargados, ' + omit.canc + ' cancelados, ' + omit.sin + ' sin cheque en el sistema.' + (fallas.length ? '<br>Con error: ' + esc(fallas.join(' | ')) : '') + '<br>Recargar la aplicación para ver los cambios.';
+  toast(ok + ' archivos cargados.', ok ? 'ok' : 'err'); btn.disabled = false; S.satItems = [];
+}
 
 /* ===================== EVENTOS ===================== */
 // Todo lo que se escribe en la app va en MAYÚSCULAS (correo y contraseña no se tocan, aunque se muestre la contraseña).
