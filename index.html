@@ -3340,8 +3340,8 @@ async function satSube() {
     for (const it of items) {
       n++; const c = mapa[it.ch + '-' + it.num], tipo = it.tipo, un = tipo === 'factura' || tipo === 'foto_cheque';
       if (!c) { omit.sin++; continue; }
-      if (c.estatus === 'cancelado') { omit.canc++; continue; }
-      const nombre = tipo === 'factura' ? 'Factura ' + it.em + ' SAT ' + it.u + '.pdf' : tipo === 'foto_cheque' ? 'Foto_cheque_' + it.num + '.pdf' : tipo === 'folio' ? 'Folio ' + it.em + ' ' + it.u + '.pdf' : 'Comprobante ' + it.em + ' ' + it.u + '.pdf', clave = un ? c.id : c.id + '|' + nombre;
+      if (c.estatus === 'cancelado' && tipo !== 'foto_cheque') { omit.canc++; continue; }
+      const nombre = tipo === 'factura' ? 'Factura ' + it.em + ' SAT ' + it.u + '.pdf' : tipo === 'foto_cheque' ? (c.estatus === 'cancelado' ? 'Foto cheque cancelado.pdf' : 'Foto_cheque_' + it.num + '.pdf') : tipo === 'folio' ? 'Folio ' + it.em + ' ' + it.u + '.pdf' : 'Comprobante ' + it.em + ' ' + it.u + '.pdf', clave = un ? c.id : c.id + '|' + nombre;
       if (con[tipo].has(clave)) { omit.ya++; continue; }
       say('Subiendo ' + n + ' de ' + items.length + '… (' + ok + ' cargadas)');
       try {
