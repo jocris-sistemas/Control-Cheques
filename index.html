@@ -868,9 +868,10 @@ const ceCom = (monto, tipo) => tipo === 'RAYAS_4' ? Math.round(Number(monto) / 1
 async function viewCajaEf() {
   const tok = S.ceTok = (S.ceTok || 0) + 1;
   S.ce = S.ce || { vie: ceViernes(today()), vista: 'sem', anio: today().slice(0, 4) };
+  if (S.ce.vista === 'com') S.ce.vista = 'sem';
   const c = S.ce;
   $('#view').innerHTML = `<div class="pagehead"><h2>Caja</h2><span class="sub">Efectivo semanal · cheques 4% y nómina</span></div>
-    <div class="cnseg" role="tablist"><button data-cev="sem" class="${c.vista === 'sem' ? 'on' : ''}">Semana</button><button data-cev="com" class="${c.vista === 'com' ? 'on' : ''}">Comisiones</button><button data-cev="hist" class="${c.vista === 'hist' ? 'on' : ''}">Semanas</button></div>
+    <div class="cnseg" role="tablist"><button data-cev="sem" class="${c.vista === 'sem' ? 'on' : ''}">Semana</button><button data-cev="hist" class="${c.vista === 'hist' ? 'on' : ''}">Historial</button></div>
     <div id="ceBody"><div class="sk"></div><div class="sk"></div></div>`;
   $('#view').querySelectorAll('[data-cev]').forEach(b => b.onclick = () => { c.vista = b.dataset.cev; viewCajaEf(); });
   try {
@@ -1005,7 +1006,7 @@ function pintaCeCom(R) {
 }
 function pintaCeHist(R) {
   const B = $('#ceBody'); if (!B) return;
-  B.innerHTML = `<div class="card" style="overflow:auto"><h3 class="rh">Semanas de caja <span class="mut sm">(${R.length})</span></h3><table class="ingtbl cn"><thead><tr><th>Semana</th><th>Viernes de pago</th><th>Estado</th><th class="r">Sobrante trasladado</th></tr></thead>
+  B.innerHTML = `<div class="card" style="overflow:auto"><h3 class="rh">Historial de semanas <span class="mut sm">(${R.length})</span></h3><table class="ingtbl cn"><thead><tr><th>Semana</th><th>Viernes de pago</th><th>Estado</th><th class="r">Sobrante trasladado</th></tr></thead>
     <tbody>${R.map(x => `<tr data-cevie="${x.viernes}"><td>${ceSemTxt(x.viernes)}</td><td>${fdate(x.viernes)}</td><td>${x.estatus === 'cerrada' ? 'Cerrada' : 'Abierta'}</td><td class="r">${x.sobrante == null ? '–' : fmt(x.sobrante)}</td></tr>`).join('') || '<tr><td colspan="4" class="mut">Sin semanas registradas.</td></tr>'}</tbody></table></div>`;
   B.onclick = ev => { const r = ev.target.closest('[data-cevie]'); if (r) { S.ce.vie = r.dataset.cevie; S.ce.vista = 'sem'; viewCajaEf(); } };
 }
