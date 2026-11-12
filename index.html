@@ -773,7 +773,7 @@ function renderShell() {
   $('#app').innerHTML = `
   <header class="top">
     <div class="brand"><span class="mark">J</span><div>${veCaja() ? 'JOCRIS' : 'JOCRIS · <span class="tl">Control de </span>Cheques'}<small>${esc(S.perfil.nombre)} · ${esc(rolTxt(S.perfil.rol))}</small></div></div>
-    ${veCaja() || veCancun() ? `<div class="modsw" role="tablist"><button data-act="modulo" data-mod="cheques" class="on">Cheques</button>${veCaja() ? '<button data-act="modulo" data-mod="caja">Acumulado</button>' : ''}${veCancun() ? '<button data-act="modulo" data-mod="cancun">Cancún</button>' : ''}</div>` : ''}
+    ${veCaja() || veCancun() ? `<div class="modsw" role="tablist"><button data-act="modulo" data-mod="cheques" class="on">Cheques</button>${veCaja() ? '<button data-act="modulo" data-mod="caja">Acumulado</button><button data-act="modulo" data-mod="cajaef">Caja</button>' : ''}${veCancun() ? '<button data-act="modulo" data-mod="cancun">Cancún</button>' : ''}</div>` : ''}
     <button class="acct" data-act="menu" title="Mi cuenta" aria-label="Mi cuenta">${esc(iniciales(S.perfil.nombre))}</button>
   </header>
   <nav class="tabs">${tabs.map(([k, l]) => `<button data-tab="${k}" class="${S.tab === k ? 'on' : ''}">${ICON[k] || ''}<span>${l}</span>${k === 'pend' ? `<span class="badge hidden" id="bPend">0</span>` : ''}</button>`).join('')}</nav>
@@ -806,10 +806,17 @@ function abrirModulo(m, desdeHist) {
   const B = document.body;
   if (m === 'cancun' && veCancun()) {   // Cancún: tercer módulo del selector de arriba (usa la misma pantalla de Cheques, sin pestañas)
     if (B.classList.contains('modo-caja')) abrirModulo('cheques');
-    if (S.tab !== 'cancun') S.tabPrev = S.tab;
+    if (!['cancun', 'cajaef'].includes(S.tab)) S.tabPrev = S.tab;
     B.classList.add('modo-cancun');
     document.querySelectorAll('header.top .modsw button').forEach(b => b.classList.toggle('on', b.dataset.mod === 'cancun'));
     altoHeader(); go('cancun'); return;
+  }
+  if (m === 'cajaef' && veCaja()) {   // Caja: efectivo semanal (cheques 4% y nómina contra el Acumulado); misma pantalla de Cheques, sin pestañas
+    if (B.classList.contains('modo-caja')) abrirModulo('cheques');
+    if (!['cancun', 'cajaef'].includes(S.tab)) S.tabPrev = S.tab;
+    B.classList.add('modo-cancun');
+    document.querySelectorAll('header.top .modsw button').forEach(b => b.classList.toggle('on', b.dataset.mod === 'cajaef'));
+    altoHeader(); go('cajaef'); return;
   }
   if (B.classList.contains('modo-cancun')) {
     B.classList.remove('modo-cancun');
@@ -851,6 +858,157 @@ window.addEventListener('message', ev => {
   if (d.caja === 'nav') revisaGuardia();
   if (d.caja === 'sesion') sb.auth.getSession().then(({ data }) => { if (!data.session && S.perfil) { S.perfil = null; location.reload(); } });
 });
+/* ===================== CAJA (efectivo semanal: cheques 4% y nómina contra el Acumulado) ===================== */
+const ceYmd = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const ceViernes = s => { const [y, m, d] = String(s).slice(0, 10).split('-').map(Number); const x = new Date(y, m - 1, d); x.setDate(x.getDate() + 5 - (x.getDay() || 7)); return ceYmd(x); };
+const ceMas = (s, n) => { const [y, m, d] = s.split('-').map(Number); const x = new Date(y, m - 1, d + n); return ceYmd(x); };
+const ceSemTxt = v => `${fdate(ceMas(v, -4))} al ${fdate(ceMas(v, 2))}`;
+const CE_TIPO = { RAYAS_4: 'Rayas 4%', NOMINA: 'Nómina', OTRO: 'Otro' };
+const ceCom = (monto, tipo) => tipo === 'RAYAS_4' ? Math.round(Number(monto) / 1.16 * 0.04 * 100) / 100 : 0;
+async function viewCajaEf() {
+  const tok = S.ceTok = (S.ceTok || 0) + 1;
+  S.ce = S.ce || { vie: ceViernes(today()), vista: 'sem', anio: today().slice(0, 4) };
+  const c = S.ce;
+  $('#view').innerHTML = `<div class="pagehead"><h2>Caja</h2><span class="sub">Efectivo semanal · cheques 4% y nómina</span></div>
+    <div class="cnseg" role="tablist"><button data-cev="sem" class="${c.vista === 'sem' ? 'on' : ''}">Semana</button><button data-cev="com" class="${c.vista === 'com' ? 'on' : ''}">Comisiones</button><button data-cev="hist" class="${c.vista === 'hist' ? 'on' : ''}">Semanas</button></div>
+    <div id="ceBody"><div class="sk"></div><div class="sk"></div></div>`;
+  $('#view').querySelectorAll('[data-cev]').forEach(b => b.onclick = () => { c.vista = b.dataset.cev; viewCajaEf(); });
+  try {
+    if (c.vista === 'com') { const r = await rpc('caja_ef_comisiones', { p_desde: c.anio + '-01-01', p_hasta: c.anio + '-12-31' }); if (tok !== S.ceTok) return; return pintaCeCom(r || []); }
+    if (c.vista === 'hist') { const r = await rpc('caja_ef_semanas_lista', {}); if (tok !== S.ceTok) return; return pintaCeHist(r || []); }
+    const r = await rpc('caja_ef_resumen', { p_viernes: c.vie }); if (tok !== S.ceTok) return;
+    S.ceD = r; pintaCeSem();
+  } catch (e) { if (tok === S.ceTok && $('#ceBody')) $('#ceBody').innerHTML = `<div class="warnbox">${esc(errMsg(e))}</div>`; }
+}
+function pintaCeSem() {
+  const D = S.ceD, B = $('#ceBody'), c = S.ce; if (!D || !B) return;
+  const abierta = D.estatus === 'abierta', puede = puedeCapturar();
+  const acep = D.cheques.filter(x => x.estatus === 'aceptado'), excl = D.cheques.filter(x => x.estatus === 'excluido');
+  const sum = (a, k) => a.reduce((s, x) => s + Number(x[k] || 0), 0);
+  const sob = Number(D.sobrante), bad = 'var(--bad,#c0392b)';
+  const filaE = x => `<tr${x.estatus === 'excluido' ? ' style="opacity:.55"' : ''}><td><b>${x.numero}</b></td><td>${esc(x.chequera)}</td><td>${fdate(x.fecha)}</td><td>${esc(x.beneficiario)}</td><td>${esc(x.concepto || '')}${x.cheque_estatus === 'cancelado' ? ` <span class="chip cancelado">Cheque cancelado</span>` : ''}${x.nota ? `<div class="mut sm">${esc(x.nota)}</div>` : ''}</td><td>${CE_TIPO[x.tipo] || x.tipo}</td><td class="r">${fmt(x.monto)}</td><td class="r">${Number(x.comision) ? fmt(x.comision) : '–'}${x.ajustada ? ' <span class="mut sm" title="Comisión ajustada">✎</span>' : ''}</td><td class="r"><b>${x.estatus === 'excluido' ? 'Excluido' : fmt(x.neto)}</b></td><td class="r">${abierta && puede ? (x.estatus === 'excluido' ? `<button class="btn ghost sm" data-ceacep="${x.cheque_id}">Aceptar</button>` : `<button class="btn ghost sm" data-ceedit="${x.cheque_id}">Editar</button> <button class="btn ghost sm" data-ceexcl="${x.cheque_id}">Excluir</button>`) : ''}</td></tr>`;
+  const filaP = x => `<tr><td><b>${x.numero}</b></td><td>${esc(x.chequera)}</td><td>${fdate(x.fecha)}</td><td>${esc(x.beneficiario)}</td><td>${esc(x.concepto || '')}</td><td>${CE_TIPO[x.tipo] || ''}</td><td class="r">${fmt(x.monto)}</td><td class="r">${x.tipo === 'RAYAS_4' ? fmt(ceCom(x.monto, x.tipo)) : '–'}</td><td class="r"><b>${fmt(x.monto - ceCom(x.monto, x.tipo))}</b></td><td class="r">${abierta && puede ? `<button class="btn gold sm" data-ceacep="${x.cheque_id}">Aceptar</button> <button class="btn ghost sm" data-ceexcl="${x.cheque_id}">Excluir</button>` : ''}</td></tr>`;
+  const thead = '<thead><tr><th>Cheque</th><th>Chequera</th><th>Fecha</th><th>Beneficiario</th><th>Concepto</th><th>Tipo</th><th class="r">Monto</th><th class="r">Comisión</th><th class="r">Entra a caja</th><th></th></tr></thead>';
+  const mxG = Math.max(1, ...D.gastos_grupo.map(g => Number(g.importe)));
+  B.innerHTML = `<div class="filters" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
+      <button class="btn ghost sm" data-cesem="-7" aria-label="Semana anterior">‹</button>
+      <b>Semana del ${ceSemTxt(D.viernes)}</b><span class="mut sm">· pago del viernes ${fdate(D.viernes)}</span>
+      <button class="btn ghost sm" data-cesem="7" aria-label="Semana siguiente">›</button>
+      <button class="btn ghost sm" data-cesem="hoy">Semana actual</button>
+      <span class="grow"></span>
+      <span class="chip ${abierta ? "warn" : "autorizado"}">${abierta ? 'Abierta' : 'Cerrada'}</span></div>
+    <div class="kpis"><div class="kpi"><div class="mut sm">Saldo inicial</div><div class="big">${fmt(D.saldo_inicial)}</div></div>
+      <div class="kpi"><div class="mut sm">Entradas a caja</div><div class="big" style="color:var(--ok)">${fmt(D.entradas)}</div><div class="mut sm">Comisión 4%: ${fmt(D.comisiones)}</div></div>
+      <div class="kpi"><div class="mut sm">Gastos del Acumulado</div><div class="big">${fmt(D.gastos)}</div></div>
+      <div class="kpi"><div class="mut sm">${sob < 0 ? 'Faltante' : 'Sobrante'}</div><div class="big" style="${sob < 0 ? 'color:' + bad : ''}">${fmt(Math.abs(sob))}</div><div class="mut sm">Disponible ${fmt(D.disponible)}</div></div></div>
+    ${D.pendientes.length ? `<div class="card" style="overflow:auto;border-left:4px solid var(--gold)"><h3 class="rh">Por revisar <span class="mut sm">(${D.pendientes.length}) · cheques de la semana con concepto de rayas 4% o nómina</span></h3><table class="ingtbl cn">${thead}<tbody>${D.pendientes.map(filaP).join('')}</tbody></table></div>` : ''}
+    <div class="card" style="overflow:auto"><h3 class="rh">Entradas <span class="mut sm">(${acep.length})</span>${abierta && puede ? ' <button class="btn ghost sm" data-ceman="1" style="float:right">Agregar cheque</button>' : ''}</h3>
+      <table class="ingtbl cn">${thead}<tbody>${acep.map(filaE).join('') || '<tr><td colspan="10" class="mut">Sin entradas en la semana.</td></tr>'}${excl.map(filaE).join('')}</tbody>
+      <tfoot><tr><td colspan="6"><b>Total</b></td><td class="r"><b>${fmt(sum(acep, 'monto'))}</b></td><td class="r"><b>${fmt(sum(acep, 'comision'))}</b></td><td class="r"><b>${fmt(sum(acep, 'neto'))}</b></td><td></td></tr></tfoot></table></div>
+    <div class="card"><h3 class="rh">Gastos de la semana por grupo <span class="mut sm">· Acumulado del viernes ${fdate(D.viernes)}</span></h3>
+      ${D.gastos_grupo.length ? `<div class="bars">${D.gastos_grupo.map(g => `<div class="row" style="gap:10px;margin:5px 0;align-items:center"><span style="width:150px;flex:none">${esc(g.grupo)}</span><div class="grow" style="background:var(--line);border-radius:4px;height:8px"><div style="width:${(Number(g.importe) / mxG * 100).toFixed(1)}%;background:var(--gold);height:8px;border-radius:4px"></div></div><b class="money" style="width:130px;text-align:right">${fmt(g.importe)}</b></div>`).join('')}</div>` : '<div class="mut">El Acumulado de esta semana aún no está cargado.</div>'}</div>
+    <div class="card" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><div class="grow">${abierta
+      ? `<b>Cierre de semana</b><div class="mut sm">Al cerrar, el ${sob < 0 ? 'faltante' : 'sobrante'} de ${fmt(Math.abs(sob))} pasa como saldo inicial de la semana siguiente.</div>`
+      : `<b>Semana cerrada</b><div class="mut sm">Por ${esc(D.cerrada_por || '')} el ${fdt(D.cerrada_en)}. ${sob < 0 ? 'Faltante' : 'Sobrante'} trasladado: ${fmt(Math.abs(sob))}.</div>`}</div>
+      ${abierta && puede ? `<button class="btn gold" data-cecerrar="1"${D.pendientes.length ? ' disabled title="Se requiere revisar los cheques pendientes"' : ''}>Cerrar semana</button>` : ''}
+      ${!abierta && esAdmin() ? '<button class="btn ghost" data-cereabrir="1">Reabrir</button>' : ''}</div>`;
+  B.onclick = async ev => {
+    const t = ev.target, g = k => t.closest('[data-' + k + ']')?.dataset[k];
+    if (g('cesem')) { const v = g('cesem'); c.vie = v === 'hoy' ? ceViernes(today()) : ceMas(c.vie, Number(v)); return viewCajaEf(); }
+    if (g('ceacep') || g('ceedit')) return ceModalAceptar(g('ceacep') || g('ceedit'));
+    if (g('ceexcl')) return ceModalExcluir(g('ceexcl'));
+    if (g('ceman')) return ceModalManual();
+    if (g('cecerrar')) return ceModalCerrar();
+    if (g('cereabrir')) return ceModalReabrir();
+  };
+}
+function ceBuscaCheque(id) { const D = S.ceD; return D.pendientes.find(x => x.cheque_id === id) || D.cheques.find(x => x.cheque_id === id); }
+function ceModalAceptar(id, extra) {
+  const x = extra || ceBuscaCheque(id); if (!x) return;
+  const tipo0 = x.tipo || 'OTRO', com0 = x.estatus === 'aceptado' ? Number(x.comision) : ceCom(x.monto, tipo0);
+  openModal(`<h3>Aceptar cheque ${x.numero} · ${esc(x.chequera)}</h3><div class="mut sm" style="margin-bottom:10px">${esc(x.beneficiario)} · ${esc(x.concepto || '')} · ${fdate(x.fecha)}</div>
+    <div class="kv"><div>Monto del cheque</div><div><b>${fmt(x.monto)}</b></div></div>
+    <label class="f">Tipo<select id="ceTipo">${Object.entries(CE_TIPO).map(([k, l]) => `<option value="${k}" ${k === tipo0 ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+    <label class="f">Comisión<input type="text" id="ceCom" inputmode="decimal" value="${com0.toFixed(2)}"></label>
+    <div class="mut sm" id="ceCalc"></div>
+    <label class="f">Semana (viernes de pago)<input id="ceVie" type="date" value="${S.ce.vie}"></label>
+    <label class="f">Nota<input type="text" id="ceNota" value="${esc(x.nota || '')}" placeholder="Opcional"></label>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px"><button class="btn ghost" data-act="close">Cancelar</button><button class="btn gold" id="ceOk">Aceptar en caja</button></div>`);
+  const calc = () => { const m = Number(x.monto), cm = parseMoney($('#ceCom').value); $('#ceCalc').innerHTML = isNaN(cm) ? 'Comisión inválida.' : `Base sin IVA ${fmt(m / 1.16)} · entra a caja <b>${fmt(m - cm)}</b>`; };
+  $('#ceTipo').onchange = () => { $('#ceCom').value = ceCom(x.monto, $('#ceTipo').value).toFixed(2); calc(); };
+  $('#ceCom').oninput = calc; calc();
+  $('#ceOk').onclick = async () => {
+    const cm = parseMoney($('#ceCom').value), vie = $('#ceVie').value;
+    if (isNaN(cm) || cm < 0) return toast('Comisión inválida.', 'err');
+    if (!vie || ceViernes(vie) !== vie) return toast('Se requiere indicar un viernes.', 'err');
+    $('#ceOk').disabled = true;
+    try { S.ceD = await rpc('caja_ef_aceptar', { p_cheque: x.cheque_id, p_viernes: vie, p_comision: cm, p_tipo: $('#ceTipo').value, p_nota: $('#ceNota').value }); closeModal(); toast('Cheque aceptado en caja.'); if (vie !== S.ce.vie) S.ce.vie = vie; viewCajaEf(); }
+    catch (e) { $('#ceOk').disabled = false; toast(errMsg(e), 'err'); }
+  };
+}
+function ceModalExcluir(id) {
+  const x = ceBuscaCheque(id); if (!x) return;
+  openModal(`<h3>Excluir cheque ${x.numero}</h3><div class="mut sm" style="margin-bottom:10px">${esc(x.beneficiario)} · ${fmt(x.monto)}. No suma a la caja; queda registrado como excluido.</div>
+    <label class="f">Motivo<input type="text" id="ceNota" placeholder="Ej. no es efectivo para la semana"></label>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px"><button class="btn ghost" data-act="close">Cancelar</button><button class="btn gold" id="ceOk">Excluir</button></div>`);
+  $('#ceOk').onclick = async () => { $('#ceOk').disabled = true; try { await rpc('caja_ef_excluir', { p_cheque: x.cheque_id, p_nota: $('#ceNota').value }); closeModal(); toast('Cheque excluido.'); viewCajaEf(); } catch (e) { $('#ceOk').disabled = false; toast(errMsg(e), 'err'); } };
+}
+function ceModalManual() {
+  openModal(`<h3>Agregar cheque a la caja</h3>
+    <label class="f">Chequera<select id="ceChq">${S.chequeras.map(q => `<option value="${q.id}">${esc(q.nombre)}</option>`).join('')}</select></label>
+    <label class="f">Número de cheque<input type="text" id="ceNum" inputmode="numeric"></label>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px"><button class="btn ghost" data-act="close">Cancelar</button><button class="btn gold" id="ceOk">Buscar</button></div>`);
+  $('#ceOk').onclick = async () => {
+    const n = Number($('#ceNum').value), q = Number($('#ceChq').value); if (!n) return toast('Se requiere el número de cheque.', 'err');
+    const { data, error } = await sb.from('cheques').select('id,numero_cheque,chequera_id,beneficiario,monto,concepto,fecha,estatus').eq('chequera_id', q).eq('numero_cheque', n).neq('estatus', 'cancelado').limit(1);
+    if (error) return toast(errMsg(error), 'err');
+    if (!data.length) return toast('No se encontró el cheque o está cancelado.', 'err');
+    const r = data[0], t = /RAYAS.*4/i.test(r.concepto || '') ? 'RAYAS_4' : /^NOMINA/i.test(r.concepto || '') ? 'NOMINA' : 'OTRO';
+    ceModalAceptar(r.id, { cheque_id: r.id, numero: r.numero_cheque, chequera: chequeraNombre(r.chequera_id), beneficiario: r.beneficiario, concepto: r.concepto, fecha: r.fecha, monto: Number(r.monto), tipo: t });
+  };
+}
+function ceModalCerrar() {
+  const D = S.ceD, sob = Number(D.sobrante);
+  openModal(`<h3>Cerrar semana del ${ceSemTxt(D.viernes)}</h3>
+    <div class="kv"><div>Saldo inicial</div><div>${fmt(D.saldo_inicial)}</div><div>Entradas a caja</div><div>${fmt(D.entradas)}</div><div>Disponible</div><div><b>${fmt(D.disponible)}</b></div><div>Gastos del Acumulado</div><div>${fmt(D.gastos)}</div><div>${sob < 0 ? 'Faltante' : 'Sobrante'}</div><div><b>${fmt(Math.abs(sob))}</b></div></div>
+    ${Number(D.gastos) ? '' : '<div class="warnbox" style="margin-top:8px">El Acumulado de esta semana no tiene gastos cargados.</div>'}
+    <div class="mut sm" style="margin-top:8px">El ${sob < 0 ? 'faltante' : 'sobrante'} pasa como saldo inicial de la semana siguiente. La semana queda bloqueada.</div>
+    <label class="f">Nota<input type="text" id="ceNota" placeholder="Opcional"></label>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px"><button class="btn ghost" data-act="close">Cancelar</button><button class="btn gold" id="ceOk">Cerrar semana</button></div>`);
+  $('#ceOk').onclick = async () => { $('#ceOk').disabled = true; try { await rpc('caja_ef_cerrar', { p_viernes: D.viernes, p_nota: $('#ceNota').value }); closeModal(); toast('Semana cerrada.'); viewCajaEf(); } catch (e) { $('#ceOk').disabled = false; toast(errMsg(e), 'err'); } };
+}
+function ceModalReabrir() {
+  const D = S.ceD;
+  openModal(`<h3>Reabrir semana del ${ceSemTxt(D.viernes)}</h3><label class="f">Motivo<input type="text" id="ceNota"></label>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px"><button class="btn ghost" data-act="close">Cancelar</button><button class="btn gold" id="ceOk">Reabrir</button></div>`);
+  $('#ceOk').onclick = async () => { if (!$('#ceNota').value.trim()) return toast('Se requiere el motivo.', 'err'); $('#ceOk').disabled = true; try { await rpc('caja_ef_reabrir', { p_viernes: D.viernes, p_motivo: $('#ceNota').value }); closeModal(); toast('Semana reabierta.'); viewCajaEf(); } catch (e) { $('#ceOk').disabled = false; toast(errMsg(e), 'err'); } };
+}
+function pintaCeCom(R) {
+  const B = $('#ceBody'), c = S.ce; if (!B) return;
+  const anios = []; for (let y = 2026; y <= Number(today().slice(0, 4)); y++) anios.push(String(y));
+  const meses = {}; R.forEach(x => { const k = String(x.viernes).slice(0, 7); const o = meses[k] = meses[k] || { n: 0, monto: 0, com: 0, neto: 0 }; o.n++; o.monto += Number(x.monto); o.com += Number(x.comision); o.neto += Number(x.neto); });
+  const T = R.reduce((t, x) => ({ monto: t.monto + Number(x.monto), base: t.base + Number(x.base), com: t.com + Number(x.comision), neto: t.neto + Number(x.neto) }), { monto: 0, base: 0, com: 0, neto: 0 });
+  B.innerHTML = `<div class="filters" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px"><select id="ceAnio">${anios.map(y => `<option ${y === c.anio ? 'selected' : ''}>${y}</option>`).join('')}</select><span class="grow"></span><button class="btn ghost sm" id="ceXls">Descargar Excel</button></div>
+    <div class="kpis"><div class="kpi"><div class="mut sm">Cheques 4%</div><div class="big">${R.length}</div></div><div class="kpi"><div class="mut sm">Monto de cheques</div><div class="big">${fmt(T.monto)}</div></div><div class="kpi"><div class="mut sm">Comisión pagada</div><div class="big" style="color:var(--bad,#c0392b)">${fmt(T.com)}</div></div><div class="kpi"><div class="mut sm">Efectivo recibido</div><div class="big">${fmt(T.neto)}</div></div></div>
+    <div class="card" style="overflow:auto"><h3 class="rh">Por mes</h3><table class="ingtbl cn"><thead><tr><th>Mes</th><th class="r">Cheques</th><th class="r">Monto</th><th class="r">Comisión</th><th class="r">Efectivo</th></tr></thead><tbody>${Object.keys(meses).sort().map(k => `<tr><td>${esc(mesLbl(k))}</td><td class="r">${meses[k].n}</td><td class="r">${fmt(meses[k].monto)}</td><td class="r">${fmt(meses[k].com)}</td><td class="r">${fmt(meses[k].neto)}</td></tr>`).join('') || '<tr><td colspan="5" class="mut">Sin cheques 4% en el año.</td></tr>'}</tbody></table></div>
+    <div class="card" style="overflow:auto"><h3 class="rh">Detalle <span class="mut sm">(${R.length})</span></h3><table class="ingtbl cn"><thead><tr><th>Semana</th><th>Cheque</th><th>Chequera</th><th>Fecha</th><th>Beneficiario</th><th class="r">Monto</th><th class="r">Base sin IVA</th><th class="r">Comisión</th><th class="r">Efectivo</th></tr></thead>
+      <tbody>${R.map(x => `<tr><td>${fdate(x.viernes)}</td><td><b>${x.numero}</b></td><td>${esc(x.chequera)}</td><td>${fdate(x.fecha)}</td><td>${esc(x.beneficiario)}</td><td class="r">${fmt(x.monto)}</td><td class="r">${fmt(x.base)}</td><td class="r">${fmt(x.comision)}${x.ajustada ? ' ✎' : ''}</td><td class="r">${fmt(x.neto)}</td></tr>`).join('')}</tbody>
+      <tfoot><tr><td colspan="5"><b>Total</b></td><td class="r"><b>${fmt(T.monto)}</b></td><td class="r"><b>${fmt(T.base)}</b></td><td class="r"><b>${fmt(T.com)}</b></td><td class="r"><b>${fmt(T.neto)}</b></td></tr></tfoot></table></div>`;
+  $('#ceAnio').onchange = e => { c.anio = e.target.value; viewCajaEf(); };
+  $('#ceXls').onclick = async () => {
+    try { await cargarSheetJS(); } catch (e) { return toast('No se pudo cargar el generador de Excel.', 'err'); }
+    const rows = R.map(x => ({ 'SEMANA (VIERNES)': x.viernes, CHEQUE: x.numero, CHEQUERA: x.chequera, FECHA: x.fecha, BENEFICIARIO: x.beneficiario, MONTO: Number(x.monto), 'BASE SIN IVA': Number(x.base), 'COMISION 4%': Number(x.comision), 'EFECTIVO RECIBIDO': Number(x.neto) }));
+    const wb = XLSX.utils.book_new(), ws = XLSX.utils.json_to_sheet(rows.length ? rows : [{ 'SIN DATOS': '' }]);
+    ws['!cols'] = [12, 9, 22, 12, 36, 14, 14, 14, 16].map(w => ({ wch: w }));
+    XLSX.utils.book_append_sheet(wb, ws, 'Comisiones ' + c.anio); XLSX.writeFile(wb, `COMISIONES_4PCT_${c.anio}.xlsx`);
+  };
+}
+function pintaCeHist(R) {
+  const B = $('#ceBody'); if (!B) return;
+  B.innerHTML = `<div class="card" style="overflow:auto"><h3 class="rh">Semanas de caja <span class="mut sm">(${R.length})</span></h3><table class="ingtbl cn"><thead><tr><th>Semana</th><th>Viernes de pago</th><th>Estado</th><th class="r">Sobrante trasladado</th></tr></thead>
+    <tbody>${R.map(x => `<tr data-cevie="${x.viernes}"><td>${ceSemTxt(x.viernes)}</td><td>${fdate(x.viernes)}</td><td>${x.estatus === 'cerrada' ? 'Cerrada' : 'Abierta'}</td><td class="r">${x.sobrante == null ? '–' : fmt(x.sobrante)}</td></tr>`).join('') || '<tr><td colspan="4" class="mut">Sin semanas registradas.</td></tr>'}</tbody></table></div>`;
+  B.onclick = ev => { const r = ev.target.closest('[data-cevie]'); if (r) { S.ce.vie = r.dataset.cevie; S.ce.vista = 'sem'; viewCajaEf(); } };
+}
 /* ===================== CANCÚN (copia del Google Sheet REPORTE CANCUN 2026) ===================== */
 const veCancun = () => false;   // módulo Cancún oculto en esta app (se gestiona desde Folios); para reactivar: !!S.perfil?.puede_cancun
 /* const veCancunOrig = () => !!S.perfil?.puede_cancun; */   // solo quien tenga perfiles.puede_cancun (hoy: Pedro)
@@ -1073,7 +1231,7 @@ function go(tab) {
   document.querySelectorAll('nav.tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
   if (tab !== 'nuevo') S.F = null;
   { const b = $('#selbar'); if (b) b.classList.add('hidden'); }
-  ({ pend: viewPend, cheques: viewCheques, nuevo: viewNuevo, series: viewSeries, bit: viewBit, rep: viewRep, ing: viewIng, cancun: viewCancun }[tab])();
+  ({ pend: viewPend, cheques: viewCheques, nuevo: viewNuevo, series: viewSeries, bit: viewBit, rep: viewRep, ing: viewIng, cancun: viewCancun, cajaef: viewCajaEf }[tab])();
   window.scrollTo(0, 0);
   refreshPendCount(); cargarAlertas(); selloActualiza();
 }
